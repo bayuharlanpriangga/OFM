@@ -1468,13 +1468,144 @@ body {
 }
 
 </style>
+  <!-- Firebase -->
+  <script type="module">
+    import { initializeApp } from 'https://www.gstatic.com/firebasejs/11.0.0/firebase-app.js';
+    import { getAuth, GoogleAuthProvider, signInWithPopup, signInWithEmailAndPassword, createUserWithEmailAndPassword, onAuthStateChanged, signOut } from 'https://www.gstatic.com/firebasejs/11.0.0/firebase-auth.js';
+    import { getFirestore, doc, setDoc, getDoc, onSnapshot } from 'https://www.gstatic.com/firebasejs/11.0.0/firebase-firestore.js';
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyCkYcfBseaPEiJDY65I9xqDPATYq0ZV-jE",
+      authDomain: "oriasfinancialmanagement.firebaseapp.com",
+      projectId: "oriasfinancialmanagement",
+      storageBucket: "oriasfinancialmanagement.firebasestorage.app",
+      messagingSenderId: "583348308396",
+      appId: "1:583348308396:web:284f7da8f629d3b743d209"
+    };
+
+    const app      = initializeApp(firebaseConfig);
+    const auth     = getAuth(app);
+    const db       = getFirestore(app);
+    const provider = new GoogleAuthProvider();
+
+    // Expose to global scope for non-module JS
+    window._fbAuth     = auth;
+    window._fbDb       = db;
+    window._fbProvider = provider;
+    window._fbFns = {
+      signInWithPopup, signInWithEmailAndPassword,
+      createUserWithEmailAndPassword, signOut,
+      doc, setDoc, getDoc, onSnapshot,
+      GoogleAuthProvider
+    };
+
+    // Auth state observer
+    onAuthStateChanged(auth, user => {
+      if (user) {
+        window._currentUser = user;
+        document.getElementById('authOverlay').style.display = 'none';
+        document.getElementById('app').style.display = 'block';
+        // Load user data from Firestore
+        window._loadUserData(user.uid);
+        // Update profile UI
+        const nameEl = document.getElementById('profileName');
+        const emailEl = document.getElementById('profileEmail');
+        const avatarEl = document.getElementById('profileAvatar');
+        if (nameEl)   nameEl.textContent  = user.displayName || 'Pengguna OFM';
+        if (emailEl)  emailEl.textContent = user.email || '';
+        if (avatarEl) avatarEl.textContent = (user.displayName || user.email || 'U')[0].toUpperCase();
+      } else {
+        window._currentUser = null;
+        document.getElementById('authOverlay').style.display = 'flex';
+        document.getElementById('app').style.display = 'none';
+      }
+    });
+  </script>
+
+  <link rel="icon" type="image/png" sizes="32x32" href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAABmJLR0QA/wD/AP+gvaeTAAAENklEQVRYhcVXT2xUZRD/zfd9771dlriWbSmhrthuJUHSyAGDcDC1xIPRk1oTNJGDGCESUBIkGg31ohw0lkRShJgYEw+CGhMTTz1gMJ6gJI2WlMKWtlEMxaapWbb73vu+8fC23b+vb9lAmMvuzrczv9/Mm5k3H3CfRTZv2qucNnpLJVq26dtbRoDrphkv1IxRLLWhz4AGIakn0PA4MR8qzE79ck8JOG2Zbmb9MYB+sq2iNQNCgF0XDB4mgQPujanLd5dAe3vC1vHDYBwhS8YgBNj3A3AAEARSEiAGa+0xY8grqA8xd3UhynVUDZCV6nxNafUzhHiebKVgGKz9Ev2lENiAiECWkgC2Kem/oZItrl6Yv1BiWgcg7MBKpZ8Ai+ME2k6OFUTn+iWLcvAqHSkJKAl2PRDRiCAczE9nf2uIwKrW9HpPy6Mg3iMsJSADRwCHAobphGMDzGDfZyJ8D4nDi5OTU6EE4i1dD/vQY6REgqQCaw0YEwlU75Oo+EOKICNGg43JCUmP5bPZ6SVMUU5AC50AkBDKAnteCbya7kq6cnACYAzY80CWAoCE1jpRjllBAAiMealmGom2QR0zV+U7hMCdOC0ntqtvHQb3dmGVo1Z+XJEEmoz20z0x7Osbx1M7u6Nty0TV5xVCIrTtBN7P7cTG0QRGN21B2+PbMXf6R+j5hVrbSAJNZODBV57FD99eQu78GIAx2I+m0frubljr1+LW599gcXSi1k9RGq8BAmRydY3O6lgLO/MQcucvLevcazO4+dGXYKMRDLEyGzuKQEi0sZ5udP56EsmXn6k4S+3vx78nztTYsuvir9cHkL8wVt93UerXQJ3HEN/Rg/kzw1CtSaw7th8LZ4fhbHoE+ZFx6FvzjbdsJIE6GYht7oRa8wBmj30NECBWx9E+8CYST2/F9ecO3nHLhhOwAejKP4u4gzV7X8A/731RGiq5Rdw8ehLOd13Qs3PhQA1kILIGUu/swtzpn2BuFwJVccyafAH5i5fDgRrMQP0uIIAshY6hIwARFv+4Vjvjq502OrQiCRSBSEmIlmTQXk28kKp1JKgUQJlU1IAkmdNscqz9BEhi5tUPAA6WXSJq7oUkBMiSgG8AICdtmSvHrMhA/u/stLL0Rmhzil3PkCSQY4OEqHQaEe3yiLYtkBSA6zMbcxaSN+f/LO0C1XwrxEp3bSVjjhPRDrKtpc1mRcCl78srmeeBgIsEvJ2/0uBKVn1ud3S+RAKfQYg0WTJYMLSuD64ESMrgnM0NIgwsXpn8CkFz15XIm5H+b35Mx51TlrQ81vpJEkKRrQBTtmAIAtkKBIB934PhEwXIF/2J7O9YYSNuJAMV4qS7MyT1Jwz0kxM8lqDQqLi4YpiFOeBO3O2LSZXEMpk+NmYQonQ1A9OhQjZ7b69mFdLbq5yZqX0AUEhvGMK5c37Tvu6n/A+5qm9zFPGUkQAAAABJRU5ErkJggg==">
+  <link rel="icon" type="image/png" sizes="16x16" href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAABmJLR0QA/wD/AP+gvaeTAAAB10lEQVQ4jX2Tz2sTURDHP/PeZpOtSUpSf4GxEliEHrz0oJ4EL4qHHnoSL/4JpSB4sGdvovbqtUIR74LHeCp6URErAWlaq1Ba1MXSrkneex42YdlkzcDAe8N3vjPv+2ZgggX1sBHUw8YkjM6NNhqBX6jfw5cXzmNJn5iumqlzGxztd0ehMhoo1poLriCroqTpjAEF4ikc7DrcSu/71hrgxgj8mQtzIE/EUzeddQlGADVAKUE8ASstq81yr9N5nxJMz9b8gt5HRONsEh26Ss8iAlohGhP3e6fY2fmlALB9LXnJA786V0EpSe7OAuhKqaQZ8APl3MRh6w+Xz3P21mWkoNP4wFRGzmGrfgosX5vnxoNv7LU+MLN0B+90PUPgAVABbEp08v5d4s9bdDe/4qzFRocgcPD0eVLAS+uOdRDMXyRaf83hqzdUF69z/PZj/tPyCEqXQvSZGt3tH2AcB4/WcCZf2CyBFxsEQ8njeONT8l3/E1UrRIlRxdjAcJSjKNbl6sv+3s9QrAkzomYGSSEiLWPN4tHmdodsM4kVZ5sLKL0qiqazg1HWCifsCnYlbmdHeWyZTPS7bcpTz5TwR3neFREx4B7/9YPb/S/td6P4iRaEYSMIJ6/zPxtukbPvhyjDAAAAAElFTkSuQmCC">
+  <link rel="apple-touch-icon" sizes="192x192" href="icon-192.png">
+  <meta name="theme-color" content="#050d1f">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="OFM">
+  <link rel="manifest" href="manifest.json">
+  <script>
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('sw.js').then(r => {
+        r.addEventListener('updatefound', () => {
+          r.installing.addEventListener('statechange', e => {
+            if (e.target.state === 'activated') console.log('[OFM] SW updated');
+          });
+        });
+      });
+    }
+  </script>
 </head>
 <body>
 
 <!-- ANIMATED BACKGROUND -->
 <canvas id="bg-canvas"></canvas>
 
-<div id="app">
+
+<!-- ══════ AUTH OVERLAY ══════ -->
+<div id="authOverlay" style="display:flex;position:fixed;inset:0;z-index:9999;align-items:center;justify-content:center;background:var(--bg,#060A18)">
+  <div style="width:100%;max-width:360px;padding:0 24px">
+    <!-- Logo -->
+    <div style="text-align:center;margin-bottom:32px">
+      <div style="font-family:var(--disp,'Space Grotesk'),sans-serif;font-size:36px;font-weight:800;letter-spacing:-1px">
+        O<span style="color:var(--teal,#2AE8C4)">FM</span>
+      </div>
+      <div style="font-size:13px;color:rgba(255,255,255,0.45);margin-top:4px">Orias Financial Management</div>
+    </div>
+
+    <!-- Auth card -->
+    <div id="authCard" style="background:rgba(255,255,255,0.08);backdrop-filter:blur(50px) saturate(200%);border-radius:24px;border:1px solid rgba(255,255,255,0.2);box-shadow:inset 0 2px 0 rgba(255,255,255,0.5),0 24px 60px rgba(0,0,0,0.5);padding:28px 24px;position:relative;overflow:hidden">
+      <div style="position:absolute;top:0;left:0;right:0;height:50%;background:linear-gradient(180deg,rgba(255,255,255,0.14) 0%,transparent 100%);pointer-events:none"></div>
+
+      <!-- Tabs -->
+      <div id="authTabs" style="display:flex;background:rgba(0,0,0,0.25);border-radius:12px;padding:3px;margin-bottom:24px;position:relative;z-index:1">
+        <div id="tabLogin" onclick="switchAuthTab('login')" style="flex:1;text-align:center;padding:8px;border-radius:9px;font-size:13px;font-weight:600;cursor:pointer;background:rgba(255,255,255,0.12);color:#fff;transition:all 0.2s">Masuk</div>
+        <div id="tabRegister" onclick="switchAuthTab('register')" style="flex:1;text-align:center;padding:8px;border-radius:9px;font-size:13px;font-weight:600;cursor:pointer;color:rgba(255,255,255,0.45);transition:all 0.2s">Daftar</div>
+      </div>
+
+      <!-- Email field -->
+      <div style="margin-bottom:12px;position:relative;z-index:1">
+        <input id="authEmail" type="email" placeholder="Email" style="width:100%;box-sizing:border-box;background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.15);border-radius:12px;padding:12px 14px;color:#fff;font-size:14px;outline:none" onfocus="this.style.borderColor='rgba(42,232,196,0.5)'" onblur="this.style.borderColor='rgba(255,255,255,0.15)'">
+      </div>
+      <!-- Password field -->
+      <div style="margin-bottom:8px;position:relative;z-index:1">
+        <input id="authPassword" type="password" placeholder="Password" style="width:100%;box-sizing:border-box;background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.15);border-radius:12px;padding:12px 14px;color:#fff;font-size:14px;outline:none" onfocus="this.style.borderColor='rgba(42,232,196,0.5)'" onblur="this.style.borderColor='rgba(255,255,255,0.15)'" onkeydown="if(event.key==='Enter')doEmailAuth()">
+      </div>
+      <!-- Name field (register only) -->
+      <div id="authNameWrap" style="margin-bottom:8px;display:none;position:relative;z-index:1">
+        <input id="authName" type="text" placeholder="Nama kamu" style="width:100%;box-sizing:border-box;background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.15);border-radius:12px;padding:12px 14px;color:#fff;font-size:14px;outline:none" onfocus="this.style.borderColor='rgba(42,232,196,0.5)'" onblur="this.style.borderColor='rgba(255,255,255,0.15)'">
+      </div>
+
+      <!-- Error msg -->
+      <div id="authError" style="font-size:12px;color:#FF6B84;margin-bottom:8px;min-height:16px;position:relative;z-index:1"></div>
+
+      <!-- Primary CTA -->
+      <button id="authBtn" onclick="doEmailAuth()" style="width:100%;padding:14px;background:linear-gradient(135deg,rgba(42,232,196,0.9),rgba(20,180,150,0.9));border:1px solid rgba(255,255,255,0.35);border-radius:14px;color:#001a14;font-family:var(--disp),sans-serif;font-size:15px;font-weight:700;cursor:pointer;margin-bottom:12px;box-shadow:inset 0 2px 0 rgba(255,255,255,0.4),0 0 20px rgba(42,232,196,0.25);position:relative;z-index:1;transition:opacity 0.2s" onmousedown="this.style.opacity='0.85'" onmouseup="this.style.opacity='1'">Masuk</button>
+
+      <!-- Divider -->
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;position:relative;z-index:1">
+        <div style="flex:1;height:1px;background:rgba(255,255,255,0.1)"></div>
+        <div style="font-size:11px;color:rgba(255,255,255,0.35)">atau</div>
+        <div style="flex:1;height:1px;background:rgba(255,255,255,0.1)"></div>
+      </div>
+
+      <!-- Google -->
+      <button onclick="doGoogleAuth()" style="width:100%;padding:13px;background:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.2);border-radius:14px;color:#fff;font-size:14px;font-weight:600;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:10px;position:relative;z-index:1;box-shadow:inset 0 1px 0 rgba(255,255,255,0.25);transition:background 0.2s" onmousedown="this.style.background='rgba(255,255,255,0.16)'" onmouseup="this.style.background='rgba(255,255,255,0.1)'">
+        <svg width="18" height="18" viewBox="0 0 18 18"><path fill="#4285F4" d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844c-.209 1.125-.843 2.078-1.796 2.717v2.258h2.908c1.702-1.567 2.684-3.874 2.684-6.615z"/><path fill="#34A853" d="M9 18c2.43 0 4.467-.806 5.956-2.18l-2.908-2.259c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332A8.997 8.997 0 0 0 9 18z"/><path fill="#FBBC05" d="M3.964 10.71A5.41 5.41 0 0 1 3.682 9c0-.593.102-1.17.282-1.71V4.958H.957A8.996 8.996 0 0 0 0 9c0 1.452.348 2.827.957 4.042l3.007-2.332z"/><path fill="#EA4335" d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0A8.997 8.997 0 0 0 .957 4.958L3.964 6.29C4.672 4.163 6.656 3.58 9 3.58z"/></svg>
+        Lanjut dengan Google
+      </button>
+    </div>
+  </div>
+</div>
+
+<div id="app" style="display:none">
 
   <!-- ── BOTTOM NAV — Floating Pill ── -->
   <nav class="bottom-nav">
@@ -1667,7 +1798,7 @@ body {
     </div>
 
     <!-- Transactions -->
-    <div class="section-head"><h2>Terbaru</h2><span class="see-all">Semua →</span></div>
+    <div class="section-head"><h2>Terbaru</h2><span class="see-all" onclick="showPage('riwayat')">Semua →</span></div>
     <div class="tx-list" id="txList"></div>
     <div class="empty" id="txEmpty" style="display:none">
       <div class="empty-icon">💸</div>
@@ -1681,12 +1812,38 @@ body {
   <div class="page" id="page-budget">
     <div class="topbar">
       <div class="topbar-logo">O<span>FM</span></div>
-      <div class="topbar-actions"><div class="icon-btn" onclick="showToast('⚙️ Kelola kategori')">⚙️</div></div>
+      <div class="topbar-actions">
+        <div class="date-filter-wrap">
+          <div class="date-filter-trigger icon-btn" id="budgetDtTrigger" onclick="toggleBudgetDatePicker()" style="border-radius:12px;width:auto;padding:0 12px;gap:6px;font-size:12px">
+            📅 <span id="budgetDtLabel">Bulan Ini</span>
+          </div>
+          <div class="date-picker-panel" id="budgetDatePicker">
+            <div class="dp-header">
+              <div class="dp-month-nav" onclick="budgetDpNav(-1)">‹</div>
+              <div class="dp-month-label" id="budgetDpLabel"></div>
+              <div class="dp-month-nav" onclick="budgetDpNav(1)">›</div>
+            </div>
+            <div class="dp-weekdays">
+              <div class="dp-wd">Min</div><div class="dp-wd">Sen</div><div class="dp-wd">Sel</div>
+              <div class="dp-wd">Rab</div><div class="dp-wd">Kam</div><div class="dp-wd">Jum</div><div class="dp-wd">Sab</div>
+            </div>
+            <div class="dp-days" id="budgetDpDays"></div>
+            <div class="dp-range-info" id="budgetDpRangeInfo"></div>
+            <div class="dp-presets">
+              <div class="dp-preset" onclick="budgetDpPreset('today')">Hari ini</div>
+              <div class="dp-preset active" onclick="budgetDpPreset('month')">Bulan Ini</div>
+              <div class="dp-preset" onclick="budgetDpPreset('last3')">3 Bulan</div>
+              <div class="dp-preset" onclick="budgetDpPreset('year')">Tahun Ini</div>
+              <div class="dp-preset" onclick="budgetDpPreset('all')">Semua</div>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
     <div class="budget-header-bg">
       <div class="budget-period">
         <div class="period-label" id="budgetPeriod"></div>
-        <div class="period-nav">
+        <div class="period-nav" style="display:none">
           <div class="period-btn">‹</div>
           <div class="period-btn">›</div>
         </div>
@@ -1797,11 +1954,10 @@ body {
     <div class="topbar"><div class="topbar-logo">O<span>FM</span></div></div>
     <div style="height:8px"></div>
     <div class="profile-hero glass">
-      <div class="avatar">O</div>
+      <div class="avatar" id="profileAvatar">O</div>
       <div class="profile-info">
-        <div class="pi-name">Orias</div>
-        <div class="pi-email">orias@ofm.app</div>
-        <div class="pi-since" id="piSince">OFM Member</div>
+        <div class="pi-name" id="profileName">—</div>
+        <div class="pi-email" id="profileEmail" style="font-size:12px;color:var(--txt3)"></div>
       </div>
     </div>
     <div class="settings-group">
@@ -1840,6 +1996,14 @@ body {
         </div>
         <div class="settings-item" onclick="showToast('☁️ Backup tersinkron')">
           <div class="si-icon">☁️</div><div class="si-text"><div class="si-name">Cloud Backup</div><div class="si-desc">Terakhir: hari ini 09:14</div></div><div class="si-badge">Sinkron</div>
+        </div>
+      </div>
+    </div>
+    <div class="settings-group">
+      <div class="settings-label">Akun</div>
+      <div class="s-items">
+        <div class="settings-item" onclick="doLogout()" style="color:var(--red)">
+          <div class="si-icon">🚪</div><div class="si-text"><div class="si-name" style="color:var(--red)">Keluar</div><div class="si-desc">Logout dari akun OFM</div></div><div class="si-arrow" style="color:var(--red)">›</div>
         </div>
       </div>
     </div>
@@ -2368,6 +2532,7 @@ function showPage(id) {
 
   S.currentPage = id;
   if (id === 'analytics')  { setTimeout(renderAnalytics, 60); }
+  if (id === 'budget')     setTimeout(renderBudget, 30);
   if (id === 'akun')       renderWallets();
   if (id === 'goals')      renderGoals();
   if (id === 'recurring')  renderRecurList();
@@ -2622,26 +2787,45 @@ function fmtDate(s) {
    BUDGET
 ══════════════════════════════════════════ */
 function renderBudget() {
-  const used  = BUDGET.cats.reduce((s,c)=>s+c.spent,0);
-  const left  = Math.max(0,BUDGET.total-used);
-  document.getElementById('bov-total').textContent='Rp '+BUDGET.total.toLocaleString('id-ID');
-  document.getElementById('bov-used').textContent ='Rp '+used.toLocaleString('id-ID');
-  document.getElementById('bov-left').textContent ='Rp '+left.toLocaleString('id-ID');
-  document.getElementById('bov-save').textContent =Math.round(left/BUDGET.total*100)+'%';
-  document.getElementById('budgetPeriod').textContent=
-    new Date().toLocaleDateString('id-ID',{month:'long',year:'numeric'});
-  document.getElementById('budgetCats').innerHTML=BUDGET.cats.map(c=>{
-    const pct   = Math.min(100,Math.round(c.spent/c.limit*100));
+  // Apply budget filter to compute real spent from transactions
+  const bf   = typeof BUDGET_FILTER !== 'undefined' ? BUDGET_FILTER : {};
+  const filtTx = S.transactions.filter(t => {
+    if (t.type !== 'expense') return false;
+    if (bf.dateFrom && t.date < bf.dateFrom) return false;
+    if (bf.dateTo   && t.date > bf.dateTo)   return false;
+    return true;
+  });
+  // Build spent per catId from filtered transactions
+  const spentMap = {};
+  filtTx.forEach(t => {
+    spentMap[t.catId] = (spentMap[t.catId] || 0) + t.amount;
+  });
+  const used = Object.values(spentMap).reduce((s,v) => s+v, 0);
+  const left = Math.max(0, BUDGET.total - used);
+  document.getElementById('bov-total').textContent = 'Rp ' + BUDGET.total.toLocaleString('id-ID');
+  document.getElementById('bov-used').textContent  = 'Rp ' + used.toLocaleString('id-ID');
+  document.getElementById('bov-left').textContent  = 'Rp ' + left.toLocaleString('id-ID');
+  document.getElementById('bov-save').textContent  = BUDGET.total > 0 ? Math.round(left/BUDGET.total*100)+'%' : '—';
+  // Period label
+  const periodEl = document.getElementById('budgetPeriod');
+  if (periodEl) {
+    if (!bf.dateFrom) periodEl.textContent = 'Semua Waktu';
+    else if (bf.dateFrom === bf.dateTo) periodEl.textContent = fmtDateShort(bf.dateFrom);
+    else periodEl.textContent = fmtDateShort(bf.dateFrom) + ' – ' + fmtDateShort(bf.dateTo);
+  }
+  document.getElementById('budgetCats').innerHTML = BUDGET.cats.map(c => {
+    const spent = spentMap[c.id] || 0;
+    const pct   = c.limit > 0 ? Math.min(100, Math.round(spent/c.limit*100)) : 0;
     const color = pct>90?'var(--red)':pct>70?'var(--gold)':c.color;
     return `
       <div class="bcat glass-sm">
         <div class="bcat-head">
           <div class="bcat-icon" style="background:${c.color}22">${c.icon}</div>
           <div class="bcat-name">${c.label}</div>
-          <div class="bcat-remain">sisa Rp ${fmtK(Math.max(0,c.limit-c.spent))}</div>
+          <div class="bcat-remain">sisa Rp ${fmtK(Math.max(0,c.limit-spent))}</div>
         </div>
         <div class="bcat-bar-bg"><div class="bcat-bar-fill" style="width:${pct}%;background:${color}"></div></div>
-        <div class="bcat-amounts"><span>Rp ${c.spent.toLocaleString('id-ID')}</span><span>Rp ${c.limit.toLocaleString('id-ID')}</span></div>
+        <div class="bcat-amounts"><span>Rp ${spent.toLocaleString('id-ID')}</span><span>Rp ${c.limit.toLocaleString('id-ID')}</span></div>
       </div>`;
   }).join('');
 }
@@ -3336,31 +3520,52 @@ function checkBudgetAlerts() {
 
 const DB_KEY = 'ofm_data_v1';
 
+// ── Firestore save (debounced 800ms) ──────────────────────
+let _saveTimer = null;
 function saveToStorage() {
+  clearTimeout(_saveTimer);
+  _saveTimer = setTimeout(_saveNow, 800);
+}
+async function _saveNow() {
+  if (!window._currentUser || !window._fbDb) return;
   try {
-    localStorage.setItem(DB_KEY, JSON.stringify({
+    const { doc, setDoc } = window._fbFns;
+    await setDoc(doc(window._fbDb, 'users', window._currentUser.uid), {
       transactions: S.transactions,
       budgetCats:   BUDGET.cats,
       goals:        GOALS,
       wallets:      WALLETS,
       recurrings:   RECURRINGS,
-    }));
-  } catch(e) { console.warn('Storage full', e); }
+      updatedAt:    Date.now(),
+    });
+  } catch(e) { console.warn('Firestore save error', e); }
 }
 
-function loadFromStorage() {
+// ── Firestore load ─────────────────────────────────────────
+window._loadUserData = async function(uid) {
+  if (!window._fbDb) return;
   try {
-    const raw = localStorage.getItem(DB_KEY);
-    if (!raw) return false;
-    const data = JSON.parse(raw);
-    if (data.transactions) S.transactions = data.transactions;
-    if (data.budgetCats)   BUDGET.cats    = data.budgetCats;
-    if (data.goals)        GOALS      = data.goals;
-    if (data.wallets)      WALLETS    = data.wallets;
-    if (data.recurrings)   RECURRINGS = data.recurrings;
-    return true;
-  } catch(e) { return false; }
-}
+    // Clear old localStorage data
+    localStorage.removeItem('ofm_data_v1');
+    const { doc, getDoc } = window._fbFns;
+    const snap = await getDoc(doc(window._fbDb, 'users', uid));
+    if (snap.exists()) {
+      const data = snap.data();
+      if (data.transactions) S.transactions = data.transactions;
+      if (data.budgetCats)   BUDGET.cats    = data.budgetCats;
+      if (data.goals)        GOALS          = data.goals;
+      if (data.wallets)      WALLETS        = data.wallets;
+      if (data.recurrings)   RECURRINGS     = data.recurrings;
+    }
+    // Init app after data loaded
+    _initApp();
+  } catch(e) {
+    console.warn('Firestore load error', e);
+    _initApp();
+  }
+};
+
+function loadFromStorage() { /* replaced by Firestore */ }
 
 /* ══════════════════════════════════════════
    GOALS STATE
@@ -3597,10 +3802,8 @@ function initScrollDetection() {
   });
 }
 
-function init() {
-  loadFromStorage();
-
-  // Set balance (no animation needed when starting from 0)
+function _initApp() {
+  // Set balance
   const el = document.getElementById('totalBalance');
   if (el) el.textContent = '0';
 
@@ -3616,9 +3819,13 @@ function init() {
 
   // Scroll detection for topbar glass
   setTimeout(initScrollDetection, 100);
-
   setTimeout(initRiverTooltip, 300);
   setTimeout(() => { processRecurringDue(); checkBudgetAlerts(); }, 500);
+}
+
+function init() {
+  // App init is triggered by Firebase auth state → _loadUserData → _initApp
+  // This is kept as no-op for DOMContentLoaded
 }
 
 
@@ -3672,39 +3879,24 @@ function renderAnalyticsDp() {
     const ds = ANALYTICS_DP.year + '-' + String(ANALYTICS_DP.month+1).padStart(2,'0') + '-' + String(d).padStart(2,'0');
     let cls = 'dp-day';
     if (ds === todayStr) cls += ' today';
-    if (ANALYTICS_DP.rangeStart && ANALYTICS_DP.rangeEnd) {
-      if (ds === ANALYTICS_DP.rangeStart)      cls += ' range-start';
-      else if (ds === ANALYTICS_DP.rangeEnd)   cls += ' range-end';
-      else if (ds > ANALYTICS_DP.rangeStart && ds < ANALYTICS_DP.rangeEnd) cls += ' in-range';
-    } else if (ds === ANALYTICS_DP.rangeStart) cls += ' selected';
+    if (ds === ANALYTICS_DP.rangeStart) cls += ' selected';
     html += '<div class="' + cls + '" onclick="analyticsDpClick(\'' + ds + '\')">' + d + '</div>';
   }
   document.getElementById('analyticsDpDays').innerHTML = html;
 
   const info = document.getElementById('analyticsDpRangeInfo');
-  if (!ANALYTICS_DP.rangeStart)       info.textContent = 'Pilih tanggal awal';
-  else if (!ANALYTICS_DP.rangeEnd)    info.textContent = fmtDateShort(ANALYTICS_DP.rangeStart) + ' → Pilih akhir';
-  else                                info.textContent = fmtDateShort(ANALYTICS_DP.rangeStart) + ' → ' + fmtDateShort(ANALYTICS_DP.rangeEnd);
+  if (info) info.textContent = ANALYTICS_DP.rangeStart ? fmtDateShort(ANALYTICS_DP.rangeStart) : 'Pilih tanggal';
 }
 
 function analyticsDpClick(ds) {
-  if (!ANALYTICS_DP.rangeStart || (ANALYTICS_DP.rangeStart && ANALYTICS_DP.rangeEnd)) {
-    ANALYTICS_DP.rangeStart = ds;
-    ANALYTICS_DP.rangeEnd   = null;
-  } else {
-    if (ds < ANALYTICS_DP.rangeStart) {
-      ANALYTICS_DP.rangeEnd   = ANALYTICS_DP.rangeStart;
-      ANALYTICS_DP.rangeStart = ds;
-    } else {
-      ANALYTICS_DP.rangeEnd = ds;
-    }
-    ANALYTICS_FILTER.dateFrom = ANALYTICS_DP.rangeStart;
-    ANALYTICS_FILTER.dateTo   = ANALYTICS_DP.rangeEnd;
-    updateAnalyticsDtLabel();
-    document.getElementById('analyticsDatePicker').classList.remove('open');
-    renderAnalytics();
-  }
-  renderAnalyticsDp();
+  // Single click = filter that specific day
+  ANALYTICS_DP.rangeStart   = ds;
+  ANALYTICS_DP.rangeEnd     = ds;
+  ANALYTICS_FILTER.dateFrom = ds;
+  ANALYTICS_FILTER.dateTo   = ds;
+  updateAnalyticsDtLabel();
+  document.getElementById('analyticsDatePicker').classList.remove('open');
+  renderAnalytics();
 }
 
 function analyticsDpPreset(preset) {
@@ -3812,6 +4004,162 @@ function txDpPreset(p) {
   const today     = new Date().toISOString().split('T')[0];
   const yesterday = new Date(Date.now()-86400000).toISOString().split('T')[0];
   pickTxDate(p === 'today' ? today : yesterday);
+}
+
+
+/* ══════════════════════════════════════════
+   BUDGET DATE PICKER
+══════════════════════════════════════════ */
+const BUDGET_DP = { year: new Date().getFullYear(), month: new Date().getMonth() };
+const BUDGET_FILTER = (function() {
+  const now  = new Date();
+  const from = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0];
+  const to   = now.toISOString().split('T')[0];
+  return { dateFrom: from, dateTo: to };
+})();
+
+function toggleBudgetDatePicker() {
+  const panel   = document.getElementById('budgetDatePicker');
+  const trigger = document.getElementById('budgetDtTrigger');
+  if (panel.classList.contains('open')) { panel.classList.remove('open'); return; }
+  BUDGET_DP.year  = new Date().getFullYear();
+  BUDGET_DP.month = new Date().getMonth();
+  renderBudgetDp();
+  positionDatePanel(panel, trigger);
+  panel.classList.add('open');
+}
+
+function budgetDpNav(dir) {
+  BUDGET_DP.month += dir;
+  if (BUDGET_DP.month > 11) { BUDGET_DP.month = 0; BUDGET_DP.year++; }
+  if (BUDGET_DP.month < 0)  { BUDGET_DP.month = 11; BUDGET_DP.year--; }
+  renderBudgetDp();
+}
+
+function renderBudgetDp() {
+  const months = ['Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember'];
+  document.getElementById('budgetDpLabel').textContent = months[BUDGET_DP.month] + ' ' + BUDGET_DP.year;
+  const firstDay    = new Date(BUDGET_DP.year, BUDGET_DP.month, 1).getDay();
+  const daysInMonth = new Date(BUDGET_DP.year, BUDGET_DP.month + 1, 0).getDate();
+  const todayStr    = new Date().toISOString().split('T')[0];
+  const selDate     = BUDGET_FILTER.dateFrom === BUDGET_FILTER.dateTo ? BUDGET_FILTER.dateFrom : null;
+  let html = '';
+  for (let i = 0; i < firstDay; i++) html += '<div class="dp-day empty"></div>';
+  for (let d = 1; d <= daysInMonth; d++) {
+    const ds  = BUDGET_DP.year + '-' + String(BUDGET_DP.month+1).padStart(2,'0') + '-' + String(d).padStart(2,'0');
+    let cls = 'dp-day';
+    if (ds === todayStr) cls += ' today';
+    if (ds === selDate)  cls += ' selected';
+    html += '<div class="' + cls + '" onclick="budgetDpPickDay(\'' + ds + '\')">' + d + '</div>';
+  }
+  document.getElementById('budgetDpDays').innerHTML = html;
+  const info = document.getElementById('budgetDpRangeInfo');
+  if (info) info.textContent = BUDGET_FILTER.dateFrom && BUDGET_FILTER.dateTo && BUDGET_FILTER.dateFrom !== BUDGET_FILTER.dateTo
+    ? fmtDateShort(BUDGET_FILTER.dateFrom) + ' – ' + fmtDateShort(BUDGET_FILTER.dateTo)
+    : BUDGET_FILTER.dateFrom ? fmtDateShort(BUDGET_FILTER.dateFrom) : '';
+}
+
+function budgetDpPickDay(ds) {
+  // Single click = set both from and to to that day
+  BUDGET_FILTER.dateFrom = ds;
+  BUDGET_FILTER.dateTo   = ds;
+  document.getElementById('budgetDtLabel').textContent = fmtDateShort(ds);
+  document.getElementById('budgetDatePicker').classList.remove('open');
+  renderBudget();
+}
+
+function budgetDpPreset(preset) {
+  const today = new Date(); today.setHours(0,0,0,0);
+  const ts    = today.toISOString().split('T')[0];
+  let from, to, label;
+  if (preset === 'today') {
+    from = to = ts; label = 'Hari Ini';
+  } else if (preset === 'month') {
+    from = new Date(today.getFullYear(), today.getMonth(), 1).toISOString().split('T')[0];
+    to = ts; label = 'Bulan Ini';
+  } else if (preset === 'last3') {
+    const d = new Date(today); d.setMonth(d.getMonth()-3);
+    from = d.toISOString().split('T')[0]; to = ts; label = '3 Bulan';
+  } else if (preset === 'year') {
+    from = today.getFullYear() + '-01-01'; to = ts; label = 'Tahun Ini';
+  } else {
+    from = null; to = null; label = 'Semua';
+  }
+  BUDGET_FILTER.dateFrom = from;
+  BUDGET_FILTER.dateTo   = to;
+  document.getElementById('budgetDtLabel').textContent = label;
+  document.querySelectorAll('#budgetDatePicker .dp-preset').forEach(el => {
+    el.classList.toggle('active', el.getAttribute('onclick') === "budgetDpPreset('" + preset + "')");
+  });
+  document.getElementById('budgetDatePicker').classList.remove('open');
+  renderBudget();
+}
+
+
+/* ══════════════════════════════════════════
+   AUTH FUNCTIONS
+══════════════════════════════════════════ */
+let _authMode = 'login';
+
+function switchAuthTab(mode) {
+  _authMode = mode;
+  const isLogin = mode === 'login';
+  document.getElementById('tabLogin').style.background    = isLogin ? 'rgba(255,255,255,0.12)' : 'transparent';
+  document.getElementById('tabLogin').style.color         = isLogin ? '#fff' : 'rgba(255,255,255,0.45)';
+  document.getElementById('tabRegister').style.background = !isLogin ? 'rgba(255,255,255,0.12)' : 'transparent';
+  document.getElementById('tabRegister').style.color      = !isLogin ? '#fff' : 'rgba(255,255,255,0.45)';
+  document.getElementById('authBtn').textContent          = isLogin ? 'Masuk' : 'Daftar';
+  document.getElementById('authNameWrap').style.display   = isLogin ? 'none' : 'block';
+  document.getElementById('authError').textContent = '';
+}
+
+async function doEmailAuth() {
+  const email    = document.getElementById('authEmail').value.trim();
+  const password = document.getElementById('authPassword').value;
+  const errEl    = document.getElementById('authError');
+  const btn      = document.getElementById('authBtn');
+  if (!email || !password) { errEl.textContent = 'Isi email dan password dulu'; return; }
+  btn.textContent = '...';
+  btn.disabled    = true;
+  try {
+    if (_authMode === 'login') {
+      await window._fbFns.signInWithEmailAndPassword(window._fbAuth, email, password);
+    } else {
+      const name = document.getElementById('authName').value.trim();
+      const cred = await window._fbFns.createUserWithEmailAndPassword(window._fbAuth, email, password);
+      // Update display name
+      if (name) await cred.user.updateProfile({ displayName: name }).catch(()=>{});
+    }
+    errEl.textContent = '';
+  } catch(e) {
+    const msgs = {
+      'auth/user-not-found':     'Akun tidak ditemukan',
+      'auth/wrong-password':     'Password salah',
+      'auth/email-already-in-use': 'Email sudah terdaftar',
+      'auth/weak-password':      'Password minimal 6 karakter',
+      'auth/invalid-email':      'Format email tidak valid',
+      'auth/invalid-credential': 'Email atau password salah',
+    };
+    errEl.textContent = msgs[e.code] || 'Terjadi kesalahan, coba lagi';
+    btn.textContent   = _authMode === 'login' ? 'Masuk' : 'Daftar';
+    btn.disabled      = false;
+  }
+}
+
+async function doGoogleAuth() {
+  try {
+    await window._fbFns.signInWithPopup(window._fbAuth, window._fbProvider);
+  } catch(e) {
+    if (e.code !== 'auth/popup-closed-by-user') {
+      document.getElementById('authError').textContent = 'Login Google gagal, coba lagi';
+    }
+  }
+}
+
+async function doLogout() {
+  showConfirm('Keluar dari OFM?', 'Lo harus login lagi untuk mengakses data.', async () => {
+    await window._fbFns.signOut(window._fbAuth);
+  }, '🚪');
 }
 
 window.addEventListener('resize',()=>{ if(S.currentPage==='dashboard')drawRiver(); if(S.currentPage==='analytics')renderAnalytics(); });
@@ -4016,20 +4364,14 @@ function renderRiwayatDp() {
     const dateStr = `${RIWAYAT_DP.year}-${String(RIWAYAT_DP.month+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
     let cls = 'dp-day';
     if (dateStr === todayStr) cls += ' today';
-    if (RIWAYAT_DP.rangeStart && RIWAYAT_DP.rangeEnd) {
-      if (dateStr === RIWAYAT_DP.rangeStart) cls += ' range-start';
-      else if (dateStr === RIWAYAT_DP.rangeEnd) cls += ' range-end';
-      else if (dateStr > RIWAYAT_DP.rangeStart && dateStr < RIWAYAT_DP.rangeEnd) cls += ' in-range';
-    } else if (dateStr === RIWAYAT_DP.rangeStart) cls += ' selected';
+    if (dateStr === RIWAYAT_DP.rangeStart) cls += ' selected';
     html += `<div class="${cls}" onclick="riwayatDpClick('${dateStr}')">${d}</div>`;
   }
   document.getElementById('riwayatDpDays').innerHTML = html;
 
   // Update range info
   const info = document.getElementById('riwayatDpRangeInfo');
-  if (!RIWAYAT_DP.rangeStart) info.textContent = 'Pilih tanggal awal';
-  else if (!RIWAYAT_DP.rangeEnd) info.textContent = fmtDateShort(RIWAYAT_DP.rangeStart) + ' → Pilih akhir';
-  else info.textContent = fmtDateShort(RIWAYAT_DP.rangeStart) + ' → ' + fmtDateShort(RIWAYAT_DP.rangeEnd);
+  if (info) info.textContent = RIWAYAT_DP.rangeStart ? fmtDateShort(RIWAYAT_DP.rangeStart) : 'Pilih tanggal';
 }
 
 function fmtDateShort(s) {
@@ -4039,26 +4381,17 @@ function fmtDateShort(s) {
 }
 
 function riwayatDpClick(dateStr) {
-  if (!RIWAYAT_DP.rangeStart || (RIWAYAT_DP.rangeStart && RIWAYAT_DP.rangeEnd)) {
-    // Start fresh selection
-    RIWAYAT_DP.rangeStart = dateStr;
-    RIWAYAT_DP.rangeEnd   = null;
-  } else {
-    // Set end date
-    if (dateStr < RIWAYAT_DP.rangeStart) {
-      RIWAYAT_DP.rangeEnd   = RIWAYAT_DP.rangeStart;
-      RIWAYAT_DP.rangeStart = dateStr;
-    } else {
-      RIWAYAT_DP.rangeEnd = dateStr;
-    }
-    // Apply filter
-    RIWAYAT_FILTER.dateFrom = RIWAYAT_DP.rangeStart;
-    RIWAYAT_FILTER.dateTo   = RIWAYAT_DP.rangeEnd;
-    updateRiwayatDateLabel();
-    document.getElementById('riwayatDatePicker').classList.remove('open');
-    renderRiwayat();
-  }
-  renderRiwayatDp();
+  // Single click = filter that specific day
+  RIWAYAT_DP.rangeStart = dateStr;
+  RIWAYAT_DP.rangeEnd   = dateStr;
+  RIWAYAT_FILTER.dateFrom = dateStr;
+  RIWAYAT_FILTER.dateTo   = dateStr;
+  const lbl = document.getElementById('riwayatDateLabel');
+  if (lbl) lbl.textContent = fmtDateShort(dateStr);
+  const trigger = document.getElementById('riwayatDateTrigger');
+  if (trigger) trigger.classList.add('active');
+  document.getElementById('riwayatDatePicker').classList.remove('open');
+  renderRiwayat();
 }
 
 function riwayatDpPreset(preset) {
