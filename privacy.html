@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Kebijakan Privasi — OFM (Orias Financial Management)</title>
+<style>
+  :root{
+    --bg:#050d1f; --card:#0d1830; --border:rgba(255,255,255,0.08);
+    --txt:#eef2f8; --txt2:#a9b4c9; --teal:#2dd4bf; --red:#f87171;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0; background:radial-gradient(circle at 20% 0%, #0b1730 0%, var(--bg) 55%);
+    color:var(--txt); font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;
+    line-height:1.65; padding:32px 18px 80px;
+  }
+  .wrap{max-width:720px; margin:0 auto;}
+  h1{font-size:1.6rem; margin-bottom:4px;}
+  .sub{color:var(--txt2); font-size:0.9rem; margin-bottom:32px;}
+  h2{font-size:1.1rem; margin-top:36px; color:var(--teal); display:flex; align-items:center; gap:8px;}
+  p, li{color:var(--txt2); font-size:0.95rem;}
+  ul{padding-left:20px;}
+  .card{
+    background:var(--card); border:1px solid var(--border); border-radius:16px;
+    padding:20px 22px; margin-top:14px;
+  }
+  a{color:var(--teal);}
+  .foot{margin-top:48px; padding-top:20px; border-top:1px solid var(--border); font-size:0.85rem; color:var(--txt2);}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Kebijakan Privasi <span style="color:var(--teal)">OFM</span></h1>
+  <div class="sub">Orias Financial Management &middot; Terakhir diperbarui: Agustus 2026</div>
+
+  <div class="card">
+    <p>OFM adalah aplikasi manajemen keuangan pribadi. Kebijakan ini menjelaskan data apa saja yang dikumpulkan aplikasi ini, bagaimana data tersebut digunakan, dan bagaimana kamu bisa mengontrolnya.</p>
+  </div>
+
+  <h2>Data yang Dikumpulkan</h2>
+  <ul>
+    <li><strong>Akun (jika login):</strong> alamat email dan kata sandi terenkripsi, diproses melalui Firebase Authentication (Google).</li>
+    <li><strong>Data transaksi keuangan:</strong> catatan pemasukan, pengeluaran, transfer, saldo akun, kategori, dan nominal yang kamu masukkan sendiri ke aplikasi.</li>
+    <li><strong>Foto struk (opsional):</strong> jika kamu melampirkan foto struk pada transaksi.</li>
+    <li><strong>Mode Tamu:</strong> jika kamu menggunakan aplikasi tanpa login, seluruh data disimpan hanya di perangkatmu sendiri (local storage) dan tidak dikirim ke server manapun.</li>
+  </ul>
+
+  <h2>Bagaimana Data Digunakan</h2>
+  <ul>
+    <li>Data akun dan transaksi digunakan semata-mata untuk menjalankan fungsi aplikasi (menyimpan dan menampilkan catatan keuanganmu, sinkronisasi antar perangkat).</li>
+    <li>Data disimpan di Firebase (Google Cloud Firestore) menggunakan aturan akses yang membatasi setiap pengguna hanya bisa mengakses datanya sendiri.</li>
+    <li>Aplikasi ini <strong>tidak menjual atau membagikan data pribadi</strong> kamu ke pihak ketiga mana pun, termasuk untuk keperluan iklan.</li>
+  </ul>
+
+  <h2>Penyimpanan &amp; Keamanan</h2>
+  <p>Data akun tersimpan di infrastruktur Firebase milik Google, yang menerapkan enkripsi saat transit dan saat disimpan. Komunikasi antara aplikasi dan server dilakukan melalui HTTPS.</p>
+
+  <h2>Kontrol &amp; Hak Kamu</h2>
+  <ul>
+    <li>Kamu bisa menghapus transaksi atau akunmu kapan saja langsung dari dalam aplikasi.</li>
+    <li>Kamu bisa berhenti menggunakan mode akun dan beralih ke Mode Tamu jika tidak ingin data tersimpan di server.</li>
+    <li>Untuk permintaan penghapusan data secara menyeluruh, hubungi kontak di bawah.</li>
+  </ul>
+
+  <h2>Pihak Ketiga</h2>
+  <p>Aplikasi ini menggunakan layanan Firebase (Google) untuk autentikasi dan penyimpanan data. Google memproses data ini sesuai <a href="https://policies.google.com/privacy" target="_blank" rel="noopener">Kebijakan Privasi Google</a>.</p>
+
+  <h2>Perubahan Kebijakan</h2>
+  <p>Kebijakan ini bisa diperbarui sewaktu-waktu mengikuti perkembangan fitur aplikasi. Perubahan akan dipublikasikan di halaman ini.</p>
+
+  <h2>Kontak</h2>
+  <p>Pertanyaan seputar privasi bisa diarahkan melalui GitHub: <a href="https://github.com/bayuharlanpriangga" target="_blank" rel="noopener">github.com/bayuharlanpriangga</a></p>
+
+  <div class="foot">OFM &middot; dikembangkan secara independen oleh Bayu Harlan Priangga.</div>
+</div>
+</body>
+</html>
