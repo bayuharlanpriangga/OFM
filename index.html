@@ -32,7 +32,7 @@
   /* Liquid Glass recipe */
   --glass-bg:        rgba(255,255,255,0.08);
   --glass-bg-heavy:  rgba(255,255,255,0.13);
-  --glass-blur:      28px;
+  --glass-blur:      9px;
   --glass-border:    rgba(255,255,255,0.22);
   --glass-border-b:  rgba(255,255,255,0.07);
   --glass-shine:     rgba(255,255,255,0.55);
@@ -59,36 +59,13 @@ body {
 #loadingScreen {
   position: fixed; inset: 0; z-index: 100000;
   display: flex; align-items: center; justify-content: center;
-  background: #060A18;
+  /* Transparent so the real animated #bg-canvas (same orbs used throughout
+     the app) shows straight through — no separate/duplicated background. */
+  background: rgba(6,10,24,0.42);
   overflow: hidden;
   transition: opacity 0.5s ease;
 }
 #loadingScreen.hide { opacity: 0; pointer-events: none; }
-.loading-orb {
-  position: absolute; border-radius: 50%; filter: blur(60px);
-  opacity: 0.55; pointer-events: none;
-}
-/* Colors matched to #bg-canvas orb palette (0,80,200 / 130,0,200 / 0,160,130) */
-.loading-orb.o1 {
-  width: 320px; height: 320px; top: -80px; left: -60px;
-  background: radial-gradient(circle, rgba(0,80,200,0.55), transparent 70%);
-  animation: loadingFloat 7s ease-in-out infinite;
-}
-.loading-orb.o2 {
-  width: 340px; height: 340px; bottom: -100px; right: -80px;
-  background: radial-gradient(circle, rgba(130,0,200,0.45), transparent 70%);
-  animation: loadingFloat 9s ease-in-out infinite reverse;
-}
-.loading-orb.o3 {
-  width: 260px; height: 260px; bottom: 15%; left: -60px;
-  background: radial-gradient(circle, rgba(0,160,130,0.4), transparent 70%);
-  animation: loadingFloat 8s ease-in-out infinite;
-  animation-delay: -3s;
-}
-@keyframes loadingFloat {
-  0%, 100% { transform: translate(0, 0) scale(1); }
-  50%      { transform: translate(18px, -22px) scale(1.08); }
-}
 .loading-grid {
   position: absolute; inset: 0;
   background-image:
@@ -154,8 +131,8 @@ body {
 ═══════════════════════════════════════ */
 .glass {
   background: var(--glass-bg);
-  backdrop-filter: blur(var(--glass-blur)) saturate(180%) brightness(1.05);
-  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(180%) brightness(1.05);
+  backdrop-filter: blur(9px) saturate(195%) brightness(1.12);
+  -webkit-backdrop-filter: blur(9px) saturate(195%) brightness(1.12);
   border-radius: var(--r);
   /* Kaca tepi atas lebih terang (specular), bawah lebih gelap = depth */
   border: 1px solid var(--glass-border);
@@ -193,8 +170,8 @@ body {
 /* Heavy glass variant */
 .glass-heavy {
   background: var(--glass-bg-heavy);
-  backdrop-filter: blur(40px) saturate(200%) brightness(1.08);
-  -webkit-backdrop-filter: blur(40px) saturate(200%) brightness(1.08);
+  backdrop-filter: blur(14px) saturate(205%) brightness(1.12);
+  -webkit-backdrop-filter: blur(14px) saturate(205%) brightness(1.12);
   border-radius: var(--r);
   border: 1px solid rgba(255,255,255,0.28);
   border-bottom-color: rgba(255,255,255,0.08);
@@ -226,8 +203,8 @@ body {
 /* Glass small radius variant */
 .glass-sm {
   background: var(--glass-bg);
-  backdrop-filter: blur(20px) saturate(160%);
-  -webkit-backdrop-filter: blur(20px) saturate(160%);
+  backdrop-filter: blur(7px) saturate(185%) brightness(1.1);
+  -webkit-backdrop-filter: blur(7px) saturate(185%) brightness(1.1);
   border-radius: var(--r-sm);
   border: 1px solid var(--glass-border);
   border-bottom-color: var(--glass-border-b);
@@ -258,6 +235,10 @@ body {
   position: relative;
   z-index: 1;
 }
+/* Keeps app content invisible (but still laid out/rendering) until the loading
+   screen starts dismissing, so only the animated canvas shows through the
+   loading screen — not the dashboard/page content sitting behind it. */
+#app.pre-load { visibility: hidden; }
 
 .page {
   display: none;
@@ -266,7 +247,7 @@ body {
   height: 100dvh;
   overflow-y: auto;
   overflow-x: hidden;
-  animation: pageSlideIn 0.3s cubic-bezier(0.22,1,0.36,1);
+  animation: pageSlideIn 0.4s cubic-bezier(0.22,1,0.36,1);
 }
 .page.active { display: block; }
 
@@ -292,8 +273,8 @@ body {
 .topbar:has(.topbar-logo:empty):not(:has(.topbar-greeting)) { padding-bottom: 4px; }
 .topbar.scrolled {
   background: rgba(8,12,28,0.72);
-  backdrop-filter: blur(28px) saturate(180%);
-  -webkit-backdrop-filter: blur(28px) saturate(180%);
+  backdrop-filter: blur(9px) saturate(195%);
+  -webkit-backdrop-filter: blur(9px) saturate(195%);
   border-bottom: 1px solid rgba(255,255,255,0.07);
 }
 .topbar-left { display: flex; flex-direction: column; gap: 1px; }
@@ -388,31 +369,44 @@ body {
   display: flex; flex-direction: column; align-items: center; gap: 2px;
   cursor: pointer; padding: 8px 12px; border-radius: 99px;
   min-width: 52px; transition: all 0.2s cubic-bezier(0.22,1,0.36,1);
-  position: relative;
+  position: relative; z-index: 1;
 }
 .nav-item:active { transform: scale(0.9); }
 
-/* Active pill highlight */
-.nav-item.active {
+/* The moving glass highlight lives in a single shared element (#navIndicator)
+   that glides between items instead of popping in/out per item — see
+   moveNavIndicator() in JS. */
+.nav-indicator {
+  position: absolute;
+  left: 0; top: 0;
+  border-radius: 99px;
   background: rgba(255,255,255,0.12);
   box-shadow: inset 0 1px 0 rgba(255,255,255,0.3), inset 0 -1px 0 rgba(0,0,0,0.15);
+  transition: transform 0.45s cubic-bezier(0.22,1,0.36,1), width 0.45s cubic-bezier(0.22,1,0.36,1);
+  pointer-events: none;
+  opacity: 0;
+  z-index: 0;
 }
+.nav-indicator.ready { opacity: 1; }
 
 .nav-icon  { font-size: 20px; transition: transform 0.25s cubic-bezier(0.34,1.56,0.64,1); line-height: 1; }
 .nav-label { font-size: 9px; font-weight: 600; color: var(--txt3); letter-spacing: 0.3px; transition: color 0.15s; }
 .nav-item.active .nav-icon  { transform: scale(1.18) translateY(-1px); }
 .nav-item.active .nav-label { color: var(--teal); }
 
-/* Active teal dot indicator */
-.nav-item.active::after {
+/* Active teal dot indicator — fades in/out in sync with the sliding pill */
+.nav-item::after {
   content: '';
   position: absolute;
-  bottom: 4px;
+  bottom: 4px; left: 50%; transform: translateX(-50%);
   width: 4px; height: 4px;
   border-radius: 50%;
   background: var(--teal);
   box-shadow: 0 0 6px rgba(42,232,196,0.8);
+  opacity: 0;
+  transition: opacity 0.3s ease;
 }
+.nav-item.active::after { opacity: 1; }
 
 .nav-center {
   width: 48px; height: 48px; border-radius: 50%;
@@ -535,8 +529,8 @@ body {
 /* Better page transitions */
 .page { animation: pageSlideIn 0.3s cubic-bezier(0.22,1,0.36,1); }
 @keyframes pageSlideIn {
-  from { opacity: 0; transform: translateY(14px) scale(0.99); }
-  to   { opacity: 1; transform: translateY(0) scale(1); }
+  from { opacity: 0; transform: translateY(10px) scale(0.985); filter: blur(6px); }
+  to   { opacity: 1; transform: translateY(0) scale(1); filter: blur(0); }
 }
 .river-wrap { margin: 0 20px; padding: 18px 18px 14px; }
 .river-header {
@@ -710,6 +704,7 @@ body {
 .dl-item  { display: flex; align-items: center; gap: 8px; }
 .dl-color { width: 10px; height: 10px; border-radius: 3px; flex-shrink: 0; }
 .dl-name  { font-size: 12px; color: var(--txt2); flex: 1; }
+.dl-sub   { font-size: 10px; color: var(--txt3); margin-top: 1px; }
 .dl-bar   { flex: 1; height: 4px; background: rgba(255,255,255,0.08); border-radius: 99px; overflow: hidden; }
 .dl-fill  { height: 100%; border-radius: 99px; }
 .dl-pct   { font-family: var(--mono); font-size: 12px; }
@@ -784,7 +779,10 @@ body {
 ═══════════════════════════════════════ */
 .modal-overlay {
   position: fixed; inset: 0;
-  background: rgba(0,0,0,0.55);
+  /* No dark scrim — matches .notif-panel's approach so the glass sheet's own
+     backdrop-filter (blur+saturate+brightness) picks up vivid color from
+     whatever's behind it instead of a darkened backdrop. */
+  background: transparent;
   z-index: 200;
   display: flex; align-items: center; justify-content: center;
   padding: 0 24px;
@@ -797,7 +795,10 @@ body {
   width: 100%; max-width: 400px;
   margin: 0 auto;
   max-height: 85vh;
-  background: rgba(255,255,255,0.12);
+  background:
+    radial-gradient(circle at 12% -10%, rgba(94,179,255,0.4), transparent 55%),
+    radial-gradient(circle at 100% 110%, rgba(148,90,255,0.32), transparent 60%),
+    rgba(255,255,255,0.12);
   backdrop-filter: blur(50px) saturate(200%) brightness(1.1);
   -webkit-backdrop-filter: blur(50px) saturate(200%) brightness(1.1);
   border-radius: 24px;
@@ -810,12 +811,6 @@ body {
   transition: transform 0.28s cubic-bezier(0.22,1,0.36,1);
   position: relative; overflow-y: auto; overflow-x: hidden;
 }
-.modal-sheet::before {
-  content: '';
-  position: absolute; top: 0; left: 0; right: 0; height: 50%;
-  background: linear-gradient(180deg,rgba(255,255,255,0.16) 0%,transparent 100%);
-  pointer-events: none; z-index: 0;
-}
 .modal-overlay.open .modal-sheet { transform: scale(1) translateY(0); }
 .modal-handle { display: none; }
 
@@ -825,14 +820,25 @@ body {
 .modal-close  { width: 30px; height: 30px; border-radius: 50%; background: rgba(255,255,255,0.12); border: 1px solid rgba(255,255,255,0.2); color: var(--txt2); cursor: pointer; font-size: 14px; display: flex; align-items: center; justify-content: center; box-shadow: inset 0 1px 0 rgba(255,255,255,0.3); }
 
 .type-toggle { display: flex; margin: 0 20px 14px; background: rgba(0,0,0,0.2); border-radius: var(--r-sm); padding: 4px; gap: 4px; position: relative; z-index: 1; }
+/* Sliding glass highlight — single shared element that glides between
+   type-btns instead of popping in/out per button. See moveTypeIndicator() in JS. */
+.type-indicator {
+  position: absolute;
+  top: 4px; left: 4px;
+  border-radius: 10px;
+  background: rgba(255,255,255,0.15);
+  box-shadow: inset 0 1.5px 0 rgba(255,255,255,0.4), 0 2px 8px rgba(0,0,0,0.2);
+  transition: transform 0.35s cubic-bezier(0.22,1,0.36,1), width 0.35s cubic-bezier(0.22,1,0.36,1);
+  pointer-events: none;
+  opacity: 0;
+  z-index: 0;
+}
+.type-indicator.ready { opacity: 1; }
 .type-btn {
   flex: 1; padding: 10px; border-radius: 10px; border: none; cursor: pointer;
   font-family: var(--disp); font-size: 13px; font-weight: 600;
-  transition: all 0.2s; background: transparent; color: var(--txt3);
-}
-.type-btn.active {
-  background: rgba(255,255,255,0.15);
-  box-shadow: inset 0 1.5px 0 rgba(255,255,255,0.4), 0 2px 8px rgba(0,0,0,0.2);
+  transition: color 0.2s; background: transparent; color: var(--txt3);
+  position: relative; z-index: 1;
 }
 .type-btn.active.expense { color: var(--red); }
 .type-btn.active.income  { color: var(--teal); }
@@ -976,8 +982,8 @@ body {
 .s-items {
   border-radius: var(--r); overflow: hidden; display: flex; flex-direction: column;
   background: var(--glass-bg);
-  backdrop-filter: blur(var(--glass-blur)) saturate(180%) brightness(1.05);
-  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(180%) brightness(1.05);
+  backdrop-filter: blur(9px) saturate(195%) brightness(1.12);
+  -webkit-backdrop-filter: blur(9px) saturate(195%) brightness(1.12);
   border: 1px solid var(--glass-border);
   border-bottom-color: var(--glass-border-b);
   border-right-color: var(--glass-border-b);
@@ -1132,7 +1138,7 @@ body {
 /* Goal Modal */
 .goal-modal-overlay {
   position: fixed; inset: 0;
-  background: rgba(0,0,0,0.55);
+  background: transparent;
   z-index: 200;
   display: flex; align-items: center; justify-content: center;
   padding: 0 24px;
@@ -1227,7 +1233,10 @@ body {
   left: 50%;
   transform: translateX(-50%) translateY(-14px) scale(0.97);
   width: calc(100% - 32px); max-width: 398px;
-  background: rgba(255,255,255,0.12);
+  background:
+    radial-gradient(circle at 12% -10%, rgba(94,179,255,0.4), transparent 55%),
+    radial-gradient(circle at 100% 110%, rgba(148,90,255,0.32), transparent 60%),
+    rgba(255,255,255,0.12);
   backdrop-filter: blur(50px) saturate(200%) brightness(1.1);
   -webkit-backdrop-filter: blur(50px) saturate(200%) brightness(1.1);
   border-radius: 26px;
@@ -1320,7 +1329,7 @@ body {
 /* ═══ PICKER MODAL (centered popup) ═══ */
 .picker-overlay {
   position: fixed; inset: 0;
-  background: rgba(0,0,0,0.55);
+  background: transparent;
   z-index: 800;
   display: flex; align-items: center; justify-content: center;
   padding: 0 24px;
@@ -1330,7 +1339,10 @@ body {
 .picker-overlay.open { opacity: 1; pointer-events: all; }
 .picker-modal {
   width: 100%; max-width: 340px;
-  background: rgba(255,255,255,0.12);
+  background:
+    radial-gradient(circle at 12% -10%, rgba(94,179,255,0.4), transparent 55%),
+    radial-gradient(circle at 100% 110%, rgba(148,90,255,0.32), transparent 60%),
+    rgba(255,255,255,0.12);
   backdrop-filter: blur(50px) saturate(200%) brightness(1.1);
   -webkit-backdrop-filter: blur(50px) saturate(200%) brightness(1.1);
   border-radius: 24px;
@@ -1343,13 +1355,6 @@ body {
   position: relative;
 }
 .picker-overlay.open .picker-modal { transform: scale(1) translateY(0); }
-.picker-modal::before {
-  content: '';
-  position: absolute; top: 0; left: 0; right: 0; height: 50%;
-  background: linear-gradient(180deg,rgba(255,255,255,0.16) 0%,transparent 100%);
-  border-radius: 24px 24px 0 0;
-  pointer-events: none; z-index: 0;
-}
 .picker-modal-title {
   font-family: var(--disp); font-size: 13px; font-weight: 600;
   color: var(--txt3); text-transform: uppercase; letter-spacing: 0.8px;
@@ -1400,7 +1405,7 @@ body {
 ═══════════════════════════════════════ */
 .confirm-overlay {
   position: fixed; inset: 0;
-  background: rgba(0,0,0,0.55);
+  background: transparent;
   z-index: 500;
   display: flex; align-items: center; justify-content: center;
   padding: 0 32px;
@@ -1410,7 +1415,10 @@ body {
 .confirm-overlay.open { opacity: 1; pointer-events: all; }
 .confirm-box {
   width: 100%; max-width: 360px;
-  background: rgba(255,255,255,0.12);
+  background:
+    radial-gradient(circle at 12% -10%, rgba(94,179,255,0.4), transparent 55%),
+    radial-gradient(circle at 100% 110%, rgba(148,90,255,0.32), transparent 60%),
+    rgba(255,255,255,0.12);
   backdrop-filter: blur(50px) saturate(200%) brightness(1.1);
   -webkit-backdrop-filter: blur(50px) saturate(200%) brightness(1.1);
   border-radius: 24px;
@@ -1486,11 +1494,31 @@ body {
   color: var(--teal);
   box-shadow: inset 0 1px 0 rgba(255,255,255,0.2), 0 0 10px rgba(42,232,196,0.15);
 }
+.dp-overlay {
+  position: fixed; inset: 0;
+  /* Transparent like every other modal overlay in the app (.modal-overlay,
+     .goal-modal-overlay, .picker-overlay) — the panel's own backdrop-filter
+     is what should pick up color/blur from the page behind it, same as
+     every other popup, so it all reads as one consistent design language
+     instead of the date picker looking like a separate component. */
+  background: transparent;
+  z-index: 9999;
+  display: flex; align-items: center; justify-content: center;
+  padding: 0 24px;
+  opacity: 0; pointer-events: none;
+  transition: opacity 0.2s;
+}
+.dp-overlay.open { opacity: 1; pointer-events: all; }
 .date-picker-panel {
-  position: fixed;
   width: 272px;
-  max-width: calc(100vw - 32px);
-  background: rgba(255,255,255,0.12);
+  max-width: 100%;
+  /* Same glass recipe as .modal-sheet / .picker-modal, so every popup in
+     the app — category picker, goal modal, date picker — looks like one
+     consistent design system instead of each having its own glass. */
+  background:
+    radial-gradient(circle at 12% -10%, rgba(94,179,255,0.4), transparent 55%),
+    radial-gradient(circle at 100% 110%, rgba(148,90,255,0.32), transparent 60%),
+    rgba(255,255,255,0.12);
   backdrop-filter: blur(50px) saturate(200%) brightness(1.1);
   -webkit-backdrop-filter: blur(50px) saturate(200%) brightness(1.1);
   border-radius: 20px;
@@ -1498,12 +1526,10 @@ body {
   border-bottom-color: rgba(255,255,255,0.08);
   box-shadow: inset 0 2px 0 rgba(255,255,255,0.55), 0 24px 60px rgba(0,0,0,0.45);
   padding: 14px;
-  z-index: 9999;
-  opacity: 0; pointer-events: none;
-  transform: translateY(-8px);
-  transition: opacity 0.2s, transform 0.25s cubic-bezier(0.22,1,0.36,1);
+  transform: scale(0.92) translateY(10px);
+  transition: transform 0.25s cubic-bezier(0.22,1,0.36,1);
 }
-.date-picker-panel.open { opacity: 1; pointer-events: all; transform: translateY(0); }
+.dp-overlay.open .date-picker-panel { transform: scale(1) translateY(0); }
 .dp-header {
   display: flex; align-items: center; justify-content: space-between;
   margin-bottom: 10px;
@@ -1546,7 +1572,7 @@ body {
   background: var(--teal); color: #001a14; font-weight: 700;
 }
 .dp-day.other-month { opacity: 0.3; }
-.dp-day.empty { pointer-events: none; height: 34px; }
+.dp-day.dp-blank { pointer-events: none; height: 34px; }
 .dp-presets {
   display: flex; gap: 4px; flex-wrap: wrap; margin-top: 10px;
   padding-top: 10px; border-top: 1px solid rgba(255,255,255,0.08);
@@ -1672,10 +1698,12 @@ body {
   box-shadow: inset 0 1px 0 rgba(255,255,255,0.2), 0 0 10px rgba(42,232,196,0.15);
 }
 .currency-filter-panel {
-  position: fixed;
   width: 180px;
-  max-width: calc(100vw - 32px);
-  background: rgba(255,255,255,0.12);
+  max-width: 100%;
+  background:
+    radial-gradient(circle at 12% -10%, rgba(94,179,255,0.4), transparent 55%),
+    radial-gradient(circle at 100% 110%, rgba(148,90,255,0.32), transparent 60%),
+    rgba(255,255,255,0.12);
   backdrop-filter: blur(50px) saturate(200%) brightness(1.1);
   -webkit-backdrop-filter: blur(50px) saturate(200%) brightness(1.1);
   border-radius: 16px;
@@ -1683,13 +1711,11 @@ body {
   border-bottom-color: rgba(255,255,255,0.08);
   box-shadow: inset 0 2px 0 rgba(255,255,255,0.55), 0 24px 60px rgba(0,0,0,0.45);
   padding: 6px;
-  z-index: 9999;
-  opacity: 0; pointer-events: none;
-  transform: translateY(-8px);
-  transition: opacity 0.2s, transform 0.25s cubic-bezier(0.22,1,0.36,1);
+  transform: scale(0.92) translateY(10px);
+  transition: transform 0.25s cubic-bezier(0.22,1,0.36,1);
   max-height: 260px; overflow-y: auto;
 }
-.currency-filter-panel.open { opacity: 1; pointer-events: all; transform: translateY(0); }
+.dp-overlay.open .currency-filter-panel { transform: scale(1) translateY(0); }
 .currency-opt {
   display: flex; align-items: center; justify-content: space-between;
   padding: 9px 10px; border-radius: 10px; cursor: pointer;
@@ -1701,17 +1727,17 @@ body {
 
 .filter-chip-row {
   display: flex; gap: 6px; padding: 0 20px 10px;
-  overflow-x: auto; scrollbar-width: none;
 }
-.filter-chip-row::-webkit-scrollbar { display: none; }
 .filter-chip {
-  flex: 0 0 auto;
-  font-size: 11px; font-weight: 600; padding: 5px 12px;
+  flex: 1 1 0; min-width: 0;
+  display: flex; align-items: center; justify-content: center; gap: 4px;
+  font-size: 11px; font-weight: 600; padding: 7px 4px;
   border-radius: 99px; cursor: pointer; color: var(--txt3);
   background: rgba(255,255,255,0.06);
   border: 1px solid rgba(255,255,255,0.1);
   box-shadow: inset 0 1px 0 rgba(255,255,255,0.12);
   transition: all 0.15s; white-space: nowrap;
+  overflow: hidden; text-overflow: ellipsis;
 }
 .filter-chip.active {
   background: rgba(42,232,196,0.14); color: var(--teal);
@@ -1744,13 +1770,6 @@ body {
   text-align: center; padding: 50px 20px; color: var(--txt3);
 }
 .riwayat-empty-icon { font-size: 40px; margin-bottom: 12px; }
-
-/* ═══════════════════════════════════════
-   DATE INPUT (custom native override)
-═══════════════════════════════════════ */
-.field input[type="date"] {
-  color-scheme: dark;
-}
 
 /* ═══════════════════════════════════════
    PAGE: KELOLA KATEGORI
@@ -1929,9 +1948,6 @@ body {
 
 <!-- ══════ LOADING SCREEN ══════ -->
 <div id="loadingScreen">
-  <div class="loading-orb o1"></div>
-  <div class="loading-orb o2"></div>
-  <div class="loading-orb o3"></div>
   <div class="loading-grid"></div>
   <div class="loading-inner">
     <div class="loading-logo-mark">
@@ -2011,16 +2027,17 @@ body {
   </div>
 </div>
 
-<div id="app" style="display:block">
+<div id="app" style="display:block" class="pre-load">
 
   <!-- ── BOTTOM NAV — Floating Pill ── -->
   <nav class="bottom-nav" id="bottomNav">
+    <div class="nav-indicator" id="navIndicator"></div>
     <div class="nav-item active" onclick="showPage('dashboard')" id="nav-dashboard">
-      <div class="nav-icon">◈</div>
+      <div class="nav-icon"><svg class="ic" viewBox="0 0 24 24"><path d="M4 11l8-7 8 7"/><path d="M6 10v10h12V10"/></svg></div>
       <div class="nav-label">Beranda</div>
     </div>
     <div class="nav-item" onclick="showPage('budget')" id="nav-budget">
-      <div class="nav-icon">◎</div>
+      <div class="nav-icon"><svg class="ic" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="4"/><circle cx="12" cy="12" r="0.6" fill="currentColor" stroke="none"/></svg></div>
       <div class="nav-label">Anggaran</div>
     </div>
     <div class="nav-center" onclick="openModal()">＋</div>
@@ -2029,7 +2046,7 @@ body {
       <div class="nav-label">Riwayat</div>
     </div>
     <div class="nav-item" onclick="showPage('settings')" id="nav-more">
-      <div class="nav-icon">⋯</div>
+      <div class="nav-icon"><svg class="ic" viewBox="0 0 24 24" fill="currentColor" stroke="none"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg></div>
       <div class="nav-label">Lainnya</div>
     </div>
   </nav>
@@ -2179,7 +2196,7 @@ body {
     <div class="tx-list" id="txList"></div>
     <div class="empty" id="txEmpty" style="display:none">
       <div class="empty-icon"><svg class="ic" viewBox="0 0 24 24"><rect x="2" y="6" width="20" height="12" rx="2"/><circle cx="12" cy="12" r="3"/></svg></div>
-      <h3>Belum ada transaksi</h3>
+      <h3>Belum ada transaksi hari ini</h3>
       <p>Tekan + untuk mulai catat</p>
     </div>
     <div style="height:16px"></div>
@@ -2197,6 +2214,7 @@ body {
           <div class="date-filter-trigger icon-btn" id="budgetDtTrigger" onclick="toggleBudgetDatePicker()" style="border-radius:12px;width:auto;padding:0 12px;gap:6px;font-size:12px">
             <svg class="ic" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg> <span id="budgetDtLabel">Bulan Ini</span>
           </div>
+          <div class="dp-overlay" id="budgetDatePickerOverlay" onclick="if(event.target===this) closeDp(document.getElementById('budgetDatePicker'))">
           <div class="date-picker-panel" id="budgetDatePicker">
             <div class="dp-header">
               <div class="dp-month-nav" onclick="budgetDpNav(-1)">‹</div>
@@ -2216,6 +2234,7 @@ body {
               <div class="dp-preset" onclick="budgetDpPreset('year')">Tahun Ini</div>
               <div class="dp-preset" onclick="budgetDpPreset('all')">Semua</div>
             </div>
+          </div>
           </div>
         </div>
       </div>
@@ -2260,6 +2279,7 @@ body {
           <div class="icon-btn date-filter-trigger" id="analyticsDtTrigger" onclick="toggleAnalyticsDatePicker()" style="border-radius:12px;width:auto;padding:0 12px;gap:6px;font-size:12px">
             <svg class="ic" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg> <span id="analyticsDtLabel">Bulan Ini</span>
           </div>
+          <div class="dp-overlay" id="analyticsDatePickerOverlay" onclick="if(event.target===this) closeDp(document.getElementById('analyticsDatePicker'))">
           <div class="date-picker-panel" id="analyticsDatePicker">
             <div class="dp-header">
               <div class="dp-month-nav" onclick="analyticsDpNav(-1)">‹</div>
@@ -2280,11 +2300,14 @@ body {
               <div class="dp-preset" onclick="analyticsDpPreset('all')">Semua</div>
             </div>
           </div>
+          </div>
         </div>
       </div>
     </div>
-    <div class="section-head" style="padding-bottom:0"><h2>Dibanding Periode Lalu</h2></div>
+    <div class="section-head"><h2>Dibanding Periode Lalu</h2></div>
     <div class="compare-grid" id="compareGrid"></div>
+
+    <div class="compare-grid" id="avgGrid" style="margin:0 20px 18px"></div>
 
     <div class="type-toggle" id="donutTypeToggle" style="max-width:240px;margin-left:20px;margin-right:20px">
       <button class="type-btn active expense" id="donutBtnExpense" onclick="setDonutType('expense')">Pengeluaran</button>
@@ -2304,7 +2327,17 @@ body {
     <div class="section-head"><h2>Insight Otomatis</h2></div>
     <div class="insight-list" id="insightList"></div>
 
-    <div class="section-head"><h2>Tren 6 Bulan</h2></div>
+    <div class="section-head"><h2>Anggaran vs Realisasi</h2></div>
+    <div class="glass-sm" style="margin:0 20px 18px;padding:16px">
+      <div class="donut-legend" id="budgetOverlayList" style="padding:0"></div>
+    </div>
+
+    <div class="section-head"><h2>Per Akun</h2></div>
+    <div class="glass-sm" style="margin:0 20px 18px;padding:16px">
+      <div class="donut-legend" id="accountBreakdownList" style="padding:0"></div>
+    </div>
+
+    <div class="section-head"><h2>Tren 6 Bulan</h2><span style="font-size:11px;color:var(--txt3);font-weight:500">selalu 6 bulan</span></div>
     <div class="trend-chart-wrap glass">
       <canvas id="trendCanvas"></canvas>
       <div id="trendLegend" style="display:flex;gap:16px;padding:8px 18px 4px;justify-content:flex-end">
@@ -2392,7 +2425,7 @@ body {
     <div class="settings-group">
       <div class="settings-label">Aplikasi</div>
       <div class="s-items">
-        <div class="settings-item" onclick="toggleNotifPanel()">
+        <div class="settings-item" id="settingsNotifTrigger" onclick="toggleNotifPanel()">
           <div class="si-icon"><svg class="ic" viewBox="0 0 24 24"><path d="M6 9a6 6 0 0 1 12 0c0 5 2 6 2 6H4s2-1 2-6z"/><path d="M10 20a2 2 0 0 0 4 0"/></svg></div><div class="si-text"><div class="si-name">Notifikasi</div><div class="si-desc" id="settingsNotifDesc">0 peringatan aktif</div></div><div class="si-badge" id="settingsPushBadge" onclick="event.stopPropagation();requestPushPermission()" title="Notifikasi perangkat">Aktifkan</div>
         </div>
         <div class="settings-item" onclick="showPage('analytics')">
@@ -2442,7 +2475,8 @@ body {
       </div>
     </div>
     <div class="page-title">Catat Transaksi</div>
-    <div class="type-toggle">
+    <div class="type-toggle" id="addtxTypeToggle">
+      <div class="type-indicator" id="typeIndicator"></div>
       <button class="type-btn active expense" id="typeExpense" onclick="setType('expense')"><svg class="ic" viewBox="0 0 24 24"><path d="M3 7l6 6 4-4 8 9"/><path d="M15 18h6v-6"/></svg> Keluar</button>
       <button class="type-btn income" id="typeIncome" onclick="setType('income')"><svg class="ic" viewBox="0 0 24 24"><path d="M3 17l6-6 4 4 8-9"/><path d="M15 6h6v6"/></svg> Masuk</button>
       <button class="type-btn" id="typeTransfer" onclick="setType('transfer')"><svg class="ic" viewBox="0 0 24 24"><path d="M7 8h13M17 4l3 4-3 4"/><path d="M17 16H4M7 20l-3-4 3-4"/></svg> Transfer</button>
@@ -2684,7 +2718,8 @@ body {
         <div class="modal-title">Transaksi Rutin</div>
         <button class="modal-close" onclick="closeRecurModal()"><svg class="ic" viewBox="0 0 24 24"><path d="M5 5l14 14M19 5L5 19"/></svg></button>
       </div>
-      <div class="type-toggle" style="margin-bottom:10px">
+      <div class="type-toggle" id="recurTypeToggle" style="margin-bottom:10px">
+        <div class="type-indicator" id="recurTypeIndicator"></div>
         <button class="type-btn active expense" id="recurTypeExpense" onclick="setRecurType('expense')"><svg class="ic" viewBox="0 0 24 24"><path d="M3 7l6 6 4-4 8 9"/><path d="M15 18h6v-6"/></svg> Keluar</button>
         <button class="type-btn income" id="recurTypeIncome" onclick="setRecurType('income')"><svg class="ic" viewBox="0 0 24 24"><path d="M3 17l6-6 4 4 8-9"/><path d="M15 6h6v6"/></svg> Masuk</button>
       </div>
@@ -2710,7 +2745,13 @@ body {
         <div class="field-row">
           <div class="field">
             <label>Tanggal Mulai</label>
-            <input type="date" id="recurStart">
+            <div class="date-filter-wrap">
+            <div class="picker-trigger" id="recurStartTrigger" onclick="toggleRecurStartPicker()">
+              <span id="recurStartLabel">Hari ini</span>
+              <span class="picker-arrow">▾</span>
+            </div>
+            </div>
+            <input type="hidden" id="recurStart">
           </div>
           <div class="field">
             <label>Kategori</label>
@@ -2723,6 +2764,26 @@ body {
         </div>
       </div>
       <button class="modal-submit" onclick="submitRecur()">Simpan Rutin</button>
+    </div>
+  </div>
+  <!-- Positioned outside .modal-sheet on purpose: the sheet has a CSS
+       transform, which would make position:fixed descendants confine
+       themselves to the sheet's box instead of the full viewport. -->
+  <div class="dp-overlay" id="recurStartPickerOverlay" onclick="if(event.target===this) closeDp(document.getElementById('recurStartPicker'))">
+    <div class="date-picker-panel" id="recurStartPicker">
+      <div class="dp-header">
+        <div class="dp-month-nav" onclick="recurStartDpNav(-1)">‹</div>
+        <div class="dp-month-label" id="recurStartDpLabel"></div>
+        <div class="dp-month-nav" onclick="recurStartDpNav(1)">›</div>
+      </div>
+      <div class="dp-weekdays">
+        <div class="dp-wd">Min</div><div class="dp-wd">Sen</div><div class="dp-wd">Sel</div>
+        <div class="dp-wd">Rab</div><div class="dp-wd">Kam</div><div class="dp-wd">Jum</div><div class="dp-wd">Sab</div>
+      </div>
+      <div class="dp-days" id="recurStartDpDays"></div>
+      <div class="dp-presets">
+        <div class="dp-preset" onclick="recurStartDpPreset('today')">Hari ini</div>
+      </div>
     </div>
   </div>
 
@@ -2752,7 +2813,13 @@ body {
         <div class="field-row">
           <div class="field">
             <label>Deadline</label>
-            <input type="date" id="goalDeadline">
+            <div class="date-filter-wrap">
+            <div class="picker-trigger" id="goalDeadlineTrigger" onclick="toggleGoalDeadlinePicker()">
+              <span id="goalDeadlineLabel">Pilih tanggal</span>
+              <span class="picker-arrow">▾</span>
+            </div>
+            </div>
+            <input type="hidden" id="goalDeadline">
           </div>
           <div class="field">
             <label>Ikon</label>
@@ -2765,6 +2832,28 @@ body {
         </div>
       </div>
       <button class="modal-submit" onclick="submitGoal()">Simpan Goal</button>
+    </div>
+  </div>
+  <!-- Positioned outside .modal-sheet on purpose: the sheet has a CSS
+       transform, which would make position:fixed descendants confine
+       themselves to the sheet's box instead of the full viewport. -->
+  <div class="dp-overlay" id="goalDeadlinePickerOverlay" onclick="if(event.target===this) closeDp(document.getElementById('goalDeadlinePicker'))">
+    <div class="date-picker-panel" id="goalDeadlinePicker">
+      <div class="dp-header">
+        <div class="dp-month-nav" onclick="goalDeadlineDpNav(-1)">‹</div>
+        <div class="dp-month-label" id="goalDeadlineDpLabel"></div>
+        <div class="dp-month-nav" onclick="goalDeadlineDpNav(1)">›</div>
+      </div>
+      <div class="dp-weekdays">
+        <div class="dp-wd">Min</div><div class="dp-wd">Sen</div><div class="dp-wd">Sel</div>
+        <div class="dp-wd">Rab</div><div class="dp-wd">Kam</div><div class="dp-wd">Jum</div><div class="dp-wd">Sab</div>
+      </div>
+      <div class="dp-days" id="goalDeadlineDpDays"></div>
+      <div class="dp-presets">
+        <div class="dp-preset" onclick="goalDeadlineDpPreset(3)">3 Bulan</div>
+        <div class="dp-preset" onclick="goalDeadlineDpPreset(6)">6 Bulan</div>
+        <div class="dp-preset" onclick="goalDeadlineDpPreset(12)">1 Tahun</div>
+      </div>
     </div>
   </div>
 
@@ -2799,6 +2888,7 @@ body {
 
 
   <!-- ══════ TX DATE PICKER ══════ -->
+  <div class="dp-overlay" id="txDatePickerOverlay" onclick="if(event.target===this) closeDp(document.getElementById('txDatePicker'))">
   <div class="date-picker-panel" id="txDatePicker">
     <div class="dp-header">
       <div class="dp-month-nav" onclick="txDpNav(-1)">‹</div>
@@ -2814,6 +2904,7 @@ body {
       <div class="dp-preset" onclick="txDpPreset('today')">Hari ini</div>
       <div class="dp-preset" onclick="txDpPreset('yesterday')">Kemarin</div>
     </div>
+  </div>
   </div>
 
   <!-- ══════ CONFIRM MODAL ══════ -->
@@ -2871,12 +2962,15 @@ body {
           <svg class="ic" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v10M9.5 9.5c0-1.5 3-1.5 3-1.5 1.4 0 2.5.9 2.5 2s-1.1 2-2.5 2-2.5.9-2.5 2 1.1 2 2.5 2c0 0 3 0 3-1.5"/></svg>
           <span id="riwayatCurrencyLabel">Semua</span>
         </div>
+        <div class="dp-overlay" id="riwayatCurrencyPanelOverlay" onclick="if(event.target===this) closeDp(document.getElementById('riwayatCurrencyPanel'))">
         <div class="currency-filter-panel" id="riwayatCurrencyPanel"></div>
+        </div>
       </div>
       <div class="date-filter-wrap" style="flex-shrink:0">
         <div class="date-filter-trigger" id="riwayatDateTrigger" onclick="toggleRiwayatDatePicker()">
           <svg class="ic" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg> <span id="riwayatDateLabel">Semua</span>
         </div>
+        <div class="dp-overlay" id="riwayatDatePickerOverlay" onclick="if(event.target===this) closeDp(document.getElementById('riwayatDatePicker'))">
         <div class="date-picker-panel" id="riwayatDatePicker">
           <div class="dp-header">
             <div class="dp-month-nav" onclick="riwayatDpNav(-1)">‹</div>
@@ -2896,6 +2990,7 @@ body {
             <div class="dp-preset" onclick="riwayatDpPreset('last3')">3 Bulan</div>
             <div class="dp-preset" onclick="riwayatDpPreset('all')">Semua</div>
           </div>
+        </div>
         </div>
       </div>
     </div>
@@ -3052,6 +3147,58 @@ const PILL_PAGES = ['dashboard', 'budget', 'riwayat'];
 // Pages accessible via more drawer
 const MORE_PAGES = ['analytics', 'settings'];
 
+// Tracks which nav slot is currently highlighted ('dashboard'|'budget'|'riwayat'|'more')
+// so the sliding glass indicator can be re-positioned correctly on resize.
+let _activeNavKey = 'dashboard';
+
+function moveNavIndicator(key, animate = true) {
+  _activeNavKey = key;
+  const nav = document.getElementById('bottomNav');
+  const indicator = document.getElementById('navIndicator');
+  const item = document.getElementById('nav-' + key);
+  if (!nav || !indicator) return;
+  if (!item) { indicator.classList.remove('ready'); return; }
+  const navRect  = nav.getBoundingClientRect();
+  const itemRect = item.getBoundingClientRect();
+  if (!animate) indicator.style.transition = 'none';
+  indicator.style.width     = itemRect.width + 'px';
+  indicator.style.height    = itemRect.height + 'px';
+  indicator.style.top       = (itemRect.top - navRect.top) + 'px';
+  indicator.style.transform = `translateX(${itemRect.left - navRect.left}px)`;
+  indicator.classList.add('ready');
+  if (!animate) {
+    void indicator.offsetWidth; // force reflow so the transition re-enables cleanly
+    indicator.style.transition = '';
+  }
+}
+window.addEventListener('resize', () => moveNavIndicator(_activeNavKey, false));
+
+// Generic sliding indicator for type-toggle groups (Keluar/Masuk/Transfer etc.) —
+// same glide-between-items behavior as the bottom nav pill.
+function moveTypeIndicator(toggleId, indicatorId, activeId, animate = true) {
+  const toggle = document.getElementById(toggleId);
+  const indicator = document.getElementById(indicatorId);
+  const item = document.getElementById(activeId);
+  if (!toggle || !indicator) return;
+  if (!item) { indicator.classList.remove('ready'); return; }
+  const toggleRect = toggle.getBoundingClientRect();
+  const itemRect = item.getBoundingClientRect();
+  if (!animate) indicator.style.transition = 'none';
+  indicator.style.width     = itemRect.width + 'px';
+  indicator.style.height    = itemRect.height + 'px';
+  indicator.style.top       = (itemRect.top - toggleRect.top) + 'px';
+  indicator.style.transform = `translateX(${itemRect.left - toggleRect.left}px)`;
+  indicator.classList.add('ready');
+  if (!animate) {
+    void indicator.offsetWidth; // force reflow so the transition re-enables cleanly
+    indicator.style.transition = '';
+  }
+}
+window.addEventListener('resize', () => {
+  moveTypeIndicator('addtxTypeToggle', 'typeIndicator', 'type' + S.currentType.charAt(0).toUpperCase() + S.currentType.slice(1), false);
+  moveTypeIndicator('recurTypeToggle', 'recurTypeIndicator', 'recurType' + (_recurType||'expense').charAt(0).toUpperCase() + (_recurType||'expense').slice(1), false);
+});
+
 function showPage(id) {
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
 
@@ -3071,10 +3218,12 @@ function showPage(id) {
     if (PILL_PAGES.includes(id)) {
       const ni = document.getElementById('nav-' + id);
       if (ni) ni.classList.add('active');
+      moveNavIndicator(id);
     } else {
       // Any other page (settings, analytics, goals, akun, recurring) is reached via "Lainnya"
       const moreBtn = document.getElementById('nav-more');
       if (moreBtn) moreBtn.classList.add('active');
+      moveNavIndicator('more');
     }
   }
 
@@ -3203,6 +3352,7 @@ function setType(t) {
     const b = document.getElementById('type' + type.charAt(0).toUpperCase() + type.slice(1));
     b.className = 'type-btn' + (type === t ? ' active ' + t : '');
   });
+  moveTypeIndicator('addtxTypeToggle', 'typeIndicator', 'type' + t.charAt(0).toUpperCase() + t.slice(1));
   // Sync category picker field label/value with the new type's category list
   const catHidden = document.getElementById('txCategory');
   const catLbl     = document.getElementById('txCategoryLabel');
@@ -3386,7 +3536,11 @@ function fmtK(n) {
 function renderTxList() {
   const list  = document.getElementById('txList');
   const empty = document.getElementById('txEmpty');
-  const txs   = S.transactions.slice(0,15);
+  // "Terbaru" on the dashboard is meant to be a same-day feed — only show
+  // today's transactions here; once the day rolls over it goes back to the
+  // empty state automatically (full history still lives in Riwayat).
+  const todayStr = new Date().toISOString().split('T')[0];
+  const txs = S.transactions.filter(t => t.date === todayStr).slice(0, 15);
   if (!txs.length) { list.innerHTML=''; empty.style.display='block'; return; }
   empty.style.display='none';
   const groups = {};
@@ -3450,11 +3604,16 @@ function deleteTx(id) {
 }
 
 function calcScore() {
+  // No transactions at all yet — there's nothing to score. Returning null
+  // (instead of a fake flat number) lets drawScore() show a proper
+  // "belum ada data" empty state rather than a misleading "Cukup Baik".
+  if (!S.transactions.length) return null;
   // Simple dynamic score: savings rate, budget adherence, tx consistency
   const income  = S.transactions.filter(t=>t.type==='income').reduce((s,t)=>s+t.amount,0);
   const expense = S.transactions.filter(t=>t.type==='expense').reduce((s,t)=>s+t.amount,0);
-  if (!income) return 600;
-  const savRate = Math.max(0, (income-expense)/income);
+  // Savings rate: portion of income left after expenses. With expenses but
+  // no income at all, that's the worst case (0) rather than a divide-by-zero.
+  const savRate = income > 0 ? Math.max(0, (income-expense)/income) : (expense > 0 ? 0 : 1);
   const budgetPct = expense > 0 ? Math.min(1, BUDGET.total/expense) : 1;
   const txBonus = Math.min(50, S.transactions.length * 5);
   return Math.round(600 + savRate*150 + budgetPct*50 + txBonus);
@@ -4063,10 +4222,23 @@ function drawScore() {
   canvas.style.width='80px'; canvas.style.height='80px';
   const ctx=canvas.getContext('2d'); ctx.scale(dpr,dpr);
   const score = calcScore();
-  const pct = score/850;
   const cx=40,cy=40,r=30,lw=7;
   ctx.strokeStyle='rgba(255,255,255,0.08)'; ctx.lineWidth=lw;
   ctx.beginPath(); ctx.arc(cx,cy,r,0,Math.PI*2); ctx.stroke();
+
+  const scoreEl = document.getElementById('siVal');
+  const gradeEl = document.getElementById('siGrade');
+  const tipEl   = document.getElementById('siTip');
+
+  if (score === null) {
+    // No transactions yet — neutral empty ring, no fake number/grade.
+    if (scoreEl) scoreEl.textContent = '—';
+    if (gradeEl) gradeEl.innerHTML = `<span class="status-dot" style="background:var(--txt3)"></span> Belum ada data`;
+    if (tipEl)   tipEl.textContent   = 'Catat transaksi pertamamu untuk mulai dapat skor keuangan.';
+    return;
+  }
+
+  const pct = score/850;
   const grad=ctx.createLinearGradient(0,0,80,80);
   if (score >= 700) { grad.addColorStop(0,'#C4A8FF'); grad.addColorStop(1,'#5EB3FF'); }
   else if (score >= 600) { grad.addColorStop(0,'#FFD166'); grad.addColorStop(1,'#FF8C00'); }
@@ -4074,9 +4246,6 @@ function drawScore() {
   ctx.strokeStyle=grad; ctx.lineWidth=lw; ctx.lineCap='round';
   ctx.beginPath(); ctx.arc(cx,cy,r,-Math.PI/2,-Math.PI/2+pct*Math.PI*2); ctx.stroke();
   // Update score text
-  const scoreEl = document.getElementById('siVal');
-  const gradeEl = document.getElementById('siGrade');
-  const tipEl   = document.getElementById('siTip');
   const info = gradeScore(score);
   if (scoreEl) scoreEl.textContent = score;
   if (gradeEl) gradeEl.innerHTML = `<span class="status-dot" style="background:${info.color}"></span> ${escapeHtml(info.g)}`;
@@ -4091,7 +4260,10 @@ let _donutType = 'expense';
 function renderAnalytics() {
   drawDonut();
   renderCompare();
+  renderAverages();
   renderInsights();
+  renderBudgetOverlay();
+  renderAccountBreakdown();
   drawTrend();
 }
 
@@ -4330,6 +4502,114 @@ function renderInsights() {
   list.innerHTML = cards.join('');
 }
 
+/* ── Daily / weekly average spending ── */
+function periodDayCount(from, to) {
+  if (from && to) {
+    return Math.max(1, Math.round((new Date(to + 'T00:00:00') - new Date(from + 'T00:00:00')) / 86400000) + 1);
+  }
+  // "Semua" (no bound) — span from the earliest transaction to the effective end date
+  if (!S.transactions.length) return 1;
+  const earliestDate = S.transactions.reduce((min, t) => t.date < min ? t.date : min, S.transactions[0].date);
+  const endDate = to ? new Date(to + 'T00:00:00') : new Date();
+  const days = Math.round((endDate - new Date(earliestDate + 'T00:00:00')) / 86400000) + 1;
+  return Math.max(1, days);
+}
+
+function renderAverages() {
+  const grid = document.getElementById('avgGrid');
+  if (!grid) return;
+  const _af = typeof ANALYTICS_FILTER !== 'undefined' ? ANALYTICS_FILTER : {};
+  const inRange = t => (!_af.dateFrom || t.date >= _af.dateFrom) && (!_af.dateTo || t.date <= _af.dateTo);
+  const totalExp = S.transactions.filter(t => t.type === 'expense' && inRange(t)).reduce((s,t)=>s+t.amount,0);
+  const days = periodDayCount(_af.dateFrom, _af.dateTo);
+  const dailyAvg = totalExp / days;
+  const weeklyAvg = dailyAvg * 7;
+
+  grid.innerHTML = `
+    <div class="compare-card glass-sm">
+      <div class="cc-label">Rata-rata Harian</div>
+      <div class="cc-val">Rp ${Math.round(dailyAvg).toLocaleString('id-ID')}</div>
+      <div class="cc-sub">berdasarkan ${days} hari</div>
+    </div>
+    <div class="compare-card glass-sm">
+      <div class="cc-label">Rata-rata Mingguan</div>
+      <div class="cc-val">Rp ${Math.round(weeklyAvg).toLocaleString('id-ID')}</div>
+      <div class="cc-sub">estimasi per 7 hari</div>
+    </div>`;
+}
+
+/* ── Budget overlay: actual spend vs budget limit per category ── */
+function renderBudgetOverlay() {
+  const wrap = document.getElementById('budgetOverlayList');
+  if (!wrap) return;
+  const catsWithLimit = BUDGET.cats.filter(c => c.limit > 0);
+  if (!catsWithLimit.length) {
+    wrap.innerHTML = `<div style="color:var(--txt3);font-size:12px;text-align:center;padding:8px 0">Belum ada limit anggaran. Atur limit per kategori di halaman <b style="color:var(--txt2)">Anggaran</b> dulu supaya bisa dibandingkan di sini.</div>`;
+    return;
+  }
+  const _af = typeof ANALYTICS_FILTER !== 'undefined' ? ANALYTICS_FILTER : {};
+  const inRange = t => (!_af.dateFrom || t.date >= _af.dateFrom) && (!_af.dateTo || t.date <= _af.dateTo);
+  const spentMap = {};
+  S.transactions.filter(t => t.type === 'expense' && inRange(t)).forEach(t => {
+    spentMap[t.catId] = (spentMap[t.catId] || 0) + t.amount;
+  });
+
+  wrap.innerHTML = catsWithLimit.map(c => {
+    const spent = spentMap[c.id] || 0;
+    const pct = Math.round((spent / c.limit) * 100);
+    const over = spent > c.limit;
+    const barColor = over ? 'var(--red)' : c.color;
+    return `
+      <div class="dl-item">
+        <div class="dl-color" style="background:${barColor}"></div>
+        <div class="dl-name">${escapeHtml(c.label)}
+          <div class="dl-sub">${over ? 'Lebih ' : ''}Rp ${spent.toLocaleString('id-ID')} / Rp ${c.limit.toLocaleString('id-ID')}</div>
+        </div>
+        <div class="dl-bar"><div class="dl-fill" style="width:${Math.min(100,pct)}%;background:${barColor}"></div></div>
+        <div class="dl-pct" style="color:${over?'var(--red)':'var(--txt2)'}">${pct}%</div>
+      </div>`;
+  }).join('');
+}
+
+/* ── Per-account/wallet breakdown ── */
+function renderAccountBreakdown() {
+  const wrap = document.getElementById('accountBreakdownList');
+  if (!wrap) return;
+  if (!WALLETS.length) {
+    wrap.innerHTML = `<div style="color:var(--txt3);font-size:12px;text-align:center;padding:8px 0">Belum ada akun/dompet ditambahkan.</div>`;
+    return;
+  }
+  const _af = typeof ANALYTICS_FILTER !== 'undefined' ? ANALYTICS_FILTER : {};
+  const inRange = t => (!_af.dateFrom || t.date >= _af.dateFrom) && (!_af.dateTo || t.date <= _af.dateTo);
+  const palette = ['#2AE8C4','#5EB3FF','#C4A8FF','#FF8C00','#FF6B84','#FFD166','#7CE38B','#FF9EC4'];
+  const map = {};
+  S.transactions.filter(t => t.type !== 'transfer' && inRange(t)).forEach(t => {
+    if (!t.account) return;
+    if (!map[t.account]) map[t.account] = { count: 0, total: 0 };
+    map[t.account].count += 1;
+    map[t.account].total += t.amount;
+  });
+  const rows = Object.entries(map)
+    .sort((a,b) => b[1].count - a[1].count)
+    .slice(0, 6)
+    .map(([id, d], i) => ({ id, name: walletName(id), color: palette[i % palette.length], ...d }));
+
+  if (!rows.length) {
+    wrap.innerHTML = `<div style="color:var(--txt3);font-size:12px;text-align:center;padding:8px 0">Belum ada transaksi pada periode ini.</div>`;
+    return;
+  }
+  const maxCount = Math.max(...rows.map(r => r.count));
+  wrap.innerHTML = rows.map(r => `
+    <div class="dl-item">
+      <div class="dl-color" style="background:${r.color}"></div>
+      <div class="dl-name">${escapeHtml(r.name)}
+        <div class="dl-sub">${r.count}x transaksi</div>
+      </div>
+      <div class="dl-bar"><div class="dl-fill" style="width:${Math.round(r.count/maxCount*100)}%;background:${r.color}"></div></div>
+      <div class="dl-pct">Rp ${fmtK(r.total)}</div>
+    </div>`).join('');
+}
+
 function drawTrend() {
   const canvas=document.getElementById('trendCanvas'); if(!canvas)return;
   const dpr=window.devicePixelRatio||1;
@@ -4338,10 +4618,17 @@ function drawTrend() {
   canvas.style.width=W+'px'; canvas.style.height=H+'px';
   const ctx=canvas.getContext('2d'); ctx.scale(dpr,dpr);
 
-  // Build month data respecting ANALYTICS_FILTER date range
+  // "Tren 6 Bulan" always spans exactly 6 months — it never shrinks to fewer
+  // months just because a narrower preset (7 Hari/Bulan Ini/etc) is active up
+  // top. But WHICH 6 months it shows does track the filter: the window's end
+  // anchors to the month containing the filter's end date. So "Bulan Ini"
+  // (dateTo = today) ends the window on this month as usual, but a custom
+  // range that ends last month shifts the whole 6-month window back so it
+  // ends on *that* month instead — the window slides with the filter instead
+  // of being clipped by it.
   const _tf = typeof ANALYTICS_FILTER !== 'undefined' ? ANALYTICS_FILTER : {};
-  const trendFrom = _tf.dateFrom ? new Date(_tf.dateFrom + 'T00:00:00') : (() => { const d = new Date(); d.setDate(1); d.setMonth(d.getMonth()-5); return d; })();
-  const trendTo   = _tf.dateTo   ? new Date(_tf.dateTo   + 'T00:00:00') : new Date();
+  const trendTo   = _tf.dateTo ? new Date(_tf.dateTo + 'T00:00:00') : new Date();
+  const trendFrom = (() => { const d = new Date(trendTo); d.setDate(1); d.setMonth(d.getMonth()-5); return d; })();
   // Build month buckets between trendFrom and trendTo
   const monthData = {};
   const monthLabels = [];
@@ -4355,8 +4642,6 @@ function drawTrend() {
     cur.setMonth(cur.getMonth() + 1);
   }
   S.transactions.forEach(t => {
-    if (_tf.dateFrom && t.date < _tf.dateFrom) return;
-    if (_tf.dateTo   && t.date > _tf.dateTo)   return;
     const key = t.date ? t.date.slice(0,7) : null;
     if (key && monthData[key]) {
       if (t.type === 'income')  monthData[key].income  += t.amount;
@@ -4579,11 +4864,13 @@ function setRecurType(t) {
     const b = document.getElementById('recurType' + type.charAt(0).toUpperCase() + type.slice(1));
     if (b) b.className = 'type-btn' + (type === t ? ' active ' + t : '');
   });
+  moveTypeIndicator('recurTypeToggle', 'recurTypeIndicator', 'recurType' + t.charAt(0).toUpperCase() + t.slice(1));
 }
 
 function openRecurModal() {
   document.getElementById('recurModalOverlay').classList.add('open');
   document.getElementById('recurStart').value = new Date().toISOString().split('T')[0];
+  document.getElementById('recurStartLabel').textContent = 'Hari ini';
   document.getElementById('recurName').value   = '';
   document.getElementById('recurAmount').value = '';
   setRecurType('expense');
@@ -4904,6 +5191,7 @@ function openGoalModal() {
   document.getElementById('goalModalOverlay').classList.add('open');
   const next3mo = new Date(); next3mo.setMonth(next3mo.getMonth() + 3);
   document.getElementById('goalDeadline').value = next3mo.toISOString().split('T')[0];
+  document.getElementById('goalDeadlineLabel').textContent = fmtDateShort(next3mo.toISOString().split('T')[0]);
   document.getElementById('goalName').value   = '';
   document.getElementById('goalTarget').value = '';
   document.getElementById('goalSaved').value  = '0';
@@ -5042,7 +5330,7 @@ function initScrollDetection() {
     }
     // Close any open date picker on scroll
     pg.addEventListener('scroll', () => {
-      document.querySelectorAll('.date-picker-panel.open').forEach(p => p.classList.remove('open'));
+      document.querySelectorAll('.dp-overlay.open .date-picker-panel, .dp-overlay.open .currency-filter-panel').forEach(p => closeDp(p));
     }, { passive: true });
   });
 }
@@ -5061,6 +5349,9 @@ function _initApp() {
   // Greeting
   const greetEl = document.getElementById('topbarGreeting');
   if (greetEl) greetEl.textContent = getGreeting();
+
+  // Position the sliding nav indicator under Beranda instantly (no glide on first paint)
+  moveNavIndicator('dashboard', false);
 
   // Scroll detection for topbar glass
   setTimeout(initScrollDetection, 100);
@@ -5102,6 +5393,8 @@ function hideLoadingScreen() {
   if (screen) {
     setTimeout(() => {
       screen.classList.add('hide');
+      const app = document.getElementById('app');
+      if (app) app.classList.remove('pre-load');
       setTimeout(() => { screen.style.display = 'none'; }, 550);
     }, 180);
   }
@@ -5136,14 +5429,12 @@ const ANALYTICS_FILTER = (function() {
 
 function toggleAnalyticsDatePicker() {
   const panel   = document.getElementById('analyticsDatePicker');
-  const trigger = document.getElementById('analyticsDtTrigger');
-  const isOpen  = panel.classList.contains('open');
-  if (isOpen) { panel.classList.remove('open'); return; }
-  positionDatePanel(panel, trigger);
+  const isOpen  = isDpOpen(panel);
+  if (isOpen) { closeDp(panel); return; }
   ANALYTICS_DP.year  = new Date().getFullYear();
   ANALYTICS_DP.month = new Date().getMonth();
   renderAnalyticsDp();
-  panel.classList.add('open');
+  openDp(panel);
 }
 
 function analyticsDpNav(dir) {
@@ -5162,7 +5453,7 @@ function renderAnalyticsDp() {
   const todayStr    = new Date().toISOString().split('T')[0];
 
   let html = '';
-  for (let i = 0; i < firstDay; i++) html += '<div class="dp-day empty"></div>';
+  for (let i = 0; i < firstDay; i++) html += '<div class="dp-day dp-blank"></div>';
   for (let d = 1; d <= daysInMonth; d++) {
     const ds = ANALYTICS_DP.year + '-' + String(ANALYTICS_DP.month+1).padStart(2,'0') + '-' + String(d).padStart(2,'0');
     let cls = 'dp-day';
@@ -5183,7 +5474,7 @@ function analyticsDpClick(ds) {
   ANALYTICS_FILTER.dateFrom = ds;
   ANALYTICS_FILTER.dateTo   = ds;
   updateAnalyticsDtLabel();
-  document.getElementById('analyticsDatePicker').classList.remove('open');
+  closeDp(document.getElementById('analyticsDatePicker'));
   renderAnalytics();
 }
 
@@ -5216,7 +5507,7 @@ function analyticsDpPreset(preset) {
   document.querySelectorAll('#analyticsDatePicker .dp-preset').forEach(el => {
     el.classList.toggle('active', el.textContent.trim() === label || el.getAttribute('onclick') === "analyticsDpPreset('" + preset + "')");
   });
-  document.getElementById('analyticsDatePicker').classList.remove('open');
+  closeDp(document.getElementById('analyticsDatePicker'));
   renderAnalytics();
 }
 
@@ -5239,13 +5530,11 @@ const TX_DP = { year: new Date().getFullYear(), month: new Date().getMonth() };
 
 function openTxDatePicker() {
   const panel   = document.getElementById('txDatePicker');
-  const trigger = document.getElementById('txDateTrigger');
-  if (panel.classList.contains('open')) { panel.classList.remove('open'); return; }
+  if (isDpOpen(panel)) { closeDp(panel); return; }
   TX_DP.year  = new Date().getFullYear();
   TX_DP.month = new Date().getMonth();
   renderTxDp();
-  positionDatePanel(panel, trigger);
-  panel.classList.add('open');
+  openDp(panel);
 }
 
 function txDpNav(dir) {
@@ -5263,7 +5552,7 @@ function renderTxDp() {
   const todayStr    = new Date().toISOString().split('T')[0];
   const curVal      = document.getElementById('txDate').value || todayStr;
   let html = '';
-  for (let i = 0; i < firstDay; i++) html += '<div class="dp-day empty"></div>';
+  for (let i = 0; i < firstDay; i++) html += '<div class="dp-day dp-blank"></div>';
   for (let d = 1; d <= daysInMonth; d++) {
     const ds  = TX_DP.year + '-' + String(TX_DP.month+1).padStart(2,'0') + '-' + String(d).padStart(2,'0');
     let cls = 'dp-day';
@@ -5285,13 +5574,124 @@ function pickTxDate(ds) {
     const d = new Date(ds + 'T00:00:00');
     lbl.textContent = d.toLocaleDateString('id-ID', { day:'numeric', month:'short' });
   }
-  document.getElementById('txDatePicker').classList.remove('open');
+  closeDp(document.getElementById('txDatePicker'));
 }
 
 function txDpPreset(p) {
   const today     = new Date().toISOString().split('T')[0];
   const yesterday = new Date(Date.now()-86400000).toISOString().split('T')[0];
   pickTxDate(p === 'today' ? today : yesterday);
+}
+
+
+/* ══════════════════════════════════════════
+   RECUR START DATE PICKER (single date, same
+   glass component as every other date picker)
+══════════════════════════════════════════ */
+const RECUR_START_DP = { year: new Date().getFullYear(), month: new Date().getMonth() };
+
+function toggleRecurStartPicker() {
+  const panel = document.getElementById('recurStartPicker');
+  if (isDpOpen(panel)) { closeDp(panel); return; }
+  const cur = document.getElementById('recurStart').value;
+  const d = cur ? new Date(cur + 'T00:00:00') : new Date();
+  RECUR_START_DP.year  = d.getFullYear();
+  RECUR_START_DP.month = d.getMonth();
+  renderRecurStartDp();
+  openDp(panel);
+}
+
+function recurStartDpNav(dir) {
+  RECUR_START_DP.month += dir;
+  if (RECUR_START_DP.month > 11) { RECUR_START_DP.month = 0; RECUR_START_DP.year++; }
+  if (RECUR_START_DP.month < 0)  { RECUR_START_DP.month = 11; RECUR_START_DP.year--; }
+  renderRecurStartDp();
+}
+
+function renderRecurStartDp() {
+  const months = ['Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember'];
+  document.getElementById('recurStartDpLabel').textContent = months[RECUR_START_DP.month] + ' ' + RECUR_START_DP.year;
+  const firstDay    = new Date(RECUR_START_DP.year, RECUR_START_DP.month, 1).getDay();
+  const daysInMonth = new Date(RECUR_START_DP.year, RECUR_START_DP.month + 1, 0).getDate();
+  const todayStr    = new Date().toISOString().split('T')[0];
+  const curVal      = document.getElementById('recurStart').value || todayStr;
+  let html = '';
+  for (let i = 0; i < firstDay; i++) html += '<div class="dp-day dp-blank"></div>';
+  for (let d = 1; d <= daysInMonth; d++) {
+    const ds  = RECUR_START_DP.year + '-' + String(RECUR_START_DP.month+1).padStart(2,'0') + '-' + String(d).padStart(2,'0');
+    let cls = 'dp-day';
+    if (ds === todayStr) cls += ' today';
+    if (ds === curVal)   cls += ' selected';
+    html += '<div class="' + cls + '" onclick="pickRecurStartDate(\'' + ds + '\')">' + d + '</div>';
+  }
+  document.getElementById('recurStartDpDays').innerHTML = html;
+}
+
+function pickRecurStartDate(ds) {
+  document.getElementById('recurStart').value = ds;
+  const today = new Date().toISOString().split('T')[0];
+  document.getElementById('recurStartLabel').textContent = (ds === today) ? 'Hari ini' : fmtDateShort(ds);
+  closeDp(document.getElementById('recurStartPicker'));
+}
+
+function recurStartDpPreset(p) {
+  const today = new Date().toISOString().split('T')[0];
+  pickRecurStartDate(p === 'today' ? today : today);
+}
+
+
+/* ══════════════════════════════════════════
+   GOAL DEADLINE DATE PICKER (single date, same
+   glass component as every other date picker)
+══════════════════════════════════════════ */
+const GOAL_DEADLINE_DP = { year: new Date().getFullYear(), month: new Date().getMonth() };
+
+function toggleGoalDeadlinePicker() {
+  const panel = document.getElementById('goalDeadlinePicker');
+  if (isDpOpen(panel)) { closeDp(panel); return; }
+  const cur = document.getElementById('goalDeadline').value;
+  const d = cur ? new Date(cur + 'T00:00:00') : new Date();
+  GOAL_DEADLINE_DP.year  = d.getFullYear();
+  GOAL_DEADLINE_DP.month = d.getMonth();
+  renderGoalDeadlineDp();
+  openDp(panel);
+}
+
+function goalDeadlineDpNav(dir) {
+  GOAL_DEADLINE_DP.month += dir;
+  if (GOAL_DEADLINE_DP.month > 11) { GOAL_DEADLINE_DP.month = 0; GOAL_DEADLINE_DP.year++; }
+  if (GOAL_DEADLINE_DP.month < 0)  { GOAL_DEADLINE_DP.month = 11; GOAL_DEADLINE_DP.year--; }
+  renderGoalDeadlineDp();
+}
+
+function renderGoalDeadlineDp() {
+  const months = ['Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember'];
+  document.getElementById('goalDeadlineDpLabel').textContent = months[GOAL_DEADLINE_DP.month] + ' ' + GOAL_DEADLINE_DP.year;
+  const firstDay    = new Date(GOAL_DEADLINE_DP.year, GOAL_DEADLINE_DP.month, 1).getDay();
+  const daysInMonth = new Date(GOAL_DEADLINE_DP.year, GOAL_DEADLINE_DP.month + 1, 0).getDate();
+  const todayStr    = new Date().toISOString().split('T')[0];
+  const curVal      = document.getElementById('goalDeadline').value;
+  let html = '';
+  for (let i = 0; i < firstDay; i++) html += '<div class="dp-day dp-blank"></div>';
+  for (let d = 1; d <= daysInMonth; d++) {
+    const ds  = GOAL_DEADLINE_DP.year + '-' + String(GOAL_DEADLINE_DP.month+1).padStart(2,'0') + '-' + String(d).padStart(2,'0');
+    let cls = 'dp-day';
+    if (ds === todayStr) cls += ' today';
+    if (ds === curVal)   cls += ' selected';
+    html += '<div class="' + cls + '" onclick="pickGoalDeadlineDate(\'' + ds + '\')">' + d + '</div>';
+  }
+  document.getElementById('goalDeadlineDpDays').innerHTML = html;
+}
+
+function pickGoalDeadlineDate(ds) {
+  document.getElementById('goalDeadline').value = ds;
+  document.getElementById('goalDeadlineLabel').textContent = fmtDateShort(ds);
+  closeDp(document.getElementById('goalDeadlinePicker'));
+}
+
+function goalDeadlineDpPreset(months) {
+  const d = new Date(); d.setMonth(d.getMonth() + months);
+  pickGoalDeadlineDate(d.toISOString().split('T')[0]);
 }
 
 
@@ -5308,13 +5708,11 @@ const BUDGET_FILTER = (function() {
 
 function toggleBudgetDatePicker() {
   const panel   = document.getElementById('budgetDatePicker');
-  const trigger = document.getElementById('budgetDtTrigger');
-  if (panel.classList.contains('open')) { panel.classList.remove('open'); return; }
+  if (isDpOpen(panel)) { closeDp(panel); return; }
   BUDGET_DP.year  = new Date().getFullYear();
   BUDGET_DP.month = new Date().getMonth();
   renderBudgetDp();
-  positionDatePanel(panel, trigger);
-  panel.classList.add('open');
+  openDp(panel);
 }
 
 function budgetDpNav(dir) {
@@ -5332,7 +5730,7 @@ function renderBudgetDp() {
   const todayStr    = new Date().toISOString().split('T')[0];
   const selDate     = BUDGET_FILTER.dateFrom === BUDGET_FILTER.dateTo ? BUDGET_FILTER.dateFrom : null;
   let html = '';
-  for (let i = 0; i < firstDay; i++) html += '<div class="dp-day empty"></div>';
+  for (let i = 0; i < firstDay; i++) html += '<div class="dp-day dp-blank"></div>';
   for (let d = 1; d <= daysInMonth; d++) {
     const ds  = BUDGET_DP.year + '-' + String(BUDGET_DP.month+1).padStart(2,'0') + '-' + String(d).padStart(2,'0');
     let cls = 'dp-day';
@@ -5352,7 +5750,7 @@ function budgetDpPickDay(ds) {
   BUDGET_FILTER.dateFrom = ds;
   BUDGET_FILTER.dateTo   = ds;
   document.getElementById('budgetDtLabel').textContent = fmtDateShort(ds);
-  document.getElementById('budgetDatePicker').classList.remove('open');
+  closeDp(document.getElementById('budgetDatePicker'));
   renderBudget();
 }
 
@@ -5379,7 +5777,7 @@ function budgetDpPreset(preset) {
   document.querySelectorAll('#budgetDatePicker .dp-preset').forEach(el => {
     el.classList.toggle('active', el.getAttribute('onclick') === "budgetDpPreset('" + preset + "')");
   });
-  document.getElementById('budgetDatePicker').classList.remove('open');
+  closeDp(document.getElementById('budgetDatePicker'));
   renderBudget();
 }
 
@@ -5724,7 +6122,7 @@ function showConfirm(title, sub, callback, icon = 'trash') {
   _confirmCallback = callback;
   document.getElementById('confirmTitle').textContent = title;
   document.getElementById('confirmSub').textContent   = sub;
-  document.getElementById('confirmIcon').textContent  = icon;
+  document.getElementById('confirmIcon').innerHTML    = ICON[icon] || ICON.trash;
   document.getElementById('confirmOverlay').classList.add('open');
 }
 
@@ -5758,13 +6156,11 @@ const RIWAYAT_FILTER = {
 
 function toggleCurrencyFilter() {
   const panel   = document.getElementById('riwayatCurrencyPanel');
-  const trigger = document.getElementById('riwayatCurrencyTrigger');
-  const isOpen  = panel.classList.contains('open');
-  document.querySelectorAll('.date-picker-panel.open').forEach(p => p.classList.remove('open'));
-  if (isOpen) { panel.classList.remove('open'); return; }
-  positionDatePanel(panel, trigger);
+  const isOpen  = isDpOpen(panel);
+  document.querySelectorAll('.dp-overlay.open .date-picker-panel').forEach(p => closeDp(p));
+  if (isOpen) { closeDp(panel); return; }
   renderCurrencyFilterPanel();
-  panel.classList.add('open');
+  openDp(panel);
 }
 
 function renderCurrencyFilterPanel() {
@@ -5787,46 +6183,91 @@ function setRiwayatCurrency(code) {
   const trigger = document.getElementById('riwayatCurrencyTrigger');
   if (lbl) lbl.textContent = code === 'all' ? 'Semua' : code;
   if (trigger) trigger.classList.toggle('active', code !== 'all');
-  document.getElementById('riwayatCurrencyPanel').classList.remove('open');
+  closeDp(document.getElementById('riwayatCurrencyPanel'));
   renderRiwayat();
 }
 
-function positionDatePanel(panel, trigger) {
-  const rect    = trigger.getBoundingClientRect();
-  const appEl   = document.getElementById('app');
-  const appRect = appEl ? appEl.getBoundingClientRect() : { left: 0, right: window.innerWidth };
-  // Panel has fixed CSS width 272px, just position it
-  const panelW = 272;
-  // Default: align right edge of panel with right edge of trigger
-  let left = rect.right - panelW;
-  // If that goes off left edge of app, align to app left
-  if (left < appRect.left + 8) left = appRect.left + 8;
-  // If it goes off right edge of app, align to app right
-  if (left + panelW > appRect.right - 8) left = appRect.right - panelW - 8;
-  const top = rect.bottom + 6;
-  // If panel would go below viewport bottom, show above trigger instead
-  const estimatedPanelH = 340;
-  const finalTop = (top + estimatedPanelH > window.innerHeight - 20)
-    ? Math.max(8, rect.top - estimatedPanelH - 6)
-    : top;
-  panel.style.top   = finalTop + 'px';
-  panel.style.left  = left + 'px';
-  panel.style.width = panelW + 'px';
+// Locks/unlocks scrolling on the active page while a fixed + backdrop-filter
+// overlay panel (date picker / currency filter) is open. Android Chrome/
+// WebView can fail to recompute backdrop-filter for a position:fixed layer
+// while the content underneath is actively scrolling (mid-gesture, before
+// any 'scroll' event handler even gets a chance to run) — the panel then
+// renders as a flat, barely-blurred "ghost" instead of properly blurred.
+// The only fully reliable fix is to not let the page scroll at all while
+// the panel is visible.
+let _dpScrollLockPage = null;
+function lockDpScroll() {
+  const pg = document.querySelector('.page.active');
+  if (!pg || _dpScrollLockPage) return;
+  _dpScrollLockPage = pg;
+  pg.style.overflow = 'hidden';
+  pg.style.touchAction = 'none';
+}
+function unlockDpScroll() {
+  if (!_dpScrollLockPage) return;
+  _dpScrollLockPage.style.overflow = '';
+  _dpScrollLockPage.style.touchAction = '';
+  _dpScrollLockPage = null;
+}
+function anyOverlayPanelOpen() {
+  return !!document.querySelector('.dp-overlay.open');
+}
+
+// Closes a date-picker/currency panel by closing its centered overlay
+// (letting the normal fade/scale-down CSS transition play, same as every
+// other modal), then — only after that transition has had time to finish —
+// forces the browser to actually drop the overlay's composited layer.
+// Without that deferred step, Android Chrome/WebView can leave a stale,
+// un-blurred "ghost" frame on screen briefly the next time it opens.
+function closeDp(panel) {
+  if (!panel) return;
+  const overlay = panel.closest('.dp-overlay');
+  if (!overlay) return;
+  overlay.classList.remove('open');
+  setTimeout(() => {
+    if (overlay.classList.contains('open')) return; // reopened before this fired
+    overlay.style.display = 'none';
+    void overlay.offsetHeight;
+    overlay.style.display = '';
+  }, 280);
+  if (!anyOverlayPanelOpen()) unlockDpScroll();
+}
+
+// Shows a date-picker/currency panel by opening its centered overlay. First
+// tears down and rebuilds the overlay's compositing layer (guards against a
+// stale layer from an earlier open — same Android backdrop-filter issue as
+// closeDp), then forces a second reflow so that "hidden" state actually
+// commits as a render frame *before* the 'open' class is added — otherwise
+// the browser can collapse both style changes into one and skip the
+// fade/scale-in transition entirely, making the panel just snap open.
+function openDp(panel) {
+  if (!panel) return;
+  const overlay = panel.closest('.dp-overlay');
+  if (!overlay) return;
+  overlay.style.display = 'none';
+  void overlay.offsetHeight; // discard any stale compositing layer
+  overlay.style.display = '';
+  void overlay.offsetHeight; // commit the pre-open frame so the transition below actually plays
+  overlay.classList.add('open');
+  lockDpScroll();
+}
+
+function isDpOpen(panel) {
+  const overlay = panel && panel.closest('.dp-overlay');
+  return !!overlay && overlay.classList.contains('open');
 }
 
 function toggleRiwayatDatePicker() {
   const panel   = document.getElementById('riwayatDatePicker');
-  const trigger = document.getElementById('riwayatDateTrigger');
-  const isOpen  = panel.classList.contains('open');
+  const isOpen  = isDpOpen(panel);
   if (isOpen) {
-    panel.classList.remove('open');
+    closeDp(panel);
     return;
   }
-  positionDatePanel(panel, trigger);
   RIWAYAT_DP.year  = new Date().getFullYear();
   RIWAYAT_DP.month = new Date().getMonth();
   renderRiwayatDp();
-  panel.classList.add('open');
+  openDp(panel);
 }
 
 function riwayatDpNav(dir) {
@@ -5846,7 +6287,7 @@ function renderRiwayatDp() {
   const todayStr = today.toISOString().split('T')[0];
 
   let html = '';
-  for (let i = 0; i < firstDay; i++) html += '<div class="dp-day empty"></div>';
+  for (let i = 0; i < firstDay; i++) html += '<div class="dp-day dp-blank"></div>';
   for (let d = 1; d <= daysInMonth; d++) {
     const dateStr = `${RIWAYAT_DP.year}-${String(RIWAYAT_DP.month+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
     let cls = 'dp-day';
@@ -5877,7 +6318,7 @@ function riwayatDpClick(dateStr) {
   if (lbl) lbl.textContent = fmtDateShort(dateStr);
   const trigger = document.getElementById('riwayatDateTrigger');
   if (trigger) trigger.classList.add('active');
-  document.getElementById('riwayatDatePicker').classList.remove('open');
+  closeDp(document.getElementById('riwayatDatePicker'));
   renderRiwayat();
 }
 
@@ -5911,7 +6352,7 @@ function riwayatDpPreset(preset) {
   const trigger = document.getElementById('riwayatDateTrigger');
   if (trigger) trigger.classList.toggle('active', preset !== 'all');
 
-  document.getElementById('riwayatDatePicker').classList.remove('open');
+  closeDp(document.getElementById('riwayatDatePicker'));
   renderRiwayat();
 }
 
@@ -5933,10 +6374,15 @@ function updateRiwayatDateLabel() {
 // Close date/currency pickers when clicking outside
 document.addEventListener('click', e => {
   if (!e.target.closest('.date-filter-wrap') && !e.target.closest('.date-picker-panel')) {
-    document.querySelectorAll('.date-picker-panel.open').forEach(p => p.classList.remove('open'));
+    document.querySelectorAll('.dp-overlay.open .date-picker-panel').forEach(p => closeDp(p));
   }
   if (!e.target.closest('.currency-filter-wrap')) {
-    document.querySelectorAll('.currency-filter-panel.open').forEach(p => p.classList.remove('open'));
+    document.querySelectorAll('.dp-overlay.open .currency-filter-panel').forEach(p => closeDp(p));
+  }
+  // Close the notification panel when tapping outside it (and outside the buttons that open it)
+  const notifPanel = document.getElementById('notifPanel');
+  if (notifPanel && notifPanel.classList.contains('open') && !e.target.closest('.notif-panel') && !e.target.closest('.bell-wrap') && !e.target.closest('#settingsNotifTrigger')) {
+    notifPanel.classList.remove('open');
   }
 });
 
