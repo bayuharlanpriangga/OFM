@@ -1,8 +1,0 @@
-[{
-      "relation": ["delegate_permission/common.handle_all_urls"],
-      "target": {
-        "namespace": "android_app",
-        "package_name": "io.github.bayuharlanpriangga.ofm",
-        "sha256_cert_fingerprints": ["4D:23:39:50:06:99:15:5A:CD:68:14:6A:C2:DE:D9:F2:AF:0C:F1:A1:F5:98:4E:D2:FD:6A:7F:57:64:25:42:EE"]
-      }
-    }]
