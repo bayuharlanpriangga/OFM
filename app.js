@@ -2201,15 +2201,41 @@ function showToast(msg, type = 'info') {
   clearTimeout(_tt); _tt=setTimeout(()=>t.classList.remove('show'),2400);
 }
 
-function exportData() {
+function exportCSV() {
   if(!S.transactions.length){showToast('Belum ada data untuk diekspor', 'warning');return;}
   const csvEsc = v => '"' + String(v).replace(/"/g,'""') + '"';
   const rows=S.transactions.map(t=>`${t.date},${t.type},${t.amount},${csvEsc(t.note)},${csvEsc(t.cat)},${csvEsc(walletName(t.account))}`);
   const blob=new Blob(['Tanggal,Tipe,Nominal,Keterangan,Kategori,Akun\n'+rows.join('\n')],{type:'text/csv'});
   const a=document.createElement('a'); a.href=URL.createObjectURL(blob);
-  a.download='OFM_Export.csv'; a.click();
-  showToast('Data berhasil diekspor', 'success');
+  a.download=`OFM_Transaksi_${new Date().toISOString().split('T')[0]}.csv`; a.click();
+  showToast('Transaksi berhasil diekspor ke CSV', 'success');
 }
+// Alias kept for any call sites still using the old name.
+function exportData() { openExportModal(); }
+
+// Backup lengkap semua data (bukan cuma transaksi) — buat disimpan sendiri
+// atau, ke depannya, di-restore lagi lewat fitur import.
+function exportJSON() {
+  const hasData = S.transactions.length || WALLETS.length || GOALS.length || RECURRINGS.length || BUDGET.cats.length;
+  if (!hasData) { showToast('Belum ada data untuk diekspor', 'warning'); return; }
+  const backup = {
+    app: 'OFM', version: 1,
+    exportedAt: new Date().toISOString(),
+    transactions: S.transactions,
+    wallets: WALLETS,
+    budget: BUDGET,
+    goals: GOALS,
+    recurrings: RECURRINGS,
+  };
+  const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
+  a.download = `OFM_Backup_${new Date().toISOString().split('T')[0]}.json`; a.click();
+  showToast('Backup lengkap berhasil diekspor ke JSON', 'success');
+}
+
+function openExportModal() { document.getElementById('exportModalOverlay').classList.add('open'); }
+function closeExportModal() { document.getElementById('exportModalOverlay').classList.remove('open'); }
+function closeExportModalOutside(e) { if (e.target === document.getElementById('exportModalOverlay')) closeExportModal(); }
 
 /* ══════════════════════════════════════════
    RECURRING TRANSACTIONS
