@@ -128,6 +128,38 @@
     </div>
   </nav>
 
+  <!-- ══════ QUICK NOTE — floating chat-style trigger, only shown on Catat Transaksi ══════ -->
+  <div class="quicknote-bubble" id="quickNoteBubble" onclick="openQuickNoteModal()">
+    <svg class="ic" viewBox="0 0 24 24"><path d="M12 2l1.5 4.5L18 8l-4.5 1.5L12 14l-1.5-4.5L6 8l4.5-1.5z"/><path d="M19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8z"/></svg>
+    <span>Catat cepat pakai kalimat aja</span>
+  </div>
+  <div class="quicknote-fab" id="quickNoteFab" onclick="toggleQuickNoteModal()" title="Catat Cepat">
+    <svg class="ic quicknote-fab-icon-note" viewBox="0 0 24 24"><path d="M12 2l1.5 4.5L18 8l-4.5 1.5L12 14l-1.5-4.5L6 8l4.5-1.5z"/><path d="M19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8z"/></svg>
+    <svg class="ic quicknote-fab-icon-close" viewBox="0 0 24 24"><path d="M5 5l14 14M19 5L5 19"/></svg>
+  </div>
+
+  <!-- ══════ QUICK NOTE MODAL ══════ -->
+  <div class="modal-overlay" id="quickNoteModalOverlay" onclick="if(event.target===this)closeQuickNoteModal()">
+    <div class="modal-sheet">
+      <div class="modal-handle"></div>
+      <div class="modal-header">
+        <div class="modal-title">Catat Cepat</div>
+        <button class="modal-close" onclick="closeQuickNoteModal()"><svg class="ic" viewBox="0 0 24 24"><path d="M5 5l14 14M19 5L5 19"/></svg></button>
+      </div>
+      <div class="smart-input-wrap">
+        <div class="smart-input-row">
+          <input type="text" id="smartInput" placeholder="mis. makan siang 25rb kemarin"
+            onkeydown="if(event.key==='Enter'){event.preventDefault();applySmartParse();}">
+          <div class="smart-input-btn" onclick="applySmartParse()" title="Isi otomatis">
+            <svg class="ic" viewBox="0 0 24 24"><path d="M4 12h16M13 6l6 6-6 6"/></svg>
+          </div>
+        </div>
+        <div class="smart-input-preview" id="smartPreview"></div>
+        <div class="smart-input-hint">Contoh: "gaji bulanan 5jt", "bensin 20rb kemarin", "transfer ke rekening adik 500rb". Hasilnya bakal ngisi form di belakang — cek dulu sebelum simpan.</div>
+      </div>
+    </div>
+  </div>
+
   <!-- ══════ PAGE: DASHBOARD ══════ -->
   <div class="page active" id="page-dashboard">
     <div class="topbar" id="dashTopbar">
@@ -551,22 +583,6 @@
       </div>
     </div>
     <div class="page-title">Catat Transaksi</div>
-
-    <div class="smart-input-wrap glass-sm">
-      <div class="smart-input-label">
-        <svg class="ic" viewBox="0 0 24 24"><path d="M12 2l1.5 4.5L18 8l-4.5 1.5L12 14l-1.5-4.5L6 8l4.5-1.5z"/><path d="M19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8z"/></svg>
-        Catat Cepat
-      </div>
-      <div class="smart-input-row">
-        <input type="text" id="smartInput" placeholder="mis. makan siang 25rb kemarin"
-          onkeydown="if(event.key==='Enter'){event.preventDefault();applySmartParse();}">
-        <div class="smart-input-btn" onclick="applySmartParse()" title="Isi otomatis">
-          <svg class="ic" viewBox="0 0 24 24"><path d="M4 12h16M13 6l6 6-6 6"/></svg>
-        </div>
-      </div>
-      <div class="smart-input-preview" id="smartPreview"></div>
-      <div class="smart-input-hint">Contoh: "gaji bulanan 5jt", "bensin 20rb kemarin", "transfer ke rekening adik 500rb". Hasilnya bakal ngisi form di bawah — cek dulu sebelum simpan.</div>
-    </div>
 
     <div class="type-toggle" id="addtxTypeToggle">
       <div class="type-indicator" id="typeIndicator"></div>

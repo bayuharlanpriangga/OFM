@@ -478,6 +478,10 @@ function applySmartParse() {
     showToast('Sebagian terisi otomatis — cek nominal dulu ya', 'warning');
   } else {
     showToast('Form terisi otomatis, cek sebelum simpan', 'success');
+    // Let the user see the confirmation chips for a beat, then hand them
+    // back to the (now-filled) form behind the modal to review & save.
+    const ov = document.getElementById('quickNoteModalOverlay');
+    if (ov && ov.classList.contains('open')) setTimeout(closeQuickNoteModal, 900);
   }
 }
 
@@ -549,11 +553,21 @@ function showPage(id) {
 
   const nav = document.getElementById('bottomNav');
 
+  const qnFab = document.getElementById('quickNoteFab');
+
   if (id === 'addtx') {
     // Full-screen add-transaction page — keep whatever nav item was highlighted
     // before, and hide the floating nav pill since there's already a back button.
     if (nav) nav.classList.add('hidden');
+    // Floating "Catat Cepat" trigger only ever appears here.
+    if (qnFab) qnFab.classList.add('show');
+    clearTimeout(S._qnBubbleShowTimer);
+    S._qnBubbleShowTimer = setTimeout(showQuickNoteBubble, 700);
   } else {
+    if (qnFab) qnFab.classList.remove('show');
+    closeQuickNoteModal();
+    hideQuickNoteBubble();
+    clearTimeout(S._qnBubbleShowTimer);
     if (nav) nav.classList.remove('hidden');
     document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
     // Highlight pill nav item if it's a pill page
@@ -674,6 +688,7 @@ function openModal() {
   const smartPreviewEl = document.getElementById('smartPreview');
   if (smartInputEl) smartInputEl.value = '';
   if (smartPreviewEl) { smartPreviewEl.innerHTML = ''; smartPreviewEl.classList.remove('show'); }
+  closeQuickNoteModal();
   // Reset account picker label to first wallet
   const lbl = document.getElementById('txAccountLabel');
   const hid = document.getElementById('txAccount');
@@ -687,6 +702,37 @@ function openModal() {
   updateTxAmountCurrency();
 }
 function closeModal() { showPage(S._txReturnPage || 'dashboard'); }
+
+/* ══════════════════════════════════════════
+   QUICK NOTE — floating trigger + modal
+   (only ever shown on the "Catat Transaksi" page — see showPage())
+══════════════════════════════════════════ */
+function openQuickNoteModal() {
+  hideQuickNoteBubble();
+  document.getElementById('quickNoteModalOverlay').classList.add('open');
+  document.getElementById('quickNoteFab').classList.add('open');
+  setTimeout(() => { const el = document.getElementById('smartInput'); if (el) el.focus(); }, 250);
+}
+function closeQuickNoteModal() {
+  document.getElementById('quickNoteModalOverlay').classList.remove('open');
+  document.getElementById('quickNoteFab').classList.remove('open');
+}
+function toggleQuickNoteModal() {
+  const ov = document.getElementById('quickNoteModalOverlay');
+  if (ov.classList.contains('open')) closeQuickNoteModal(); else openQuickNoteModal();
+}
+function showQuickNoteBubble() {
+  const b = document.getElementById('quickNoteBubble');
+  if (!b || document.getElementById('quickNoteModalOverlay').classList.contains('open')) return;
+  b.classList.add('show');
+  clearTimeout(S._qnBubbleHideTimer);
+  S._qnBubbleHideTimer = setTimeout(hideQuickNoteBubble, 4500);
+}
+function hideQuickNoteBubble() {
+  const b = document.getElementById('quickNoteBubble');
+  if (b) b.classList.remove('show');
+  clearTimeout(S._qnBubbleHideTimer);
+}
 
 function setType(t) {
   S.currentType = t;
