@@ -117,7 +117,7 @@
       <div class="nav-icon"><svg class="ic" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="4"/><circle cx="12" cy="12" r="0.6" fill="currentColor" stroke="none"/></svg></div>
       <div class="nav-label">Anggaran</div>
     </div>
-    <div class="nav-center" onclick="openModal()">＋</div>
+    <div class="nav-center" onclick="openModal()" title="Catat transaksi (atau tekan N)">＋</div>
     <div class="nav-item" onclick="showPage('riwayat')" id="nav-riwayat">
       <div class="nav-icon"><svg class="ic" viewBox="0 0 24 24"><rect x="5" y="4" width="14" height="17" rx="2"/><rect x="9" y="2" width="6" height="4" rx="1"/><path d="M9 11h6M9 15h6"/></svg></div>
       <div class="nav-label">Riwayat</div>
@@ -150,9 +150,17 @@
         <div class="smart-input-row">
           <input type="text" id="smartInput" placeholder="mis. makan siang 25rb kemarin"
             onkeydown="if(event.key==='Enter'){event.preventDefault();applySmartParse();}">
+          <div class="smart-input-btn smart-input-mic" id="smartVoiceBtn" onclick="toggleQuickNoteVoice()" title="Catat pakai suara">
+            <svg class="ic mic-icon-idle" viewBox="0 0 24 24"><path d="M12 2a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/><path d="M19 11a7 7 0 0 1-14 0"/><path d="M12 18v4M9 22h6"/></svg>
+            <svg class="ic mic-icon-stop" viewBox="0 0 24 24" fill="currentColor" stroke="none"><rect x="7" y="7" width="10" height="10" rx="2"/></svg>
+          </div>
           <div class="smart-input-btn" onclick="applySmartParse()" title="Isi otomatis">
             <svg class="ic" viewBox="0 0 24 24"><path d="M4 12h16M13 6l6 6-6 6"/></svg>
           </div>
+        </div>
+        <div class="smart-input-voice-status" id="smartVoiceStatus">
+          <span class="voice-wave"><i></i><i></i><i></i><i></i></span>
+          Mendengarkan...
         </div>
         <div class="smart-input-preview" id="smartPreview"></div>
         <div class="smart-input-hint">Contoh: "gaji bulanan 5jt", "bensin 20rb kemarin", "transfer ke rekening adik 500rb". Hasilnya bakal ngisi form di belakang — cek dulu sebelum simpan.</div>

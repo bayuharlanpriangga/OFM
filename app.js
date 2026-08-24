@@ -711,11 +711,13 @@ function openQuickNoteModal() {
   hideQuickNoteBubble();
   document.getElementById('quickNoteModalOverlay').classList.add('open');
   document.getElementById('quickNoteFab').classList.add('open');
+  _qnRefreshVoiceButton();
   setTimeout(() => { const el = document.getElementById('smartInput'); if (el) el.focus(); }, 250);
 }
 function closeQuickNoteModal() {
   document.getElementById('quickNoteModalOverlay').classList.remove('open');
   document.getElementById('quickNoteFab').classList.remove('open');
+  stopQuickNoteVoice();
 }
 function toggleQuickNoteModal() {
   const ov = document.getElementById('quickNoteModalOverlay');
@@ -732,6 +734,98 @@ function hideQuickNoteBubble() {
   const b = document.getElementById('quickNoteBubble');
   if (b) b.classList.remove('show');
   clearTimeout(S._qnBubbleHideTimer);
+}
+
+/* ══════════════════════════════════════════
+   VOICE QUICK NOTE — Web Speech API
+   Native browser speech-to-text (no external service, no API cost).
+   Transcribed text feeds straight into the same parseSmartText() pipeline
+   used by typed quick notes — same review-before-save flow either way.
+══════════════════════════════════════════ */
+const _SpeechRecognitionCtor = window.SpeechRecognition || window.webkitSpeechRecognition;
+let _qnRecognition = null;
+let _qnListening = false;
+
+function _qnVoiceSupported() { return !!_SpeechRecognitionCtor; }
+
+// Called each time the quick-note modal opens, so the mic button reflects
+// support correctly even if it's the very first render.
+function _qnRefreshVoiceButton() {
+  const micBtn = document.getElementById('smartVoiceBtn');
+  if (!micBtn) return;
+  micBtn.classList.toggle('unsupported', !_qnVoiceSupported());
+}
+
+function toggleQuickNoteVoice() {
+  if (!_qnVoiceSupported()) {
+    showToast('Input suara belum didukung di browser ini', 'warning');
+    return;
+  }
+  if (_qnListening) { stopQuickNoteVoice(); return; }
+  startQuickNoteVoice();
+}
+
+function startQuickNoteVoice() {
+  const input = document.getElementById('smartInput');
+  const micBtn = document.getElementById('smartVoiceBtn');
+  const statusEl = document.getElementById('smartVoiceStatus');
+  if (!input || !micBtn || !_qnVoiceSupported()) return;
+
+  const recognition = new _SpeechRecognitionCtor();
+  _qnRecognition = recognition;
+  recognition.lang = 'id-ID';
+  recognition.interimResults = true;
+  recognition.continuous = false;
+  recognition.maxAlternatives = 1;
+
+  let gotFinal = false;
+  const prevPlaceholder = input.placeholder;
+  input.value = '';
+
+  recognition.onstart = () => {
+    _qnListening = true;
+    micBtn.classList.add('listening');
+    if (statusEl) statusEl.classList.add('show');
+  };
+  recognition.onresult = (e) => {
+    let transcript = '';
+    for (let i = e.resultIndex; i < e.results.length; i++) {
+      transcript += e.results[i][0].transcript;
+      if (e.results[i].isFinal) gotFinal = true;
+    }
+    input.value = transcript;
+  };
+  recognition.onerror = (e) => {
+    if (e.error === 'not-allowed' || e.error === 'service-not-allowed') {
+      showToast('Izin mikrofon ditolak — aktifkan lewat pengaturan browser', 'warning');
+    } else if (e.error === 'no-speech') {
+      showToast('Gak kedengeran suaranya, coba lagi', 'warning');
+    } else if (e.error !== 'aborted') {
+      showToast('Gagal merekam suara, coba lagi', 'warning');
+    }
+  };
+  recognition.onend = () => {
+    _qnListening = false;
+    _qnRecognition = null;
+    micBtn.classList.remove('listening');
+    if (statusEl) statusEl.classList.remove('show');
+    input.placeholder = prevPlaceholder;
+    // Auto-run the same parser used for typed quick notes, so voice and
+    // typing land in the exact same review-before-save flow.
+    if (gotFinal && input.value.trim()) applySmartParse();
+  };
+
+  try {
+    recognition.start();
+  } catch (err) {
+    _qnListening = false;
+    _qnRecognition = null;
+    micBtn.classList.remove('listening');
+  }
+}
+
+function stopQuickNoteVoice() {
+  if (_qnRecognition) { try { _qnRecognition.stop(); } catch (e) {} }
 }
 
 function setType(t) {
@@ -4159,5 +4253,35 @@ function renderRiwayat() {
   });
 }
 
+
+/* ══════════════════════════════════════════
+   GLOBAL QUICK-ADD SHORTCUT
+   Press "N" from anywhere in the app to jump straight into "Catat
+   Transaksi" — no menus, no taps. Ignored while typing in a field or while
+   any overlay/panel is already open, and never fires with a modifier key
+   held (so it doesn't clash with the browser's own shortcuts).
+══════════════════════════════════════════ */
+function _qaIsTypingContext() {
+  const el = document.activeElement;
+  if (!el) return false;
+  if (el.isContentEditable) return true;
+  const tag = el.tagName;
+  return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT';
+}
+function _qaIsOverlayOpen() {
+  const auth = document.getElementById('authOverlay');
+  if (auth && auth.classList.contains('show')) return true;
+  return !!document.querySelector(
+    '.modal-overlay.open, .goal-modal-overlay.open, .picker-overlay.open, ' +
+    '.dp-overlay.open, .confirm-overlay.open, .receipt-lightbox-overlay.open, .notif-panel.open'
+  );
+}
+document.addEventListener('keydown', (e) => {
+  if (e.key !== 'n' && e.key !== 'N') return;
+  if (e.ctrlKey || e.metaKey || e.altKey || e.shiftKey) return;
+  if (_qaIsTypingContext() || _qaIsOverlayOpen()) return;
+  e.preventDefault();
+  openModal();
+});
 
 window.addEventListener('DOMContentLoaded',()=>setTimeout(init,80));

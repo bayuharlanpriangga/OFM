@@ -1148,6 +1148,52 @@ body {
 }
 .smart-input-btn:active { transform: scale(0.9); }
 .smart-input-btn .ic { width: 18px; height: 18px; }
+
+/* Voice mic button — secondary (neutral glass) style so the teal "apply" arrow
+   stays the clear primary action; turns red + pulses while recording. */
+.smart-input-mic {
+  position: relative;
+  background: rgba(255,255,255,0.08);
+  border: 1px solid rgba(255,255,255,0.18);
+  color: var(--txt2);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.2), 0 4px 12px rgba(0,0,0,0.15);
+}
+.smart-input-mic .mic-icon-idle, .smart-input-mic .mic-icon-stop {
+  position: absolute; top: 50%; left: 50%;
+  transition: opacity 0.15s, transform 0.2s;
+}
+.smart-input-mic .mic-icon-idle { transform: translate(-50%,-50%) scale(1); }
+.smart-input-mic .mic-icon-stop { opacity: 0; transform: translate(-50%,-50%) scale(0.6); }
+.smart-input-mic.listening {
+  background: linear-gradient(145deg, rgba(255,107,132,0.95), rgba(220,60,90,0.9));
+  border-color: rgba(255,255,255,0.4);
+  color: #fff;
+  animation: micPulse 1.4s ease-in-out infinite;
+}
+.smart-input-mic.listening .mic-icon-idle { opacity: 0; transform: translate(-50%,-50%) scale(0.6); }
+.smart-input-mic.listening .mic-icon-stop { opacity: 1; transform: translate(-50%,-50%) scale(1); }
+.smart-input-mic.unsupported { display: none; }
+@keyframes micPulse {
+  0%, 100% { box-shadow: inset 0 1px 0 rgba(255,255,255,0.4), 0 0 0 0 rgba(255,107,132,0.45); }
+  50% { box-shadow: inset 0 1px 0 rgba(255,255,255,0.4), 0 0 0 8px rgba(255,107,132,0); }
+}
+
+/* "Mendengarkan..." status row — only shown while actively recording */
+.smart-input-voice-status {
+  display: none; align-items: center; gap: 8px; margin-top: 10px;
+  font-size: 11.5px; font-weight: 500; color: var(--red);
+}
+.smart-input-voice-status.show { display: flex; }
+.voice-wave { display: flex; align-items: center; gap: 2px; height: 12px; }
+.voice-wave i {
+  width: 2.5px; height: 100%; border-radius: 2px; background: var(--red);
+  animation: voiceWave 0.9s ease-in-out infinite;
+}
+.voice-wave i:nth-child(2) { animation-delay: 0.15s; }
+.voice-wave i:nth-child(3) { animation-delay: 0.3s; }
+.voice-wave i:nth-child(4) { animation-delay: 0.45s; }
+@keyframes voiceWave { 0%, 100% { transform: scaleY(0.3); } 50% { transform: scaleY(1); } }
+
 .smart-input-hint { font-size: 10.5px; color: var(--txt3); margin-top: 8px; line-height: 1.5; }
 .smart-input-preview {
   display: none; flex-wrap: wrap; gap: 6px; margin-top: 10px;
