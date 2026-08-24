@@ -579,7 +579,9 @@ body {
 .quicknote-fab {
   position: fixed;
   right: 20px;
-  bottom: max(20px, env(safe-area-inset-bottom, 0px) + 12px);
+  /* Sits above the fixed "Simpan Transaksi" button (.addtx-submit-btn) instead
+     of sharing the same bottom offset, so the two never overlap. */
+  bottom: max(84px, env(safe-area-inset-bottom, 0px) + 76px);
   width: 56px; height: 56px; border-radius: 50%;
   display: flex; align-items: center; justify-content: center;
   cursor: pointer; color: #fff;
@@ -610,7 +612,7 @@ body {
 .quicknote-bubble {
   position: fixed;
   right: 20px;
-  bottom: max(84px, env(safe-area-inset-bottom, 0px) + 76px);
+  bottom: max(148px, env(safe-area-inset-bottom, 0px) + 140px);
   max-width: 220px;
   display: flex; align-items: center; gap: 8px;
   padding: 10px 14px; border-radius: 16px 16px 4px 16px;
@@ -1111,7 +1113,7 @@ body {
 /* ═══════════════════════════════════════
    SMART QUICK-ADD (parsing teks bebas)
 ═══════════════════════════════════════ */
-.smart-input-wrap { margin: 4px 20px 14px; padding: 14px 16px; position: relative; z-index: 1; }
+.smart-input-wrap { margin: 4px 20px 20px; padding: 14px 16px; position: relative; z-index: 1; }
 .smart-input-label {
   display: flex; align-items: center; gap: 6px;
   font-size: 11px; font-weight: 600; color: var(--teal);
@@ -1321,6 +1323,21 @@ body {
 .settings-item.danger .si-name, .settings-item.danger .si-icon, .settings-item.danger .si-arrow { color: var(--red); }
 .settings-item.disabled { opacity: 0.45; cursor: not-allowed; }
 .si-arrow { color: var(--txt3); font-size: 12px; }
+
+/* Flat variant — used when .s-items sits inside something that's already a
+   glass card (e.g. a modal-sheet), so it doesn't render as a card-in-a-card.
+   Keeps only the thin divider line between items, no outer box/shadow. */
+.s-items.flat {
+  background: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
+}
+.s-items.flat::before { display: none; }
+.s-items.flat .settings-item { padding-left: 0; padding-right: 0; }
+.s-items.flat .settings-item:active { background: rgba(255,255,255,0.06); border-radius: 12px; }
 
 /* ═══════════════════════════════════════
    EMPTY STATE / TOAST
@@ -1931,6 +1948,28 @@ body {
   z-index: 2; cursor: pointer;
 }
 .receipt-badge .ic { width: 10px; height: 10px; }
+
+/* Receipt OCR — loading spinner over the preview + result chips below it,
+   reusing .smart-chip styling from the quick-note preview for consistency. */
+.receipt-ocr-overlay {
+  position: absolute; inset: 0;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px;
+  background: rgba(6,10,24,0.6);
+  backdrop-filter: blur(3px); -webkit-backdrop-filter: blur(3px);
+  border-radius: var(--r-sm);
+  opacity: 0; pointer-events: none;
+  transition: opacity 0.2s;
+}
+.receipt-ocr-overlay.show { opacity: 1; pointer-events: all; }
+.receipt-ocr-spinner {
+  width: 22px; height: 22px; border-radius: 50%;
+  border: 2.5px solid rgba(255,255,255,0.25); border-top-color: var(--teal);
+  animation: receiptOcrSpin 0.8s linear infinite;
+}
+@keyframes receiptOcrSpin { to { transform: rotate(360deg); } }
+.receipt-ocr-label { font-size: 11px; font-weight: 600; color: #fff; }
+.receipt-ocr-result { display: none; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.receipt-ocr-result.show { display: flex; }
 .receipt-lightbox-overlay {
   position: fixed; inset: 0; z-index: 10000;
   background: rgba(0,0,0,0.85);

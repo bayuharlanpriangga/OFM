@@ -901,6 +901,7 @@ function handleReceiptSelect(event) {
       preview.src = dataUrl;
       document.getElementById('txReceiptPreviewWrap').style.display = 'block';
       document.getElementById('txReceiptEmpty').style.display = 'none';
+      runReceiptOCR(dataUrl);
     };
     img.src = e.target.result;
   };
@@ -912,6 +913,10 @@ function removeReceipt() {
   S.pendingReceipt = null;
   document.getElementById('txReceiptPreviewWrap').style.display = 'none';
   document.getElementById('txReceiptEmpty').style.display = 'flex';
+  const resultEl = document.getElementById('receiptOcrResult');
+  if (resultEl) { resultEl.classList.remove('show'); resultEl.innerHTML = ''; }
+  const overlay = document.getElementById('receiptOcrOverlay');
+  if (overlay) overlay.classList.remove('show');
 }
 
 function openReceiptLightbox(src) {
@@ -920,6 +925,102 @@ function openReceiptLightbox(src) {
 }
 function closeReceiptLightbox() {
   document.getElementById('receiptLightbox').classList.remove('open');
+}
+
+/* ══════════════════════════════════════════
+   RECEIPT OCR — Tesseract.js (client-side, gratis, tanpa API key)
+   Struk itu beda dari teks bebas: banyak angka (harga per item, subtotal,
+   pajak, total, kembalian), jadi pakai pencari nominal sendiri yang nyari
+   baris "Total" dulu, baru fallback ke angka terbesar di struk. Hasilnya
+   dipakai buat isi form yang sama kayak alur "Catat Cepat" — user tetap
+   review chip-nya sebelum Simpan, OCR ga pernah auto-submit.
+══════════════════════════════════════════ */
+const RECEIPT_TOTAL_KEYWORDS = ['grand total', 'total belanja', 'total bayar', 'total tagihan', 'jumlah bayar', 'total', 'jumlah', 'sub total', 'subtotal'];
+
+// "Rp45.000" / "45.000" / "45,000" -> 45000 (titik/koma dianggap pemisah ribuan ala struk ID)
+function receiptParseNumber(str) {
+  const digits = str.replace(/[^\d]/g, '');
+  if (!digits) return 0;
+  const n = parseInt(digits, 10);
+  return isNaN(n) ? 0 : n;
+}
+
+function receiptFindTotal(text) {
+  const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
+  const numRe = /\d{1,3}(?:[.,]\d{3})+|\d{4,}/g;
+
+  // 1) Baris yang mengandung kata kunci total — ambil angka terbesar di baris itu.
+  //    Urutan keyword sengaja dari yang paling spesifik ("grand total") ke paling umum,
+  //    supaya "Total" murni tidak kalah sama "Subtotal" kalau keduanya ada.
+  for (const kw of RECEIPT_TOTAL_KEYWORDS) {
+    for (const line of lines) {
+      if (!line.toLowerCase().includes(kw)) continue;
+      const nums = [...line.matchAll(numRe)].map(m => receiptParseNumber(m[0]));
+      if (nums.length) return Math.max(...nums);
+    }
+  }
+
+  // 2) Fallback: ga ada kata kunci ketemu sama sekali — ambil angka terbesar
+  //    di seluruh struk (biasanya total lebih gede dari harga per item).
+  const allNums = [...text.matchAll(numRe)].map(m => receiptParseNumber(m[0])).filter(n => n >= 500);
+  if (allNums.length) return Math.max(...allNums);
+
+  return 0;
+}
+
+// Tebak nama toko/keterangan dari baris atas struk (biasanya nama merchant ada di paling atas)
+function receiptGuessNote(text) {
+  const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
+  for (const line of lines.slice(0, 6)) {
+    if (line.length >= 3 && /[a-zA-Z]{3,}/.test(line) && !/^\d+$/.test(line)) {
+      return line.length > 40 ? line.slice(0, 40).trim() : line;
+    }
+  }
+  return null;
+}
+
+async function runReceiptOCR(dataUrl) {
+  if (typeof Tesseract === 'undefined') return; // CDN gagal load / offline — diam aja, isi manual tetap jalan
+  const overlay = document.getElementById('receiptOcrOverlay');
+  const resultEl = document.getElementById('receiptOcrResult');
+  if (overlay) overlay.classList.add('show');
+  if (resultEl) { resultEl.classList.remove('show'); resultEl.innerHTML = ''; }
+
+  try {
+    const { data } = await Tesseract.recognize(dataUrl, 'ind', { logger: () => {} });
+    const text = data.text || '';
+    const total = receiptFindTotal(text);
+    const note = receiptGuessNote(text);
+    const chips = [];
+
+    if (total > 0) {
+      S.amountRaw = total;
+      const amtEl = document.getElementById('amountDisplay');
+      if (amtEl) amtEl.textContent = total.toLocaleString('id-ID');
+      chips.push({ text: 'Rp' + total.toLocaleString('id-ID'), warn: false });
+    } else {
+      chips.push({ text: 'Nominal tidak kebaca — isi manual', warn: true });
+    }
+
+    if (note) {
+      const noteEl = document.getElementById('txNote');
+      if (noteEl && !noteEl.value) noteEl.value = note;
+      chips.push({ text: note, warn: false });
+    }
+
+    if (resultEl) {
+      resultEl.innerHTML = chips.map(c =>
+        `<span class="smart-chip${c.warn ? ' warn' : ''}">${c.warn ? ICON.warning : ICON.check}${escapeHtml(c.text)}</span>`
+      ).join('');
+      resultEl.classList.add('show');
+    }
+    showToast(total > 0 ? 'Struk kebaca — cek nominal sebelum simpan' : 'Struk susah kebaca, isi manual ya', total > 0 ? 'success' : 'warning');
+  } catch (err) {
+    console.error('OCR struk gagal:', err);
+    showToast('Gagal baca struk, isi manual ya', 'warning');
+  } finally {
+    if (overlay) overlay.classList.remove('show');
+  }
 }
 
 function formatAmount(el) {
