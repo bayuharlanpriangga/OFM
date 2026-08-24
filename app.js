@@ -276,6 +276,212 @@ function walletCurrencyCode(walletId) {
 }
 
 /* ══════════════════════════════════════════
+   SMART QUICK-ADD — parsing teks bebas jadi transaksi
+   Tulis kalimat kayak "makan siang 25rb kemarin" → otomatis
+   ngisi nominal, kategori, tanggal, dan keterangan di form
+   "Catat Transaksi" yang sudah ada. User tetap bisa cek/ubah
+   manual sebelum tekan Simpan — parser cuma mempercepat isi,
+   bukan langsung nyimpen.
+══════════════════════════════════════════ */
+
+// Kamus kata kunci kategori (dicek berurutan, frasa lebih panjang duluan menang)
+const SMART_CAT_KEYWORDS = {
+  expense: {
+    food:   ['makan siang','makan malam','makan pagi','sarapan','ngopi','ngemil','jajan','warteg','angkringan','restoran','resto','cafe','kafe','minum','boba','kuliner','gofood','grabfood','nasi padang','ayam geprek','bakso','mie ayam','seblak','kopi','makan'],
+    trans:  ['bensin','bbm','pertalite','pertamax','parkir','tol','ojek','ojol','gojek','grab car','grabcar','gocar','angkot','krl','mrt','taksi','taxi','servis motor','service motor','ganti oli','oli motor','tiket kereta','tiket pesawat','transportasi'],
+    shop:   ['belanja bulanan','belanja','beli baju','beli sepatu','skincare','make up','makeup','supermarket','indomaret','alfamart','shopee','tokopedia','lazada','marketplace','baju','sepatu','tas'],
+    ent:    ['nonton bioskop','nonton','bioskop','netflix','spotify','youtube premium','langganan','game','steam','konser','karaoke','wisata','jalan-jalan','staycation','hiburan'],
+    health: ['rumah sakit','dokter gigi','dokter','klinik','apotek','vitamin','obat','bpjs','vaksin','periksa','kesehatan'],
+    edu:    ['spp','kuliah','sekolah','kursus','pelatihan','seminar','workshop','beli buku','buku pelajaran','pendidikan'],
+    bill:   ['listrik','token listrik','pln','air pdam','pdam','wifi','indihome','internet','pulsa','paket data','cicilan','kartu kredit','premi asuransi','asuransi','sewa kos','kontrakan','kos','tagihan'],
+  },
+  income: {
+    salary:    ['gajian','gaji bulanan','gaji'],
+    bonus:     ['bonus tahunan','bonus','thr','insentif'],
+    invest:    ['dividen','untung saham','profit trading','hasil investasi','cuan'],
+    freelance: ['freelance','proyek','project','komisi','honor'],
+  },
+};
+
+const SMART_INCOME_HINTS   = ['gaji','gajian','bonus','thr','dividen','untung','profit','cashback','refund','honor','komisi','freelance','proyek','project','terima uang','dapat uang','pemasukan','cuan'];
+const SMART_TRANSFER_HINTS = ['transfer ke','tf ke','pindah saldo','tarik tunai','kirim ke rekening',' transfer ', ' tf '];
+const SMART_DAY_MS = 86400000;
+const SMART_WEEKDAYS = ['minggu','senin','selasa','rabu','kamis','jumat',"jum'at",'sabtu'];
+const SMART_WEEKDAY_INDEX = { minggu:0, ahad:0, senin:1, selasa:2, rabu:3, kamis:4, jumat:5, "jum'at":5, sabtu:6 };
+
+function smartToDateStr(d) {
+  return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+}
+
+function smartFindDate(text, today) {
+  const t = ' ' + text.toLowerCase() + ' ';
+  const kemarinLusaM = t.match(/\bkemarin lusa\b|\bkemaren lusa\b/);
+  if (kemarinLusaM) return { date: new Date(today.getTime() - 2*SMART_DAY_MS), matched: kemarinLusaM[0].trim() };
+  if (/\bbesok lusa\b/.test(t)) return { date: new Date(today.getTime() + 2*SMART_DAY_MS), matched: 'besok lusa' };
+  if (/\blusa\b/.test(t)) return { date: new Date(today.getTime() + 2*SMART_DAY_MS), matched: 'lusa' };
+  const nHariLalu = t.match(/\b(\d+)\s*hari\s*(yang\s*)?lalu\b/);
+  if (nHariLalu) {
+    const n = parseInt(nHariLalu[1], 10) || 0;
+    return { date: new Date(today.getTime() - n*SMART_DAY_MS), matched: nHariLalu[0].trim() };
+  }
+  const kemarinM = t.match(/\bkemarin\b|\bkemaren\b/);
+  if (kemarinM) return { date: new Date(today.getTime() - SMART_DAY_MS), matched: kemarinM[0].trim() };
+  if (/\bbesok\b/.test(t)) return { date: new Date(today.getTime() + SMART_DAY_MS), matched: 'besok' };
+  if (/\bhari ini\b/.test(t)) return { date: today, matched: 'hari ini' };
+  const tadiPhrase = t.match(/\btadi\s*(pagi|siang|sore|malam)?\b/);
+  if (tadiPhrase) return { date: today, matched: tadiPhrase[0].trim() };
+
+  for (const name of SMART_WEEKDAYS) {
+    const re = new RegExp('\\b(hari\\s+)?' + name.replace("'", "'?") + '\\b');
+    const m = t.match(re);
+    if (m) {
+      const targetIdx = SMART_WEEKDAY_INDEX[name];
+      const todayIdx = today.getDay();
+      let diff = todayIdx - targetIdx;
+      if (diff < 0) diff += 7;
+      return { date: new Date(today.getTime() - diff*SMART_DAY_MS), matched: m[0].trim() };
+    }
+  }
+
+  const MONTHS = ['januari','februari','maret','april','mei','juni','juli','agustus','september','oktober','november','desember'];
+  const namedMonth = t.match(/\b(\d{1,2})\s+(januari|februari|maret|april|mei|juni|juli|agustus|september|oktober|november|desember)\b/);
+  if (namedMonth) {
+    const day = parseInt(namedMonth[1], 10);
+    const month = MONTHS.indexOf(namedMonth[2]);
+    return { date: new Date(today.getFullYear(), month, day), matched: namedMonth[0].trim() };
+  }
+  const slashDate = t.match(/\b(\d{1,2})[\/\-](\d{1,2})(?:[\/\-](\d{2,4}))?\b/);
+  if (slashDate) {
+    const day = parseInt(slashDate[1], 10);
+    const month = parseInt(slashDate[2], 10) - 1;
+    const year = slashDate[3] ? (slashDate[3].length === 2 ? 2000 + parseInt(slashDate[3], 10) : parseInt(slashDate[3], 10)) : today.getFullYear();
+    return { date: new Date(year, month, day), matched: slashDate[0].trim() };
+  }
+
+  return { date: today, matched: null };
+}
+
+function smartFindAmount(text) {
+  const t = text.toLowerCase();
+  const unitMatch = t.match(/\b(\d+(?:[.,]\d+)?)\s*(jt|juta|rb|ribu|k)\b/);
+  if (unitMatch) {
+    const num = parseFloat(unitMatch[1].replace(',', '.'));
+    const factor = (unitMatch[2] === 'jt' || unitMatch[2] === 'juta') ? 1000000 : 1000;
+    return { amount: Math.round(num * factor), matched: unitMatch[0] };
+  }
+  const sepMatch = t.match(/\brp\.?\s*(\d{1,3}(?:[.,]\d{3})+)\b/) || t.match(/\b(\d{1,3}(?:[.,]\d{3})+)\b/);
+  if (sepMatch) return { amount: parseInt(sepMatch[1].replace(/[.,]/g, ''), 10), matched: sepMatch[0] };
+  const bareMatches = [...t.matchAll(/\b\d{3,}\b/g)];
+  if (bareMatches.length) {
+    const longest = bareMatches.reduce((a, b) => (b[0].length > a[0].length ? b : a));
+    return { amount: parseInt(longest[0], 10), matched: longest[0] };
+  }
+  return { amount: 0, matched: null };
+}
+
+function smartFindCategory(text, type) {
+  const t = text.toLowerCase();
+  const dict = SMART_CAT_KEYWORDS[type];
+  if (!dict) return { catId: 'transfer', matched: null };
+  for (const catId in dict) {
+    for (const kw of dict[catId]) {
+      if (t.includes(kw)) return { catId, matched: kw };
+    }
+  }
+  return { catId: 'other', matched: null };
+}
+
+function smartDetectType(text) {
+  const t = ' ' + text.toLowerCase() + ' ';
+  for (const kw of SMART_TRANSFER_HINTS) if (t.includes(kw)) return 'transfer';
+  for (const kw of SMART_INCOME_HINTS)   if (t.includes(kw)) return 'income';
+  return 'expense';
+}
+
+function smartCleanNote(rawText, removeMatches) {
+  let note = rawText;
+  removeMatches.filter(Boolean).forEach(m => {
+    const idx = note.toLowerCase().indexOf(m.toLowerCase());
+    if (idx !== -1) note = note.slice(0, idx) + note.slice(idx + m.length);
+  });
+  note = note.replace(/\brp\.?\b/gi, '').replace(/\s{2,}/g, ' ').replace(/^[\s,.\-]+|[\s,.\-]+$/g, '').trim();
+  if (note) note = note.charAt(0).toUpperCase() + note.slice(1);
+  return note;
+}
+
+// Parse teks bebas → { type, amount, catId, date, note }
+function parseSmartText(text, today) {
+  today = today || new Date();
+  today = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  const type = smartDetectType(text);
+  const amountRes = smartFindAmount(text);
+  const dateRes = smartFindDate(text, today);
+  const catRes = smartFindCategory(text, type);
+  const note = smartCleanNote(text, [amountRes.matched, dateRes.matched]);
+  return {
+    type, amount: amountRes.amount, catId: catRes.catId,
+    date: smartToDateStr(dateRes.date), note: note || null,
+    _debug: { amountMatched: amountRes.matched, dateMatched: dateRes.matched, catMatched: catRes.matched },
+  };
+}
+
+// Terapkan hasil parse ke form "Catat Transaksi" yang sudah ada di halaman.
+// Nggak langsung nyimpen — cuma ngisi field, user tetap review lalu tekan Simpan.
+function applySmartParse() {
+  const input = document.getElementById('smartInput');
+  const raw = (input.value || '').trim();
+  if (!raw) { showToast('Ketik dulu transaksinya, mis. "makan siang 25rb"', 'warning'); return; }
+
+  const result = parseSmartText(raw, new Date());
+  const chips = [];
+
+  // Tipe (expense/income/transfer) — reset kategori dulu via setType sebelum diisi ulang
+  setType(result.type);
+
+  // Nominal
+  if (result.amount > 0) {
+    S.amountRaw = result.amount;
+    document.getElementById('amountDisplay').textContent = result.amount.toLocaleString('id-ID');
+    chips.push({ text: 'Rp' + result.amount.toLocaleString('id-ID'), warn: false });
+  } else {
+    chips.push({ text: 'Nominal tidak terdeteksi — isi manual', warn: true });
+  }
+
+  // Kategori
+  const catList = CATS[result.type] || [];
+  const cat = catList.find(c => c.id === result.catId) || catList.find(c => c.id === 'other');
+  if (cat) {
+    pickOpt('txCategory', { value: cat.id, text: cat.label, icon: catIcon(cat.id) });
+    chips.push({ text: cat.label, warn: false });
+  }
+
+  // Tanggal
+  pickTxDate(result.date);
+  const todayStr = smartToDateStr(new Date());
+  const yestStr = smartToDateStr(new Date(Date.now() - SMART_DAY_MS));
+  const dateChipText = result.date === todayStr ? 'Hari ini' : (result.date === yestStr ? 'Kemarin' : result.date);
+  chips.push({ text: dateChipText, warn: false });
+
+  // Keterangan
+  if (result.note) {
+    document.getElementById('txNote').value = result.note;
+  }
+
+  // Tampilkan preview chip biar user tau apa yang kedeteksi sebelum simpan
+  const previewEl = document.getElementById('smartPreview');
+  previewEl.innerHTML = chips.map(c =>
+    `<span class="smart-chip${c.warn ? ' warn' : ''}">${c.warn ? ICON.warning : ICON.check}${escapeHtml(c.text)}</span>`
+  ).join('');
+  previewEl.classList.add('show');
+
+  if (result.amount <= 0) {
+    showToast('Sebagian terisi otomatis — cek nominal dulu ya', 'warning');
+  } else {
+    showToast('Form terisi otomatis, cek sebelum simpan', 'success');
+  }
+}
+
+/* ══════════════════════════════════════════
    NAV
 ══════════════════════════════════════════ */
 // Pages visible directly in the pill nav
@@ -463,6 +669,11 @@ function openModal() {
   S.amountRaw = 0; S.selectedCat = null; S.selectedBudgetCat = null;
   removeReceipt();
   setType('expense');
+  // Reset kotak "Catat Cepat" tiap kali form dibuka, biar ga ada teks/preview nyisa dari sesi sebelumnya
+  const smartInputEl = document.getElementById('smartInput');
+  const smartPreviewEl = document.getElementById('smartPreview');
+  if (smartInputEl) smartInputEl.value = '';
+  if (smartPreviewEl) { smartPreviewEl.innerHTML = ''; smartPreviewEl.classList.remove('show'); }
   // Reset account picker label to first wallet
   const lbl = document.getElementById('txAccountLabel');
   const hid = document.getElementById('txAccount');
