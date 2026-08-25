@@ -954,7 +954,12 @@ function receiptFindTotal(text) {
   //    supaya "Total" murni tidak kalah sama "Subtotal" kalau keduanya ada.
   for (const kw of RECEIPT_TOTAL_KEYWORDS) {
     for (const line of lines) {
-      if (!line.toLowerCase().includes(kw)) continue;
+      const lower = line.toLowerCase();
+      if (!lower.includes(kw)) continue;
+      // "total" ada sebagai substring di dalam "subtotal"/"sub total", jadi kalau
+      // keyword yang lagi dicek adalah "total" polos, baris subtotal harus di-skip —
+      // biar ga ke-anggap match duluan sebelum sampai ke baris "Total" beneran.
+      if (kw === 'total' && (lower.includes('subtotal') || lower.includes('sub total'))) continue;
       const nums = [...line.matchAll(numRe)].map(m => receiptParseNumber(m[0]));
       if (nums.length) return Math.max(...nums);
     }
@@ -971,7 +976,12 @@ function receiptFindTotal(text) {
 // Tebak nama toko/keterangan dari baris atas struk (biasanya nama merchant ada di paling atas)
 function receiptGuessNote(text) {
   const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
+  // Baris tanggal/nomor invoice/nomor meja gampang ke-anggap "nama toko" kalau cuma
+  // dicek "ada huruf ≥3 karakter" — jadi baris kayak "Date: 2023-07-06 15:19:44" atau
+  // "R.No: PB012033" harus di-skip duluan biar yang kepilih beneran nama merchant.
+  const skipPatterns = [/^date\b/i, /^r\.?\s*no\b/i, /^invoice\b/i, /^table\b/i, /\d{4}[-/]\d{2}[-/]\d{2}/];
   for (const line of lines.slice(0, 6)) {
+    if (skipPatterns.some(re => re.test(line))) continue;
     if (line.length >= 3 && /[a-zA-Z]{3,}/.test(line) && !/^\d+$/.test(line)) {
       return line.length > 40 ? line.slice(0, 40).trim() : line;
     }
