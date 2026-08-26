@@ -148,6 +148,63 @@ body {
   bottom: max(28px, env(safe-area-inset-bottom, 0px) + 20px);
   text-align: center; font-size: 11px; color: var(--txt3); letter-spacing: 0.3px;
 }
+
+/* ═══════════════════════════════════════
+   APP LOCK SCREEN (PIN + biometric)
+   Sits above everything (incl. the loading screen) except confirm
+   dialogs & toasts, which stay usable on top of it (e.g. "Lupa PIN?").
+═══════════════════════════════════════ */
+#lockScreen {
+  position: fixed; inset: 0; z-index: 100001;
+  display: none; align-items: center; justify-content: center;
+  background: #060A18;
+  padding: 24px;
+}
+#lockScreen.open { display: flex; }
+.lock-inner { width: 100%; max-width: 320px; text-align: center; }
+.lock-icon {
+  width: 52px; height: 52px; border-radius: 16px; margin: 0 auto 14px;
+  display: flex; align-items: center; justify-content: center; color: var(--teal);
+  background: var(--glass-bg); border: 1px solid var(--glass-border);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.25);
+}
+.lock-title { font-family: var(--disp); font-size: 22px; font-weight: 800; margin-bottom: 18px; }
+.lock-sub { font-size: 13px; color: var(--txt2); margin-bottom: 22px; }
+.pinpad-dots { display: flex; justify-content: center; gap: 12px; margin-bottom: 10px; }
+.pinpad-dots span {
+  width: 12px; height: 12px; border-radius: 50%; border: 1.5px solid var(--glass-border);
+  background: transparent; transition: background .15s, transform .15s, border-color .15s;
+}
+.pinpad-dots span.filled { background: var(--teal); border-color: var(--teal); transform: scale(1.15); }
+.pinpad-dots.shake { animation: pinpadShake .4s; }
+@keyframes pinpadShake {
+  0%, 100% { transform: translateX(0); }
+  20%      { transform: translateX(-8px); }
+  40%      { transform: translateX(8px); }
+  60%      { transform: translateX(-6px); }
+  80%      { transform: translateX(6px); }
+}
+.lock-error { min-height: 16px; font-size: 11.5px; color: var(--red); margin-bottom: 12px; }
+.pinpad-grid {
+  display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px;
+  max-width: 250px; margin: 0 auto;
+}
+.pinpad-key {
+  aspect-ratio: 1; border-radius: 50%; cursor: pointer;
+  background: var(--glass-bg); border: 1px solid var(--glass-border);
+  backdrop-filter: blur(9px) saturate(185%); -webkit-backdrop-filter: blur(9px) saturate(185%);
+  color: var(--txt); font-family: var(--disp); font-size: 19px; font-weight: 600;
+  display: flex; align-items: center; justify-content: center;
+  transition: background .15s, transform .1s;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.2);
+}
+.pinpad-key:active { background: rgba(255,255,255,0.18); transform: scale(0.94); }
+.pinpad-key-ghost { background: transparent; border-color: transparent; box-shadow: none; color: var(--txt3); }
+.pinpad-key-ghost:active { background: rgba(255,255,255,0.08); }
+.lock-forgot {
+  margin-top: 22px; font-size: 12.5px; color: rgba(255,255,255,0.45);
+  text-decoration: underline; text-underline-offset: 3px; cursor: pointer;
+}
 .loading-footer b { color: var(--txt2); font-weight: 600; }
 
 /* ═══════════════════════════════════════
@@ -1363,7 +1420,7 @@ body {
   box-shadow: inset 0 1px 0 rgba(255,255,255,0.4), 0 8px 24px rgba(0,0,0,0.3);
   border-radius: 99px; padding: 10px 20px;
   font-size: 13px; font-weight: 500; white-space: nowrap;
-  z-index: 300; opacity: 0;
+  z-index: 100003; opacity: 0;
   display: flex; align-items: center; gap: 8px;
   transition: all 0.3s cubic-bezier(0.22,1,0.36,1);
   pointer-events: none;
@@ -1724,7 +1781,7 @@ body {
 .confirm-overlay {
   position: fixed; inset: 0;
   background: transparent;
-  z-index: 500;
+  z-index: 100002;
   display: flex; align-items: center; justify-content: center;
   padding: 0 32px;
   opacity: 0; pointer-events: none;

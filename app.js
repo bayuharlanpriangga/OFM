@@ -121,6 +121,8 @@
       alertOctagon: '<svg class="ic" viewBox="0 0 24 24"><path d="M7.5 2h9L21 6.5v9L16.5 20h-9L3 15.5v-9z"/><path d="M12 8v5"/><circle cx="12" cy="16.3" r="0.6" fill="currentColor" stroke="none"/></svg>',
       sparkles: '<svg class="ic" viewBox="0 0 24 24"><path d="M12 2l1.5 4.5L18 8l-4.5 1.5L12 14l-1.5-4.5L6 8l4.5-1.5z"/><path d="M19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8z"/></svg>',
       info: '<svg class="ic" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8v.01"/></svg>',
+      lock: '<svg class="ic" viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>',
+      fingerprint: '<svg class="ic" viewBox="0 0 24 24"><path d="M12 3a7 7 0 0 0-7 7v2c0 3 1 5 1 5"/><path d="M12 3a7 7 0 0 1 7 7v3"/><path d="M8 21c-1-2-2-4-2-9a6 6 0 0 1 12 0v2"/><path d="M12 21c-2-3-3-6-3-9a3 3 0 0 1 6 0c0 1 0 2 .5 3.5"/></svg>',
     };
 
     // Escape user-provided text before inserting into innerHTML, to prevent XSS
@@ -622,6 +624,19 @@ function updateSettingsPage() {
       pushBadge.textContent = 'Aktifkan'; pushBadge.style.opacity = '0.85';
       pushBadge.style.background = ''; pushBadge.style.color = '';
       pushBadge.title = 'Tap untuk aktifkan alert real di HP-mu';
+    }
+  }
+  const lockDesc  = document.getElementById('settingsLockDesc');
+  const lockBadge = document.getElementById('settingsLockBadge');
+  if (lockDesc && lockBadge) {
+    if (lockEnabled()) {
+      lockDesc.textContent = lockHasBio() ? 'Aktif — PIN & biometrik' : 'Aktif — PIN 6 digit';
+      lockBadge.textContent = 'Aktif';
+      lockBadge.style.opacity = '1';
+    } else {
+      lockDesc.textContent = 'Nonaktif — data tanpa PIN';
+      lockBadge.textContent = 'Nonaktif';
+      lockBadge.style.opacity = '0.6';
     }
   }
   const cloudDesc  = document.getElementById('settingsCloudDesc');
@@ -2349,6 +2364,92 @@ function closeExportModal() { document.getElementById('exportModalOverlay').clas
 function closeExportModalOutside(e) { if (e.target === document.getElementById('exportModalOverlay')) closeExportModal(); }
 
 /* ══════════════════════════════════════════
+   IMPORT / RESTORE (dari backup JSON exportJSON())
+══════════════════════════════════════════ */
+function triggerImportFile() {
+  const input = document.getElementById('importFileInput');
+  if (input) { input.value = ''; input.click(); }
+}
+
+function handleImportFile(e) {
+  const file = e.target.files && e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    let data;
+    try {
+      data = JSON.parse(reader.result);
+    } catch (err) {
+      showToast('File bukan JSON yang valid', 'danger');
+      return;
+    }
+    // Terima file backup OFM (punya field app/transactions dkk) — tolak file lain
+    const looksLikeBackup = data && typeof data === 'object' &&
+      (data.app === 'OFM' || Array.isArray(data.transactions) || Array.isArray(data.wallets));
+    if (!looksLikeBackup) {
+      showToast('File ini bukan backup OFM yang valid', 'danger');
+      return;
+    }
+    const txCount = Array.isArray(data.transactions) ? data.transactions.length : 0;
+    const dateLabel = data.exportedAt ? new Date(data.exportedAt).toLocaleDateString('id-ID', { day:'numeric', month:'long', year:'numeric' }) : 'tidak diketahui';
+    showConfirm(
+      'Pulihkan Backup?',
+      `File ini berisi ${txCount} transaksi (dibuat ${dateLabel}). Semua data yang ada sekarang di aplikasi ini akan DIGANTI — tindakan ini tidak bisa dibatalkan.`,
+      () => applyImportedBackup(data),
+      'upload'
+    );
+  };
+  reader.onerror = () => showToast('Gagal membaca file', 'danger');
+  reader.readAsText(file);
+}
+
+function applyImportedBackup(data) {
+  try {
+    S.transactions = Array.isArray(data.transactions) ? data.transactions : [];
+    WALLETS        = Array.isArray(data.wallets) ? data.wallets : [];
+    BUDGET.cats    = (data.budget && Array.isArray(data.budget.cats)) ? data.budget.cats : [];
+    BUDGET.total   = (data.budget && typeof data.budget.total === 'number') ? data.budget.total : 0;
+    GOALS          = Array.isArray(data.goals) ? data.goals : [];
+    RECURRINGS     = Array.isArray(data.recurrings) ? data.recurrings : [];
+
+    // Daftarkan ulang kategori anggaran custom (icon lookup + expense picker),
+    // sama seperti alur load dari Firestore, biar tetap konsisten setelah restore.
+    const knownExpIds = new Set(CATS.expense.map(c => c.id));
+    BUDGET.cats.forEach(c => {
+      CUSTOM_CAT_ICONS[c.id] = c.icon;
+      if (!knownExpIds.has(c.id)) {
+        const insertAt = CATS.expense.length && CATS.expense[CATS.expense.length-1].id === 'other' ? CATS.expense.length - 1 : CATS.expense.length;
+        CATS.expense.splice(insertAt, 0, { id:c.id, label:c.label, color:c.color });
+        knownExpIds.add(c.id);
+      }
+    });
+
+    refreshAllUI();
+    saveToStorage();
+    showToast('Data berhasil dipulihkan dari backup', 'success');
+  } catch (err) {
+    console.warn('Import restore error', err);
+    showToast('Gagal memulihkan data dari file ini', 'danger');
+  }
+}
+
+// Re-render semua bagian UI yang tergantung data setelah restore/import massal
+function refreshAllUI() {
+  if (typeof renderDashboard === 'function')  renderDashboard();
+  if (typeof renderWallets === 'function')    renderWallets();
+  if (typeof renderBudget === 'function')     renderBudget();
+  if (typeof renderGoals === 'function')      renderGoals();
+  if (typeof renderGoalsPreview === 'function') renderGoalsPreview();
+  if (typeof renderRecurList === 'function')  renderRecurList();
+  if (typeof renderRecurPreview === 'function') renderRecurPreview();
+  if (typeof renderKategoriList === 'function') renderKategoriList();
+  if (typeof renderRiwayat === 'function')    renderRiwayat();
+  if (typeof updateAccountDropdown === 'function') updateAccountDropdown();
+  if (typeof updateBellBadge === 'function')  updateBellBadge();
+  if (typeof updateSettingsPage === 'function') updateSettingsPage();
+}
+
+/* ══════════════════════════════════════════
    RECURRING TRANSACTIONS
 ══════════════════════════════════════════ */
 let RECURRINGS = [];
@@ -2775,6 +2876,305 @@ window._loadUserData = async function(uid) {
 function loadFromStorage() { /* replaced by Firestore */ }
 
 /* ══════════════════════════════════════════
+   APP LOCK — PIN + Biometric
+   Local-device gate only: separate from the Firebase login above.
+   The PIN is hashed (SHA-256) and kept in localStorage on this device —
+   it's never sent anywhere and doesn't touch the account/cloud data.
+   Biometric unlock piggybacks on the WebAuthn platform authenticator
+   (Face ID / Touch ID / Windows Hello) purely as a local "did the
+   device owner verify themself" signal, with the PIN always kept as
+   the underlying fallback.
+══════════════════════════════════════════ */
+const LOCK_PIN_LEN = 6;
+
+function lockEnabled()      { return localStorage.getItem('ofm_lock_enabled') === '1'; }
+function lockHasBio()       { return !!localStorage.getItem('ofm_lock_bio_cred'); }
+function lockBioSupported() { return !!(window.PublicKeyCredential && navigator.credentials); }
+
+async function sha256Hex(str) {
+  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode('ofm_lock_v1:' + str));
+  return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
+}
+function b64FromBuf(buf) { return btoa(String.fromCharCode(...new Uint8Array(buf))); }
+function b64ToBuf(b64)   { return Uint8Array.from(atob(b64), c => c.charCodeAt(0)).buffer; }
+
+// ── Shared PIN-entry state machine — drives both the full-screen lock
+//    and the setup/change/disable flow inside the Settings modal ──
+const LOCKUI = { active: false, context: null, step: null, buffer: '', firstEntry: null, afterVerify: null };
+
+function lockUiStart(context, step) {
+  LOCKUI.active = true; LOCKUI.context = context; LOCKUI.step = step;
+  LOCKUI.buffer = ''; LOCKUI.firstEntry = null;
+  lockUiRenderDots();
+  lockUiSetPrompt(step, '');
+}
+
+function lockUiSetPrompt(step, error) {
+  const prompts = {
+    'verify-old': 'Masukkan PIN saat ini',
+    'new':        'Buat PIN baru (6 digit)',
+    'confirm':    'Konfirmasi PIN baru',
+    'lock':       'Masukkan PIN',
+  };
+  const subEl = document.getElementById('lockScreenSub');
+  if (LOCKUI.context === 'screen' && subEl) subEl.textContent = prompts[step] || '';
+  const modalPrompt = document.getElementById('lockModalPrompt');
+  if (LOCKUI.context === 'modal' && modalPrompt) modalPrompt.textContent = prompts[step] || '';
+  const err = document.getElementById(LOCKUI.context === 'screen' ? 'lockScreenError' : 'lockModalError');
+  if (err) err.textContent = error || '';
+}
+
+function lockUiRenderDots() {
+  document.querySelectorAll('.pinpad-dots').forEach(wrap => {
+    [...wrap.children].forEach((d, i) => d.classList.toggle('filled', i < LOCKUI.buffer.length));
+  });
+}
+
+function lockUiFail(msg) {
+  lockUiSetPrompt(LOCKUI.step, msg);
+  document.querySelectorAll('.pinpad-dots').forEach(w => { w.classList.add('shake'); setTimeout(() => w.classList.remove('shake'), 400); });
+  LOCKUI.buffer = '';
+  setTimeout(lockUiRenderDots, 50);
+}
+
+function lockKeyPress(d) {
+  if (!LOCKUI.active || LOCKUI.buffer.length >= LOCK_PIN_LEN) return;
+  LOCKUI.buffer += d;
+  lockUiRenderDots();
+  if (LOCKUI.buffer.length === LOCK_PIN_LEN) setTimeout(lockUiSubmit, 100);
+}
+function lockKeyBackspace() {
+  if (!LOCKUI.active) return;
+  LOCKUI.buffer = LOCKUI.buffer.slice(0, -1);
+  lockUiRenderDots();
+}
+
+async function lockUiSubmit() {
+  const entered = LOCKUI.buffer;
+  const step = LOCKUI.step;
+
+  if (step === 'lock' || step === 'verify-old') {
+    const hash = await sha256Hex(entered);
+    const stored = localStorage.getItem('ofm_lock_pin_hash');
+    if (hash !== stored) {
+      lockUiFail(step === 'lock' ? 'PIN salah, coba lagi' : 'PIN saat ini salah');
+      return;
+    }
+    if (step === 'lock') { lockUnlockSuccess(); return; }
+    // verify-old sukses — lanjut sesuai alasan awal diminta verifikasi
+    LOCKUI.buffer = '';
+    if (LOCKUI.afterVerify === 'disable') { lockDisable(); return; }
+    LOCKUI.step = 'new'; LOCKUI.firstEntry = null;
+    lockUiRenderDots(); lockUiSetPrompt('new', '');
+    return;
+  }
+
+  if (step === 'new') {
+    LOCKUI.firstEntry = entered;
+    LOCKUI.buffer = ''; LOCKUI.step = 'confirm';
+    lockUiRenderDots(); lockUiSetPrompt('confirm', '');
+    return;
+  }
+
+  if (step === 'confirm') {
+    if (entered !== LOCKUI.firstEntry) {
+      LOCKUI.step = 'new'; LOCKUI.firstEntry = null;
+      lockUiFail('PIN tidak cocok, ulangi dari awal');
+      setTimeout(() => lockUiSetPrompt('new', ''), 900);
+      return;
+    }
+    const hash = await sha256Hex(entered);
+    localStorage.setItem('ofm_lock_pin_hash', hash);
+    localStorage.setItem('ofm_lock_enabled', '1');
+    LOCKUI.active = false;
+    showToast('PIN berhasil diaktifkan', 'success');
+    renderLockModal();
+    updateSettingsPage();
+    return;
+  }
+}
+
+function lockUnlockSuccess() {
+  LOCKUI.active = false;
+  LOCKUI.buffer = '';
+  window._appUnlocked = true;
+  const scr = document.getElementById('lockScreen');
+  if (scr) scr.classList.remove('open');
+}
+
+function lockDisable() {
+  localStorage.removeItem('ofm_lock_pin_hash');
+  localStorage.removeItem('ofm_lock_enabled');
+  localStorage.removeItem('ofm_lock_bio_cred');
+  LOCKUI.active = false;
+  showToast('Kunci PIN dinonaktifkan', 'info');
+  renderLockModal();
+  updateSettingsPage();
+}
+
+// ── Full-screen lock, shown on launch (and after being backgrounded a while) ──
+function showLockScreen(force) {
+  if (!lockEnabled()) return;
+  if (window._appUnlocked && !force) return;
+  const scr = document.getElementById('lockScreen');
+  if (!scr) return;
+  scr.classList.add('open');
+  const bioBtn = document.getElementById('lockBioBtn');
+  if (bioBtn) bioBtn.style.display = lockHasBio() ? 'flex' : 'none';
+  lockUiStart('screen', 'lock');
+  if (lockHasBio()) setTimeout(() => attemptBiometricUnlock(true), 400);
+}
+
+let _lockHiddenAt = null;
+document.addEventListener('visibilitychange', () => {
+  if (!lockEnabled()) return;
+  if (document.hidden) {
+    _lockHiddenAt = Date.now();
+  } else if (_lockHiddenAt && (Date.now() - _lockHiddenAt) > 15000) {
+    window._appUnlocked = false;
+    showLockScreen(true);
+  }
+});
+
+function forgotPin() {
+  showConfirm(
+    'Lupa PIN?',
+    'Ini akan menghapus kunci PIN & biometrik dari perangkat ini — data transaksimu tetap aman dan tidak terhapus. Kamu perlu membuat PIN baru lagi nanti kalau mau mengaktifkan kunci lagi.',
+    () => { lockDisable(); lockUnlockSuccess(); },
+    'warning'
+  );
+}
+
+// ── Biometric enroll / verify (WebAuthn platform authenticator) ──
+async function enrollBiometric() {
+  if (!lockBioSupported()) { showToast('Biometrik tidak didukung di perangkat/browser ini', 'warning'); return; }
+  try {
+    const available = await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable();
+    if (!available) { showToast('Sensor biometrik tidak tersedia di perangkat ini', 'warning'); return; }
+    const challenge = crypto.getRandomValues(new Uint8Array(32));
+    const userId = crypto.getRandomValues(new Uint8Array(16));
+    const cred = await navigator.credentials.create({
+      publicKey: {
+        challenge,
+        rp: { name: 'OFM' },
+        user: { id: userId, name: 'ofm-local-user', displayName: 'Pengguna OFM' },
+        pubKeyCredParams: [{ type: 'public-key', alg: -7 }, { type: 'public-key', alg: -257 }],
+        authenticatorSelection: { authenticatorAttachment: 'platform', userVerification: 'required' },
+        timeout: 60000,
+      }
+    });
+    if (!cred) throw new Error('no credential returned');
+    localStorage.setItem('ofm_lock_bio_cred', b64FromBuf(cred.rawId));
+    showToast('Biometrik berhasil diaktifkan', 'success');
+    renderLockModal();
+  } catch (err) {
+    console.warn('Biometric enroll failed', err);
+    showToast('Gagal mengaktifkan biometrik', 'danger');
+  }
+}
+
+function disableBiometric() {
+  localStorage.removeItem('ofm_lock_bio_cred');
+  showToast('Biometrik dinonaktifkan', 'info');
+  renderLockModal();
+}
+
+async function attemptBiometricUnlock(silent) {
+  if (!lockHasBio()) { if (!silent) showToast('Biometrik belum diaktifkan', 'info'); return; }
+  try {
+    const credId = b64ToBuf(localStorage.getItem('ofm_lock_bio_cred'));
+    const challenge = crypto.getRandomValues(new Uint8Array(32));
+    const assertion = await navigator.credentials.get({
+      publicKey: {
+        challenge,
+        allowCredentials: [{ id: credId, type: 'public-key' }],
+        userVerification: 'required',
+        timeout: 60000,
+      }
+    });
+    if (assertion) lockUnlockSuccess();
+  } catch (err) {
+    if (!silent) showToast('Verifikasi biometrik dibatalkan', 'warning');
+  }
+}
+
+// ── Settings modal: setup / change / disable PIN, toggle biometric ──
+function openLockSettings() {
+  document.getElementById('lockModalOverlay').classList.add('open');
+  renderLockModal();
+}
+function closeLockModal() {
+  document.getElementById('lockModalOverlay').classList.remove('open');
+  LOCKUI.active = false;
+}
+function closeLockModalOutside(e) { if (e.target === document.getElementById('lockModalOverlay')) closeLockModal(); }
+
+function lockModalPinpadHTML() {
+  return `
+    <div style="text-align:center">
+      <div id="lockModalPrompt" style="font-size:13px;color:var(--txt2);margin-bottom:14px">Buat PIN baru (6 digit)</div>
+      <div class="pinpad-dots" style="margin-bottom:6px"><span></span><span></span><span></span><span></span><span></span><span></span></div>
+      <div class="lock-error" id="lockModalError"></div>
+      <div class="pinpad-grid" style="max-width:230px;margin:0 auto">
+        ${[1,2,3,4,5,6,7,8,9].map(n => `<button class="pinpad-key" onclick="lockKeyPress('${n}')">${n}</button>`).join('')}
+        <div></div>
+        <button class="pinpad-key" onclick="lockKeyPress('0')">0</button>
+        <button class="pinpad-key pinpad-key-ghost" onclick="lockKeyBackspace()"><svg class="ic" viewBox="0 0 24 24"><path d="M21 12H8M11 6l-6 6 6 6"/></svg></button>
+      </div>
+      <div class="lock-forgot" onclick="renderLockModal()" style="margin-top:16px">Batal</div>
+    </div>`;
+}
+
+function lockStartSetup() {
+  document.getElementById('lockModalBody').innerHTML = lockModalPinpadHTML();
+  lockUiStart('modal', 'new');
+}
+function lockStartChange() {
+  document.getElementById('lockModalBody').innerHTML = lockModalPinpadHTML();
+  LOCKUI.afterVerify = 'change';
+  lockUiStart('modal', 'verify-old');
+}
+function lockStartDisable() {
+  document.getElementById('lockModalBody').innerHTML = lockModalPinpadHTML();
+  LOCKUI.afterVerify = 'disable';
+  lockUiStart('modal', 'verify-old');
+}
+
+function renderLockModal() {
+  LOCKUI.active = false;
+  const body = document.getElementById('lockModalBody');
+  if (!body) return;
+  if (!lockEnabled()) {
+    body.innerHTML = `
+      <p style="font-size:12.5px;color:var(--txt3);line-height:1.6;margin-bottom:18px">
+        Kunci aplikasi pakai PIN 6 digit sebelum siapa pun bisa lihat data keuanganmu. PIN disimpan cuma di perangkat ini (terenkripsi/hash), tidak dikirim ke server mana pun.
+      </p>
+      <button class="auth-btn-primary" onclick="lockStartSetup()">Aktifkan Kunci PIN</button>
+    `;
+    return;
+  }
+  const bioSupported = lockBioSupported();
+  const bioOn = lockHasBio();
+  body.innerHTML = `
+    <div class="s-items flat" style="margin-bottom:18px">
+      <div class="settings-item" style="cursor:default">
+        <div class="si-icon">${ICON.lock}</div>
+        <div class="si-text"><div class="si-name">PIN Aktif</div><div class="si-desc">Diminta tiap kali buka aplikasi</div></div>
+        <div class="si-badge">Aktif</div>
+      </div>
+      ${bioSupported ? `
+      <div class="settings-item" onclick="${bioOn ? 'disableBiometric()' : 'enrollBiometric()'}">
+        <div class="si-icon">${ICON.fingerprint}</div>
+        <div class="si-text"><div class="si-name">Buka dengan Biometrik</div><div class="si-desc">Face ID / sidik jari, PIN tetap jadi cadangan</div></div>
+        <div class="si-badge" style="${bioOn ? '' : 'opacity:0.6'}">${bioOn ? 'Aktif' : 'Nonaktif'}</div>
+      </div>` : ''}
+    </div>
+    <button class="auth-btn-primary" style="margin-bottom:10px" onclick="lockStartChange()">Ubah PIN</button>
+    <button class="auth-btn-primary" style="background:rgba(255,107,132,0.16);border-color:rgba(255,107,132,0.35);color:var(--red);box-shadow:none" onclick="lockStartDisable()">Matikan Kunci PIN</button>
+  `;
+}
+
+/* ══════════════════════════════════════════
    GOALS STATE
 ══════════════════════════════════════════ */
 let GOALS = [];
@@ -3071,8 +3471,11 @@ function hideLoadingScreen() {
       screen.classList.add('hide');
       const app = document.getElementById('app');
       if (app) app.classList.remove('pre-load');
+      showLockScreen(); // opaque lock overlay goes up before the loading screen fully fades, so data never flashes
       setTimeout(() => { screen.style.display = 'none'; }, 550);
     }, 180);
+  } else {
+    showLockScreen();
   }
 }
 // Safety net — never leave the user stuck on the loading screen

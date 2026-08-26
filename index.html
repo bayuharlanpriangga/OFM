@@ -104,6 +104,38 @@
   </div>
 </div>
 
+<!-- ══════ APP LOCK SCREEN ══════ -->
+<div id="lockScreen">
+  <div class="lock-inner">
+    <div class="lock-icon"><svg class="ic" viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg></div>
+    <div class="lock-title">O<span style="color:var(--teal)">FM</span></div>
+    <div class="lock-sub" id="lockScreenSub">Masukkan PIN</div>
+    <div class="pinpad-dots" id="lockScreenDots">
+      <span></span><span></span><span></span><span></span><span></span><span></span>
+    </div>
+    <div class="lock-error" id="lockScreenError"></div>
+    <div class="pinpad-grid">
+      <button class="pinpad-key" onclick="lockKeyPress('1')">1</button>
+      <button class="pinpad-key" onclick="lockKeyPress('2')">2</button>
+      <button class="pinpad-key" onclick="lockKeyPress('3')">3</button>
+      <button class="pinpad-key" onclick="lockKeyPress('4')">4</button>
+      <button class="pinpad-key" onclick="lockKeyPress('5')">5</button>
+      <button class="pinpad-key" onclick="lockKeyPress('6')">6</button>
+      <button class="pinpad-key" onclick="lockKeyPress('7')">7</button>
+      <button class="pinpad-key" onclick="lockKeyPress('8')">8</button>
+      <button class="pinpad-key" onclick="lockKeyPress('9')">9</button>
+      <button class="pinpad-key pinpad-key-ghost" id="lockBioBtn" onclick="attemptBiometricUnlock()" style="display:none" title="Buka dengan biometrik">
+        <svg class="ic" viewBox="0 0 24 24"><path d="M12 3a7 7 0 0 0-7 7v2c0 3 1 5 1 5"/><path d="M12 3a7 7 0 0 1 7 7v3"/><path d="M8 21c-1-2-2-4-2-9a6 6 0 0 1 12 0v2"/><path d="M12 21c-2-3-3-6-3-9a3 3 0 0 1 6 0c0 1 0 2 .5 3.5"/></svg>
+      </button>
+      <button class="pinpad-key" onclick="lockKeyPress('0')">0</button>
+      <button class="pinpad-key pinpad-key-ghost" onclick="lockKeyBackspace()" title="Hapus">
+        <svg class="ic" viewBox="0 0 24 24"><path d="M21 12H8M11 6l-6 6 6 6"/></svg>
+      </button>
+    </div>
+    <div class="lock-forgot" onclick="forgotPin()">Lupa PIN?</div>
+  </div>
+</div>
+
 <div id="app" style="display:block" class="pre-load">
 
   <!-- ── BOTTOM NAV — Floating Pill ── -->
@@ -562,6 +594,14 @@
         </div>
         <div class="settings-item" id="installAppItem" onclick="installApp()" style="display:none">
           <div class="si-icon"><svg class="ic" viewBox="0 0 24 24"><path d="M12 3v12M12 15l-4-4M12 15l4-4"/><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg></div><div class="si-text"><div class="si-name">Instal Aplikasi</div><div class="si-desc">Pasang OFM di perangkatmu</div></div><div class="si-arrow">›</div>
+        </div>
+      </div>
+    </div>
+    <div class="settings-group">
+      <div class="settings-label">Keamanan</div>
+      <div class="s-items">
+        <div class="settings-item" onclick="openLockSettings()">
+          <div class="si-icon"><svg class="ic" viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg></div><div class="si-text"><div class="si-name">Kunci Aplikasi</div><div class="si-desc" id="settingsLockDesc">Nonaktif — data tanpa PIN</div></div><div class="si-badge" id="settingsLockBadge" style="opacity:0.6">Nonaktif</div>
         </div>
       </div>
     </div>
@@ -1062,8 +1102,26 @@
             <div class="si-text"><div class="si-name">JSON — Backup Lengkap</div><div class="si-desc">Transaksi, akun, anggaran, goals & tagihan rutin — buat backup pribadi</div></div>
             <div class="si-arrow">›</div>
           </div>
+          <div class="settings-item" onclick="triggerImportFile();closeExportModal();">
+            <div class="si-icon"><svg class="ic" viewBox="0 0 24 24"><path d="M12 4v12M8 12l4 4 4-4"/><path d="M4 16v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3"/></svg></div>
+            <div class="si-text"><div class="si-name">Import — Pulihkan Backup</div><div class="si-desc">Pulihkan dari file JSON backup (menimpa data yang ada sekarang)</div></div>
+            <div class="si-arrow">›</div>
+          </div>
         </div>
       </div>
+    </div>
+  </div>
+  <input type="file" id="importFileInput" accept="application/json,.json" style="display:none" onchange="handleImportFile(event)">
+
+  <!-- ══════ APP LOCK SETTINGS MODAL ══════ -->
+  <div class="modal-overlay" id="lockModalOverlay" onclick="closeLockModalOutside(event)">
+    <div class="modal-sheet">
+      <div class="modal-handle"></div>
+      <div class="modal-header">
+        <div class="modal-title">Kunci Aplikasi</div>
+        <button class="modal-close" onclick="closeLockModal()"><svg class="ic" viewBox="0 0 24 24"><path d="M5 5l14 14M19 5L5 19"/></svg></button>
+      </div>
+      <div id="lockModalBody" style="padding:0 20px 24px"></div>
     </div>
   </div>
 
