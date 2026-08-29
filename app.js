@@ -488,6 +488,185 @@ function applySmartParse() {
 }
 
 /* ══════════════════════════════════════════
+   SMART-PARSE NOTIFIKASI SMS / E-WALLET
+   Format notifikasi jauh lebih terstruktur daripada catatan bebas
+   (biasanya ada "Rp" eksplisit, kata kunci baku "pembayaran"/"transfer
+   masuk", dan nominal saldo yang HARUS dibedain dari nominal transaksi).
+   Dipisah dari parseSmartText() supaya masing-masing tetap sederhana.
+══════════════════════════════════════════ */
+const SMS_PROVIDER_HINTS = {
+  BCA: ['bca'], Mandiri: ['mandiri'], BNI: ['bni'], BRI: ['bri'],
+  CIMB: ['cimb'], Jenius: ['jenius'], Jago: ['jago', 'bank jago'],
+  Permata: ['permata'], GoPay: ['gopay', 'go-pay'], OVO: ['ovo'],
+  DANA: ['dana'], ShopeePay: ['shopeepay', 'shopee pay'],
+  LinkAja: ['linkaja', 'link aja'],
+};
+const SMS_INCOME_KEYWORDS = [
+  'transfer masuk', 'dana masuk', 'mutasi kredit', 'kredit sebesar',
+  'menerima', 'diterima', 'cashback', 'refund', 'pengembalian dana',
+  'top up berhasil dari', 'menerima transfer',
+];
+const SMS_EXPENSE_KEYWORDS = [
+  'pembayaran', 'berhasil membayar', 'transaksi debit', 'mutasi debit',
+  'tarik tunai', 'transfer keluar', 'berhasil bayar', 'debit sebesar',
+];
+const SMS_MERCHANT_STOP = 'telah|berhasil|saldo|senilai|sebesar|pada|tanggal|melalui|via|dengan|no\\.?|ref';
+
+// Ambil nominal transaksi — bukan saldo — dari teks notifikasi.
+// Aturan: baca semua kemunculan "Rp<angka>" berurutan, lalu skip kalau
+// kata "saldo" muncul tepat sebelum angka itu (mis. "Saldo Rp5.750.000").
+function smsFindAmount(text) {
+  const re = /rp\.?\s?(\d{1,3}(?:[.,]\d{3})+|\d+)/gi;
+  const matches = [...text.matchAll(re)];
+  if (!matches.length) return { amount: 0, matched: null };
+  for (const m of matches) {
+    const before = text.slice(Math.max(0, m.index - 15), m.index).toLowerCase();
+    if (before.includes('saldo')) continue;
+    return { amount: parseInt(m[1].replace(/[.,]/g, ''), 10), matched: m[0] };
+  }
+  // Semua kemunculan didahului "saldo" (jarang) — pakai yang pertama saja.
+  return { amount: parseInt(matches[0][1].replace(/[.,]/g, ''), 10), matched: matches[0][0] };
+}
+
+// Ambil nama merchant/pengirim setelah kata "di", "ke", atau "dari".
+// PENTING: kata sambung ("dari"/"ke"/"di") dicocokkan case-insensitive lewat
+// alternation manual, tapi nama merchant-nya sendiri HARUS diawali huruf
+// kapital/angka (regex tanpa flag /i) — supaya kata sambung Indonesia lain
+// yang kebetulan nempel (mis. "dari transaksi di Alfamart") gak ikut kebawa
+// jadi bagian dari nama merchant.
+function smsFindMerchant(text) {
+  const re = new RegExp(
+    '\\b(?:dari|Dari|ke|Ke|di|Di)\\s+([A-Z0-9][\\w .,\\-/&]{1,30}?)(?=\\s+(?:' + SMS_MERCHANT_STOP + ')\\b|[.,]|$)'
+  );
+  const m = text.match(re);
+  return m ? m[1].trim().replace(/\s{2,}/g, ' ') : null;
+}
+
+function smsDetectType(text) {
+  const t = text.toLowerCase();
+  for (const kw of SMS_INCOME_KEYWORDS)  if (t.includes(kw)) return 'income';
+  for (const kw of SMS_EXPENSE_KEYWORDS) if (t.includes(kw)) return 'expense';
+  return 'expense'; // default paling aman buat notifikasi transaksi
+}
+
+function smsDetectProvider(text) {
+  const t = text.toLowerCase();
+  for (const name in SMS_PROVIDER_HINTS) {
+    for (const kw of SMS_PROVIDER_HINTS[name]) if (t.includes(kw)) return name;
+  }
+  return null;
+}
+
+// Parse notifikasi SMS/e-wallet → { type, amount, catId, note, provider }
+function parseSmsNotif(text) {
+  const type = smsDetectType(text);
+  const amountRes = smsFindAmount(text);
+  const merchant = smsFindMerchant(text);
+  const provider = smsDetectProvider(text);
+  const catRes = smartFindCategory(merchant ? (text + ' ' + merchant) : text, type);
+  let note = merchant || provider || null;
+  if (note) note = note.charAt(0).toUpperCase() + note.slice(1);
+  return {
+    type, amount: amountRes.amount, catId: catRes.catId, note, provider,
+    _debug: { merchant, amountMatched: amountRes.matched, catMatched: catRes.matched },
+  };
+}
+
+// Terapkan hasil parse notifikasi ke form "Catat Transaksi" — sama seperti
+// applySmartParse(), tetap gak langsung nyimpen, user tetap review dulu.
+function applySmsParse() {
+  const input = document.getElementById('smsInput');
+  const raw = (input.value || '').trim();
+  if (!raw) { showToast('Tempel dulu notifikasinya', 'warning'); return; }
+
+  const result = parseSmsNotif(raw);
+  const chips = [];
+
+  setType(result.type);
+
+  if (result.amount > 0) {
+    S.amountRaw = result.amount;
+    document.getElementById('amountDisplay').textContent = result.amount.toLocaleString('id-ID');
+    chips.push({ text: 'Rp' + result.amount.toLocaleString('id-ID'), warn: false });
+  } else {
+    chips.push({ text: 'Nominal tidak terdeteksi — isi manual', warn: true });
+  }
+
+  const catList = CATS[result.type] || [];
+  const cat = catList.find(c => c.id === result.catId) || catList.find(c => c.id === 'other');
+  if (cat) {
+    pickOpt('txCategory', { value: cat.id, text: cat.label, icon: catIcon(cat.id) });
+    chips.push({ text: cat.label, warn: false });
+  }
+
+  // Notifikasi hampir selalu real-time, jadi tanggalnya hari ini.
+  pickTxDate(smartToDateStr(new Date()));
+  chips.push({ text: 'Hari ini', warn: false });
+
+  if (result.provider) chips.push({ text: result.provider, warn: false });
+
+  if (result.note) document.getElementById('txNote').value = result.note;
+
+  const previewEl = document.getElementById('smartPreview');
+  previewEl.innerHTML = chips.map(c =>
+    `<span class="smart-chip${c.warn ? ' warn' : ''}">${c.warn ? ICON.warning : ICON.check}${escapeHtml(c.text)}</span>`
+  ).join('');
+  previewEl.classList.add('show');
+
+  if (result.amount <= 0) {
+    showToast('Sebagian terisi otomatis — cek nominal dulu ya', 'warning');
+  } else {
+    showToast('Notifikasi kebaca, cek sebelum simpan', 'success');
+    const ov = document.getElementById('quickNoteModalOverlay');
+    if (ov && ov.classList.contains('open')) setTimeout(closeQuickNoteModal, 900);
+  }
+}
+
+// Tempel isi clipboard langsung ke kotak notifikasi lalu langsung di-parse.
+async function pasteSmsClipboard() {
+  if (!navigator.clipboard || !navigator.clipboard.readText) {
+    showToast('Browser ini gak izinin baca clipboard — tempel manual aja (tap & tahan)', 'warning');
+    return;
+  }
+  try {
+    const text = await navigator.clipboard.readText();
+    if (!text || !text.trim()) { showToast('Clipboard kosong', 'warning'); return; }
+    const el = document.getElementById('smsInput');
+    el.value = text.trim();
+    applySmsParse();
+  } catch (err) {
+    showToast('Gagal baca clipboard — tempel manual aja (tap & tahan)', 'warning');
+  }
+}
+
+// Ganti antara mode "Ketik" (teks bebas) dan "Tempel Notifikasi" di modal Catat Cepat.
+function setSmartMode(mode) {
+  const isSms = mode === 'sms';
+  S._smartMode = mode;
+  document.getElementById('smartModeTypeTab').classList.toggle('active', !isSms);
+  document.getElementById('smartModeSmsTab').classList.toggle('active', isSms);
+  document.getElementById('smartTypePanel').style.display = isSms ? 'none' : '';
+  document.getElementById('smartSmsPanel').style.display = isSms ? '' : 'none';
+
+  const previewEl = document.getElementById('smartPreview');
+  previewEl.classList.remove('show');
+  previewEl.innerHTML = '';
+
+  const hint = document.getElementById('smartHint');
+  if (hint) {
+    hint.textContent = isSms
+      ? 'Tempel notifikasi transaksi dari SMS bank atau e-wallet (GoPay, OVO, DANA, dll). Nominal, jenis, dan merchant kebaca otomatis — nominal saldo diabaikan.'
+      : 'Contoh: "gaji bulanan 5jt", "bensin 20rb kemarin", "transfer ke rekening adik 500rb". Hasilnya bakal ngisi form di belakang — cek dulu sebelum simpan.';
+  }
+
+  if (isSms) stopQuickNoteVoice();
+  setTimeout(() => {
+    const el = document.getElementById(isSms ? 'smsInput' : 'smartInput');
+    if (el) el.focus();
+  }, 150);
+}
+
+/* ══════════════════════════════════════════
    NAV
 ══════════════════════════════════════════ */
 // Pages visible directly in the pill nav
@@ -728,12 +907,16 @@ function openQuickNoteModal() {
   document.getElementById('quickNoteModalOverlay').classList.add('open');
   document.getElementById('quickNoteFab').classList.add('open');
   _qnRefreshVoiceButton();
+  setSmartMode('type');
   setTimeout(() => { const el = document.getElementById('smartInput'); if (el) el.focus(); }, 250);
 }
 function closeQuickNoteModal() {
   document.getElementById('quickNoteModalOverlay').classList.remove('open');
   document.getElementById('quickNoteFab').classList.remove('open');
   stopQuickNoteVoice();
+  // Notifikasi SMS/e-wallet bisa memuat info saldo/rekening — jangan biarkan nyangkut di form.
+  const smsEl = document.getElementById('smsInput');
+  if (smsEl) smsEl.value = '';
 }
 function toggleQuickNoteModal() {
   const ov = document.getElementById('quickNoteModalOverlay');
@@ -1960,6 +2143,7 @@ function drawScore() {
 let _donutType = 'expense';
 
 function renderAnalytics() {
+  renderForecast();
   drawDonut();
   renderCompare();
   renderAverages();
@@ -2238,6 +2422,145 @@ function renderAverages() {
       <div class="cc-val">Rp ${Math.round(weeklyAvg).toLocaleString('id-ID')}</div>
       <div class="cc-sub">estimasi per 7 hari</div>
     </div>`;
+}
+
+/* ══════════════════════════════════════════
+   FORECASTING SEDERHANA — proyeksi saldo Rp akhir bulan
+   Dua komponen, dijumlah biar gak dobel hitung:
+   1) Tren harian, dari transaksi NON-rutin (isRecurring:false) —
+      supaya bukan cerminan bulan lalu, tapi kebiasaan belanja/terima
+      uang harian yang aktual belakangan ini.
+   2) Transaksi rutin (RECURRINGS) yang terjadwal jatuh tempo sebelum
+      akhir bulan — dihitung eksplisit per kejadian, bukan lewat rata-rata,
+      karena nilai & tanggalnya sudah pasti diketahui dari app.
+   Cuma pakai wallet Rp (IDR), selaras dengan headline saldo di Dashboard.
+══════════════════════════════════════════ */
+
+// Rata-rata net harian (pemasukan - pengeluaran) dari transaksi non-rutin.
+// Default: transaksi bulan berjalan. Kalau bulan baru mulai (<4 hari data),
+// fallback ke 30 hari terakhir biar sampelnya gak kekecilan.
+function forecastDailyTrend() {
+  const now = new Date(); now.setHours(0,0,0,0);
+  const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+  let elapsedDays = Math.round((now - startOfMonth) / SMART_DAY_MS) + 1;
+  let from = smartToDateStr(startOfMonth);
+  let source = 'bulan ini';
+  if (elapsedDays < 4) {
+    from = smartToDateStr(new Date(now.getTime() - 29 * SMART_DAY_MS));
+    elapsedDays = 30;
+    source = '30 hari terakhir';
+  }
+  const to = smartToDateStr(now);
+  const relevant = S.transactions.filter(t =>
+    !t.isRecurring && t.date >= from && t.date <= to &&
+    (t.type === 'income' || t.type === 'expense') && walletCurrencyCode(t.account) === 'IDR'
+  );
+  const net = relevant.reduce((s, t) => s + (t.type === 'income' ? t.amount : -t.amount), 0);
+  return { dailyNet: net / elapsedDays, elapsedDays, source, sampleCount: relevant.length };
+}
+
+// Total efek transaksi rutin aktif yang akan jatuh tempo dari besok sampai
+// akhir bulan (Rp saja). Dihitung per kejadian lewat nextOccurrence() yang
+// sudah ada, jadi selaras dengan apa yang bakal benar-benar tercatat otomatis.
+function forecastRecurringNet(endOfMonth) {
+  let net = 0;
+  const items = [];
+  RECURRINGS.filter(r => r.active && r.type !== 'transfer' && walletCurrencyCode(r.account) === 'IDR').forEach(r => {
+    let occ = nextOccurrence(r.start, r.freq); // selalu > hari ini, jadi gak dobel hitung yang udah diproses hari ini
+    let guard = 0;
+    while (occ <= endOfMonth && guard < 60) {
+      const amt = r.type === 'income' ? r.amount : -r.amount;
+      net += amt;
+      items.push({ name: r.name, date: new Date(occ), amount: amt });
+      if (r.freq === 'monthly')     occ = new Date(occ.getFullYear(), occ.getMonth() + 1, occ.getDate());
+      else if (r.freq === 'weekly') occ = new Date(occ.getTime() + 7 * SMART_DAY_MS);
+      else if (r.freq === 'yearly') occ = new Date(occ.getFullYear() + 1, occ.getMonth(), occ.getDate());
+      else break;
+      guard++;
+    }
+  });
+  return { net, items };
+}
+
+function computeForecast() {
+  const now = new Date(); now.setHours(0,0,0,0);
+  const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0); endOfMonth.setHours(0,0,0,0);
+  const daysRemaining = Math.max(0, Math.round((endOfMonth - now) / SMART_DAY_MS));
+
+  const totalsByCurrency = {};
+  WALLETS.forEach(w => { totalsByCurrency[w.currency || 'IDR'] = (totalsByCurrency[w.currency || 'IDR'] || 0) + getWalletBalance(w.id); });
+  const currentBalance = totalsByCurrency.IDR || 0;
+
+  const trend = forecastDailyTrend();
+  const trendProjection = trend.dailyNet * daysRemaining;
+  const recur = forecastRecurringNet(endOfMonth);
+
+  return {
+    currentBalance, daysRemaining, endOfMonth,
+    trend, trendProjection, recur,
+    projected: currentBalance + trendProjection + recur.net,
+  };
+}
+
+function renderForecast() {
+  const card = document.getElementById('forecastCard');
+  const daysEl = document.getElementById('forecastDaysLeft');
+  if (!card) return;
+
+  if (!WALLETS.length) {
+    card.innerHTML = `<div style="color:var(--txt3);font-size:12px;text-align:center;padding:8px 0">Tambahkan akun/dompet dulu supaya proyeksi saldo bisa dihitung.</div>`;
+    if (daysEl) daysEl.textContent = '';
+    return;
+  }
+
+  const f = computeForecast();
+  if (daysEl) daysEl.textContent = f.daysRemaining === 0 ? 'Hari terakhir bulan ini' : f.daysRemaining + ' hari lagi';
+
+  const delta = f.projected - f.currentBalance;
+  const deltaUp = delta >= 0;
+  const valClass = f.projected >= f.currentBalance ? 'up' : 'down';
+
+  const recurCount = f.recur.items.length;
+  const recurSub = recurCount === 0
+    ? 'Gak ada transaksi rutin terjadwal sisa bulan ini'
+    : recurCount + ' transaksi rutin terjadwal sisa bulan ini';
+
+  let html = `
+    <div class="forecast-top">
+      <div>
+        <div class="forecast-label">Proyeksi Saldo Akhir Bulan</div>
+        <div class="forecast-val ${valClass}">Rp ${Math.round(f.projected).toLocaleString('id-ID')}</div>
+        <div class="forecast-cur">dari saldo sekarang Rp ${Math.round(f.currentBalance).toLocaleString('id-ID')}</div>
+      </div>
+      <div class="forecast-delta ${deltaUp ? 'good' : 'bad'}">
+        ${deltaUp ? ICON.trendUp : ICON.trendDown}
+        ${deltaUp ? '+' : '-'}Rp ${Math.abs(Math.round(delta)).toLocaleString('id-ID')}
+      </div>
+    </div>
+    <div class="forecast-rows">
+      <div class="forecast-row">
+        <div class="forecast-row-icon" style="background:${f.trendProjection >= 0 ? 'rgba(42,232,196,0.15)' : 'rgba(255,107,132,0.15)'};color:${f.trendProjection >= 0 ? 'var(--teal)' : 'var(--red)'}">${ICON.chart}</div>
+        <div class="forecast-row-body">
+          <div class="forecast-row-title">Tren harian</div>
+          <div class="forecast-row-sub">rata-rata ${f.trend.source} · ${f.daysRemaining} hari tersisa</div>
+        </div>
+        <div class="forecast-row-val" style="color:${f.trendProjection >= 0 ? 'var(--teal)' : 'var(--red)'}">${f.trendProjection >= 0 ? '+' : '-'}Rp ${Math.abs(Math.round(f.trendProjection)).toLocaleString('id-ID')}</div>
+      </div>
+      <div class="forecast-row">
+        <div class="forecast-row-icon" style="background:${f.recur.net >= 0 ? 'rgba(42,232,196,0.15)' : 'rgba(255,107,132,0.15)'};color:${f.recur.net >= 0 ? 'var(--teal)' : 'var(--red)'}">${ICON.refresh}</div>
+        <div class="forecast-row-body">
+          <div class="forecast-row-title">Transaksi rutin terjadwal</div>
+          <div class="forecast-row-sub">${recurSub}</div>
+        </div>
+        <div class="forecast-row-val" style="color:${f.recur.net >= 0 ? 'var(--teal)' : 'var(--red)'}">${f.recur.net >= 0 ? '+' : '-'}Rp ${Math.abs(Math.round(f.recur.net)).toLocaleString('id-ID')}</div>
+      </div>
+    </div>`;
+
+  if (f.projected < 0) {
+    html += `<div class="forecast-warn">${ICON.warning} Saldo diproyeksikan minus akhir bulan ini — kebiasaan belanja atau tagihan rutin sekarang lebih besar dari saldo yang ada.</div>`;
+  }
+
+  card.innerHTML = html;
 }
 
 /* ── Budget overlay: actual spend vs budget limit per category ── */

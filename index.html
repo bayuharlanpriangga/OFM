@@ -179,23 +179,50 @@
         <button class="modal-close" onclick="closeQuickNoteModal()"><svg class="ic" viewBox="0 0 24 24"><path d="M5 5l14 14M19 5L5 19"/></svg></button>
       </div>
       <div class="smart-input-wrap">
-        <div class="smart-input-row">
-          <input type="text" id="smartInput" placeholder="mis. makan siang 25rb kemarin"
-            onkeydown="if(event.key==='Enter'){event.preventDefault();applySmartParse();}">
-          <div class="smart-input-btn smart-input-mic" id="smartVoiceBtn" onclick="toggleQuickNoteVoice()" title="Catat pakai suara">
-            <svg class="ic mic-icon-idle" viewBox="0 0 24 24"><path d="M12 2a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/><path d="M19 11a7 7 0 0 1-14 0"/><path d="M12 18v4M9 22h6"/></svg>
-            <svg class="ic mic-icon-stop" viewBox="0 0 24 24" fill="currentColor" stroke="none"><rect x="7" y="7" width="10" height="10" rx="2"/></svg>
+        <div class="smart-mode-tabs">
+          <button type="button" class="smart-mode-tab active" id="smartModeTypeTab" onclick="setSmartMode('type')">
+            <svg class="ic" viewBox="0 0 24 24"><path d="M12 2l1.5 4.5L18 8l-4.5 1.5L12 14l-1.5-4.5L6 8l4.5-1.5z"/></svg>
+            Ketik
+          </button>
+          <button type="button" class="smart-mode-tab" id="smartModeSmsTab" onclick="setSmartMode('sms')">
+            <svg class="ic" viewBox="0 0 24 24"><rect x="6" y="2" width="12" height="20" rx="2"/><path d="M11 18h2"/></svg>
+            Notifikasi
+          </button>
+        </div>
+
+        <div class="smart-mode-panel" id="smartTypePanel">
+          <div class="smart-input-row">
+            <input type="text" id="smartInput" placeholder="mis. makan siang 25rb kemarin"
+              onkeydown="if(event.key==='Enter'){event.preventDefault();applySmartParse();}">
+            <div class="smart-input-btn smart-input-mic" id="smartVoiceBtn" onclick="toggleQuickNoteVoice()" title="Catat pakai suara">
+              <svg class="ic mic-icon-idle" viewBox="0 0 24 24"><path d="M12 2a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/><path d="M19 11a7 7 0 0 1-14 0"/><path d="M12 18v4M9 22h6"/></svg>
+              <svg class="ic mic-icon-stop" viewBox="0 0 24 24" fill="currentColor" stroke="none"><rect x="7" y="7" width="10" height="10" rx="2"/></svg>
+            </div>
+            <div class="smart-input-btn" onclick="applySmartParse()" title="Isi otomatis">
+              <svg class="ic" viewBox="0 0 24 24"><path d="M4 12h16M13 6l6 6-6 6"/></svg>
+            </div>
           </div>
-          <div class="smart-input-btn" onclick="applySmartParse()" title="Isi otomatis">
-            <svg class="ic" viewBox="0 0 24 24"><path d="M4 12h16M13 6l6 6-6 6"/></svg>
+          <div class="smart-input-voice-status" id="smartVoiceStatus">
+            <span class="voice-wave"><i></i><i></i><i></i><i></i></span>
+            Mendengarkan...
           </div>
         </div>
-        <div class="smart-input-voice-status" id="smartVoiceStatus">
-          <span class="voice-wave"><i></i><i></i><i></i><i></i></span>
-          Mendengarkan...
+
+        <div class="smart-mode-panel" id="smartSmsPanel" style="display:none">
+          <textarea id="smsInput" rows="3" placeholder="Tempel isi notifikasi SMS/e-wallet di sini, mis. &quot;Pembayaran GoPay Rp45.000 di INDOMARET berhasil. Saldo GoPay Rp230.000&quot;"></textarea>
+          <div class="smart-sms-actions">
+            <button type="button" class="smart-sms-paste" onclick="pasteSmsClipboard()">
+              <svg class="ic" viewBox="0 0 24 24"><rect x="5" y="4" width="14" height="17" rx="2"/><rect x="9" y="2" width="6" height="4" rx="1"/><path d="M9 11h6M9 15h6"/></svg>
+              Tempel dari Clipboard
+            </button>
+            <div class="smart-input-btn" onclick="applySmsParse()" title="Baca notifikasi">
+              <svg class="ic" viewBox="0 0 24 24"><path d="M4 12h16M13 6l6 6-6 6"/></svg>
+            </div>
+          </div>
         </div>
+
         <div class="smart-input-preview" id="smartPreview"></div>
-        <div class="smart-input-hint">Contoh: "gaji bulanan 5jt", "bensin 20rb kemarin", "transfer ke rekening adik 500rb". Hasilnya bakal ngisi form di belakang — cek dulu sebelum simpan.</div>
+        <div class="smart-input-hint" id="smartHint">Contoh: "gaji bulanan 5jt", "bensin 20rb kemarin", "transfer ke rekening adik 500rb". Hasilnya bakal ngisi form di belakang — cek dulu sebelum simpan.</div>
       </div>
     </div>
   </div>
@@ -454,6 +481,9 @@
         </div>
       </div>
     </div>
+    <div class="section-head"><h2>Proyeksi Saldo Akhir Bulan</h2><span id="forecastDaysLeft" style="font-size:11px;color:var(--txt3);font-weight:500"></span></div>
+    <div class="glass forecast-card" id="forecastCard"></div>
+
     <div class="section-head"><h2>Dibanding Periode Lalu</h2></div>
     <div class="compare-grid" id="compareGrid"></div>
 

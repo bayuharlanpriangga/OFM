@@ -997,6 +997,29 @@ body {
 .compare-card .cc-sub { font-size: 10.5px; color: var(--txt3); margin-top: 3px; }
 .compare-empty { margin: 0 20px 18px; padding: 14px 16px; font-size: 12px; color: var(--txt3); text-align: center; }
 
+/* Forecasting sederhana — proyeksi saldo akhir bulan */
+.forecast-card { margin: 0 20px 18px; padding: 18px; }
+.forecast-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
+.forecast-label { font-size: 10.5px; color: var(--txt3); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 7px; }
+.forecast-val { font-family: var(--disp); font-size: 26px; font-weight: 700; letter-spacing: -0.5px; line-height: 1.15; }
+.forecast-val.up   { color: var(--teal); }
+.forecast-val.down { color: var(--red); }
+.forecast-cur { font-size: 11px; color: var(--txt3); margin-top: 5px; }
+.forecast-delta { display: flex; align-items: center; gap: 4px; font-size: 12px; font-weight: 600; white-space: nowrap; flex-shrink: 0; }
+.forecast-delta svg { width: 13px; height: 13px; }
+.forecast-delta.good { color: var(--teal); }
+.forecast-delta.bad  { color: var(--red); }
+.forecast-rows { display: flex; flex-direction: column; gap: 12px; margin-top: 16px; padding-top: 14px; border-top: 1px solid rgba(255,255,255,0.08); }
+.forecast-row { display: flex; align-items: center; gap: 10px; }
+.forecast-row-icon { width: 30px; height: 30px; border-radius: 10px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.forecast-row-icon svg { width: 14px; height: 14px; }
+.forecast-row-body { flex: 1; min-width: 0; }
+.forecast-row-title { font-size: 12.5px; font-weight: 600; color: var(--txt2); }
+.forecast-row-sub { font-size: 10.5px; color: var(--txt3); margin-top: 1px; }
+.forecast-row-val { font-size: 12.5px; font-weight: 600; white-space: nowrap; flex-shrink: 0; }
+.forecast-warn { display: flex; align-items: center; gap: 8px; margin-top: 14px; padding: 10px 12px; border-radius: var(--r-sm); background: rgba(255,107,132,0.1); border: 1px solid rgba(255,107,132,0.25); color: var(--red); font-size: 11.5px; font-weight: 500; line-height: 1.4; }
+.forecast-warn svg { width: 16px; height: 16px; flex-shrink: 0; }
+
 /* Auto insight cards */
 .insight-list { display: flex; flex-direction: column; gap: 10px; margin: 0 20px 6px; }
 .insight-card { display: flex; align-items: flex-start; gap: 12px; padding: 14px; }
@@ -1182,6 +1205,55 @@ body {
    SMART QUICK-ADD (parsing teks bebas)
 ═══════════════════════════════════════ */
 .smart-input-wrap { margin: 4px 20px 20px; padding: 14px 16px; position: relative; z-index: 1; }
+
+/* Tab "Ketik" vs "Notifikasi" di dalam Catat Cepat */
+.smart-mode-tabs {
+  display: flex; gap: 4px; margin-bottom: 12px;
+  background: rgba(0,0,0,0.2); border-radius: var(--r-sm); padding: 3px;
+}
+.smart-mode-tab {
+  flex: 1; display: flex; align-items: center; justify-content: center; gap: 5px;
+  padding: 8px; border-radius: 9px; border: none; cursor: pointer;
+  background: transparent; color: var(--txt3);
+  font-family: var(--sans); font-size: 12px; font-weight: 600;
+  transition: background 0.2s, color 0.2s;
+}
+.smart-mode-tab .ic { width: 13px; height: 13px; }
+.smart-mode-tab.active {
+  background: rgba(255,255,255,0.12); color: var(--teal);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.25), 0 2px 8px rgba(0,0,0,0.15);
+}
+
+/* Kotak tempel notifikasi SMS/e-wallet — gaya sama seperti smart-input-row input */
+#smsInput {
+  width: 100%; resize: none;
+  background: rgba(255,255,255,0.08);
+  border: 1px solid rgba(42,232,196,0.25);
+  border-bottom-color: rgba(255,255,255,0.05);
+  border-radius: var(--r-sm);
+  padding: 11px 13px;
+  color: var(--txt);
+  font-family: var(--sans); font-size: 13px; line-height: 1.5;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.15), inset 0 2px 6px rgba(0,0,0,0.2);
+  transition: border-color 0.15s;
+}
+#smsInput:focus {
+  outline: none;
+  border-color: rgba(42,232,196,0.6);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.15), 0 0 0 3px rgba(42,232,196,0.15);
+}
+#smsInput::placeholder { color: var(--txt3); }
+
+.smart-sms-actions { display: flex; gap: 8px; margin-top: 8px; }
+.smart-sms-paste {
+  flex: 1; height: 42px; display: flex; align-items: center; justify-content: center; gap: 6px;
+  padding: 0 12px; border-radius: var(--r-sm); cursor: pointer;
+  background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.18);
+  color: var(--txt2); font-family: var(--sans); font-size: 12.5px; font-weight: 500;
+  transition: transform 0.15s;
+}
+.smart-sms-paste .ic { width: 15px; height: 15px; }
+.smart-sms-paste:active { transform: scale(0.97); }
 .smart-input-label {
   display: flex; align-items: center; gap: 6px;
   font-size: 11px; font-weight: 600; color: var(--teal);
