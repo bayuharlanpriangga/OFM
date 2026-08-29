@@ -666,7 +666,7 @@ function setSmartMode(mode, animate = true) {
    a speed-dial with a wave/label-reveal effect.
 ══════════════════════════════════════════ */
 // Every page reachable from the rail (bubble id "nav-<key>" must exist).
-const NAV_PAGES = ['dashboard', 'budget', 'riwayat', 'addtx', 'analytics', 'goals', 'recurring', 'kelolakategori', 'akun', 'settings'];
+const NAV_PAGES = ['dashboard', 'budget', 'riwayat', 'analytics', 'goals', 'recurring', 'kelolakategori', 'akun', 'settings'];
 
 // Tracks which bubble is currently marked active, so it survives resizes/re-renders.
 let _activeNavKey = 'dashboard';
@@ -693,6 +693,7 @@ function openNavRail() {
 
 function closeNavRail() {
   document.getElementById('navRail')?.classList.remove('open');
+  document.getElementById('navRail')?.classList.remove('dragging');
   document.getElementById('navFab')?.classList.remove('open');
   document.getElementById('navRailScrim')?.classList.remove('open');
   _railBubbles.forEach(b => { b.style.removeProperty('--wave'); b.classList.remove('nb-peek', 'nb-focus'); });
@@ -722,6 +723,7 @@ function onRailPointerDown(e) {
   const rail = document.getElementById('navRail');
   if (!rail || !rail.classList.contains('open')) return;
   _railDragging = true;
+  rail.classList.add('dragging');
   updateRailWave(e.clientY);
   window.addEventListener('pointermove', onRailPointerMove);
   window.addEventListener('pointerup', onRailPointerUp, { once: true });
@@ -751,6 +753,7 @@ function updateRailWave(clientY) {
 function onRailPointerUp() {
   window.removeEventListener('pointermove', onRailPointerMove);
   _railDragging = false;
+  document.getElementById('navRail')?.classList.remove('dragging');
   const picked = _railNearest;
   _railBubbles.forEach(b => { b.style.removeProperty('--wave'); b.classList.remove('nb-peek', 'nb-focus'); });
   _railNearest = null;

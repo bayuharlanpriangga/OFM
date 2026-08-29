@@ -176,11 +176,6 @@
         <div class="nb-label">Riwayat</div>
       </div>
 
-      <div class="nav-bubble nb-accent" data-nav="addtx" id="nav-addtx" onclick="navRailSelect('addtx')" title="Catat transaksi (atau tekan N)">
-        <div class="nb-glyph"><svg class="ic" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></div>
-        <div class="nb-label">Tambah</div>
-      </div>
-
       <div class="nav-bubble" data-nav="analytics" id="nav-analytics" onclick="navRailSelect('analytics')">
         <div class="nb-glyph"><svg class="ic" viewBox="0 0 24 24"><path d="M4 20V10M12 20V4M20 20v-7"/><path d="M2 20h20"/></svg></div>
         <div class="nb-label">Analitik</div>
@@ -213,10 +208,19 @@
     </div>
 
     <div class="nav-fab" id="navFab" onclick="toggleNavRail()" title="Menu">
-      <svg class="nav-fab-icon" id="navFabIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-        <path class="nfi-h" d="M5 12h14"/>
-        <path class="nfi-v" d="M12 5v14"/>
-      </svg>
+      <div class="nav-fab-hex">
+        <svg class="nav-fab-graph" id="navFabGraph" viewBox="0 0 40 40" fill="none">
+          <polyline points="4,29 11,21 17,25 23,11 31,16" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
+          <circle class="nfg-dot" cx="4"  cy="29" r="2.4"/>
+          <circle class="nfg-dot" cx="11" cy="21" r="2.4"/>
+          <circle class="nfg-dot" cx="17" cy="25" r="2.4"/>
+          <circle class="nfg-dot nfg-dot-accent" cx="23" cy="11" r="3"/>
+          <circle class="nfg-dot" cx="31" cy="16" r="2.4"/>
+        </svg>
+        <svg class="nav-fab-close" id="navFabClose" viewBox="0 0 40 40" fill="none">
+          <path d="M12 12l16 16M28 12L12 28" stroke="currentColor" stroke-width="2.8" stroke-linecap="round"/>
+        </svg>
+      </div>
       <span class="nav-fab-dot" id="navFabDot"></span>
     </div>
   </nav>
@@ -296,6 +300,7 @@
         <div class="topbar-greeting" id="topbarGreeting">Selamat pagi</div>
       </div>
       <div class="topbar-actions">
+        <div class="icon-btn" onclick="openModal()" title="Catat transaksi (atau tekan N)"><svg class="ic" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></div>
         <div class="bell-wrap icon-btn" onclick="toggleNotifPanel()"><svg class="ic" viewBox="0 0 24 24"><path d="M6 9a6 6 0 0 1 12 0c0 5 2 6 2 6H4s2-1 2-6z"/><path d="M10 20a2 2 0 0 0 4 0"/></svg><div class="bell-badge" id="bellBadge">0</div></div>
         <div class="icon-btn" onclick="showPageFromMore('akun')"><svg class="ic" viewBox="0 0 24 24"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20"/><path d="M6 15h4"/></svg></div>
       </div>
@@ -668,21 +673,6 @@
       <div class="s-items">
         <div class="settings-item" id="settingsNotifTrigger" onclick="toggleNotifPanel()">
           <div class="si-icon"><svg class="ic" viewBox="0 0 24 24"><path d="M6 9a6 6 0 0 1 12 0c0 5 2 6 2 6H4s2-1 2-6z"/><path d="M10 20a2 2 0 0 0 4 0"/></svg></div><div class="si-text"><div class="si-name">Notifikasi</div><div class="si-desc" id="settingsNotifDesc">0 peringatan aktif</div></div><div class="si-badge" id="settingsPushBadge" onclick="event.stopPropagation();requestPushPermission()" title="Notifikasi perangkat">Aktifkan</div>
-        </div>
-        <div class="settings-item" onclick="showPage('analytics')">
-          <div class="si-icon"><svg class="ic" viewBox="0 0 24 24"><path d="M4 20V10M12 20V4M20 20v-7"/><path d="M2 20h20"/></svg></div><div class="si-text"><div class="si-name">Analitik</div><div class="si-desc">Kebiasaan keuanganmu</div></div><div class="si-arrow">›</div>
-        </div>
-        <div class="settings-item" onclick="showPage('goals')">
-          <div class="si-icon"><svg class="ic" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="4"/><circle cx="12" cy="12" r="0.6" fill="currentColor" stroke="none"/></svg></div><div class="si-text"><div class="si-name">Goals</div><div class="si-desc">Target tabunganmu</div></div><div class="si-arrow">›</div>
-        </div>
-        <div class="settings-item" onclick="showPage('akun')">
-          <div class="si-icon"><svg class="ic" viewBox="0 0 24 24"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20"/><path d="M6 15h4"/></svg></div><div class="si-text"><div class="si-name">Akun</div><div class="si-desc">Rekening & dompetmu</div></div><div class="si-arrow">›</div>
-        </div>
-        <div class="settings-item" onclick="showPage('kelolakategori')">
-          <div class="si-icon"><svg class="ic" viewBox="0 0 24 24"><path d="M3 8l9-5 9 5-9 5-9-5z"/><path d="M3 8v8l9 5 9-5V8"/><path d="M12 13v8"/></svg></div><div class="si-text"><div class="si-name">Kelola Kategori</div><div class="si-desc">Kategori transaksimu</div></div><div class="si-arrow">›</div>
-        </div>
-        <div class="settings-item" onclick="showPage('recurring')">
-          <div class="si-icon"><svg class="ic" viewBox="0 0 24 24"><path d="M20 12a8 8 0 1 1-2.6-5.9"/><path d="M20 4v5h-5"/></svg></div><div class="si-text"><div class="si-name">Tagihan</div><div class="si-desc">Transaksi rutin</div></div><div class="si-arrow">›</div>
         </div>
         <div class="settings-item" id="installAppItem" onclick="installApp()" style="display:none">
           <div class="si-icon"><svg class="ic" viewBox="0 0 24 24"><path d="M12 3v12M12 15l-4-4M12 15l4-4"/><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg></div><div class="si-text"><div class="si-name">Instal Aplikasi</div><div class="si-desc">Pasang OFM di perangkatmu</div></div><div class="si-arrow">›</div>
