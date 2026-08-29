@@ -185,6 +185,24 @@ body {
   80%      { transform: translateX(6px); }
 }
 .lock-error { min-height: 16px; font-size: 11.5px; color: var(--red); margin-bottom: 12px; }
+
+/* Layar verifikasi biometrik — ditampilkan sendiri (gak barengan sama PIN pad)
+   waktu user punya PIN + biometrik aktif dua-duanya. */
+.lock-bio-view { display: flex; flex-direction: column; align-items: center; padding: 8px 0 4px; }
+.lock-bio-btn {
+  width: 84px; height: 84px; border-radius: 50%; cursor: pointer;
+  background: var(--glass-bg); border: 1px solid var(--glass-border);
+  backdrop-filter: blur(9px) saturate(185%); -webkit-backdrop-filter: blur(9px) saturate(185%);
+  color: var(--teal);
+  display: flex; align-items: center; justify-content: center;
+  transition: background .15s, transform .1s;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.2);
+  margin-bottom: 16px;
+}
+.lock-bio-btn .ic { width: 34px; height: 34px; }
+.lock-bio-btn:active { background: rgba(255,255,255,0.18); transform: scale(0.94); }
+.lock-bio-hint { font-size: 12.5px; color: var(--txt3); margin-bottom: 22px; }
+
 .pinpad-grid {
   display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px;
   max-width: 250px; margin: 0 auto;
@@ -1029,6 +1047,17 @@ body {
 .insight-title { font-size: 13px; font-weight: 600; color: var(--txt); margin-bottom: 2px; }
 .insight-desc { font-size: 12px; color: var(--txt3); line-height: 1.4; }
 
+/* Kartu saran deteksi langganan berulang (di halaman Transaksi Rutin) */
+.sub-detect-actions { display: flex; gap: 8px; margin-top: 10px; }
+.sub-detect-btn {
+  flex: 1; padding: 8px 10px; border-radius: 10px;
+  font-size: 12px; font-weight: 500; cursor: pointer; text-align: center;
+  background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.15);
+  color: var(--txt2); transition: transform 0.15s;
+}
+.sub-detect-btn:active { transform: scale(0.96); }
+.sub-detect-btn.primary { background: rgba(42,232,196,0.15); border-color: rgba(42,232,196,0.4); color: var(--teal); }
+
 /* ═══════════════════════════════════════
    WALLETS
 ═══════════════════════════════════════ */
@@ -1130,8 +1159,9 @@ body {
 }
 .type-indicator.ready { opacity: 1; }
 .type-btn {
-  flex: 1; padding: 10px; border-radius: 10px; border: none; cursor: pointer;
+  flex: 1; min-width: 0; padding: 10px; border-radius: 10px; border: none; cursor: pointer;
   font-family: var(--disp); font-size: 13px; font-weight: 600;
+  white-space: nowrap;
   transition: color 0.2s; background: transparent; color: var(--txt3);
   position: relative; z-index: 1;
 }
@@ -1206,26 +1236,39 @@ body {
 ═══════════════════════════════════════ */
 .smart-input-wrap { margin: 4px 20px 20px; padding: 14px 16px; position: relative; z-index: 1; }
 
-/* Tab "Ketik" vs "Notifikasi" di dalam Catat Cepat */
+/* Tab "Ketik" vs "Notifikasi" di dalam Catat Cepat — sliding glass indicator,
+   pola yang sama seperti pil tab Keluar/Masuk/Transfer (lihat .type-indicator). */
 .smart-mode-tabs {
   display: flex; gap: 4px; margin-bottom: 12px;
   background: rgba(0,0,0,0.2); border-radius: var(--r-sm); padding: 3px;
+  position: relative;
 }
+.smart-mode-indicator {
+  position: absolute;
+  top: 3px; left: 3px;
+  border-radius: 9px;
+  background: rgba(255,255,255,0.12);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.25), 0 2px 8px rgba(0,0,0,0.15);
+  transition: transform 0.35s cubic-bezier(0.22,1,0.36,1), width 0.35s cubic-bezier(0.22,1,0.36,1);
+  pointer-events: none;
+  opacity: 0;
+  z-index: 0;
+}
+.smart-mode-indicator.ready { opacity: 1; }
 .smart-mode-tab {
-  flex: 1; display: flex; align-items: center; justify-content: center; gap: 5px;
+  flex: 1; min-width: 0; display: flex; align-items: center; justify-content: center; gap: 5px;
   padding: 8px; border-radius: 9px; border: none; cursor: pointer;
   background: transparent; color: var(--txt3);
   font-family: var(--sans); font-size: 12px; font-weight: 600;
-  transition: background 0.2s, color 0.2s;
+  white-space: nowrap;
+  transition: color 0.2s;
+  position: relative; z-index: 1;
 }
 .smart-mode-tab .ic { width: 13px; height: 13px; }
-.smart-mode-tab.active {
-  background: rgba(255,255,255,0.12); color: var(--teal);
-  box-shadow: inset 0 1px 0 rgba(255,255,255,0.25), 0 2px 8px rgba(0,0,0,0.15);
-}
+.smart-mode-tab.active { color: var(--teal); }
 
-/* Kotak tempel notifikasi SMS/e-wallet — gaya sama seperti smart-input-row input */
-#smsInput {
+/* Kotak tempel notifikasi SMS/e-wallet & kotak "Ketik" — ukuran & gaya disamakan, keduanya bisa di-scroll */
+#smsInput, #smartInput {
   width: 100%; resize: none;
   background: rgba(255,255,255,0.08);
   border: 1px solid rgba(42,232,196,0.25);
@@ -1237,18 +1280,20 @@ body {
   box-shadow: inset 0 1px 0 rgba(255,255,255,0.15), inset 0 2px 6px rgba(0,0,0,0.2);
   transition: border-color 0.15s;
 }
-#smsInput:focus {
+#smsInput:focus, #smartInput:focus {
   outline: none;
   border-color: rgba(42,232,196,0.6);
   box-shadow: inset 0 1px 0 rgba(255,255,255,0.15), 0 0 0 3px rgba(42,232,196,0.15);
 }
-#smsInput::placeholder { color: var(--txt3); }
+#smsInput::placeholder, #smartInput::placeholder { color: var(--txt3); }
 
 .smart-sms-actions { display: flex; gap: 8px; margin-top: 8px; }
 .smart-sms-paste {
   flex: 1; height: 42px; display: flex; align-items: center; justify-content: center; gap: 6px;
   padding: 0 12px; border-radius: var(--r-sm); cursor: pointer;
   background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.18);
+  backdrop-filter: blur(9px) saturate(185%); -webkit-backdrop-filter: blur(9px) saturate(185%);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.2), 0 4px 12px rgba(0,0,0,0.15);
   color: var(--txt2); font-family: var(--sans); font-size: 12.5px; font-weight: 500;
   transition: transform 0.15s;
 }
@@ -1260,25 +1305,6 @@ body {
   text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px;
 }
 .smart-input-label .ic { width: 13px; height: 13px; }
-.smart-input-row { display: flex; gap: 8px; }
-.smart-input-row input {
-  flex: 1;
-  background: rgba(255,255,255,0.08);
-  border: 1px solid rgba(42,232,196,0.25);
-  border-bottom-color: rgba(255,255,255,0.05);
-  border-radius: var(--r-sm);
-  padding: 11px 13px;
-  color: var(--txt);
-  font-family: var(--sans); font-size: 14px;
-  box-shadow: inset 0 1px 0 rgba(255,255,255,0.15), inset 0 2px 6px rgba(0,0,0,0.2);
-  transition: border-color 0.15s;
-}
-.smart-input-row input:focus {
-  outline: none;
-  border-color: rgba(42,232,196,0.6);
-  box-shadow: inset 0 1px 0 rgba(255,255,255,0.15), 0 0 0 3px rgba(42,232,196,0.15);
-}
-.smart-input-row input::placeholder { color: var(--txt3); }
 .smart-input-btn {
   flex-shrink: 0; width: 42px; height: 42px; border-radius: var(--r-sm);
   display: flex; align-items: center; justify-content: center; cursor: pointer;

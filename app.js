@@ -446,7 +446,7 @@ function applySmartParse() {
     document.getElementById('amountDisplay').textContent = result.amount.toLocaleString('id-ID');
     chips.push({ text: 'Rp' + result.amount.toLocaleString('id-ID'), warn: false });
   } else {
-    chips.push({ text: 'Nominal tidak terdeteksi — isi manual', warn: true });
+    chips.push({ text: 'Nominal Tidak Terdeteksi', warn: true });
   }
 
   // Kategori
@@ -589,7 +589,7 @@ function applySmsParse() {
     document.getElementById('amountDisplay').textContent = result.amount.toLocaleString('id-ID');
     chips.push({ text: 'Rp' + result.amount.toLocaleString('id-ID'), warn: false });
   } else {
-    chips.push({ text: 'Nominal tidak terdeteksi — isi manual', warn: true });
+    chips.push({ text: 'Nominal Tidak Terdeteksi', warn: true });
   }
 
   const catList = CATS[result.type] || [];
@@ -640,24 +640,18 @@ async function pasteSmsClipboard() {
 }
 
 // Ganti antara mode "Ketik" (teks bebas) dan "Tempel Notifikasi" di modal Catat Cepat.
-function setSmartMode(mode) {
+function setSmartMode(mode, animate = true) {
   const isSms = mode === 'sms';
   S._smartMode = mode;
   document.getElementById('smartModeTypeTab').classList.toggle('active', !isSms);
   document.getElementById('smartModeSmsTab').classList.toggle('active', isSms);
   document.getElementById('smartTypePanel').style.display = isSms ? 'none' : '';
   document.getElementById('smartSmsPanel').style.display = isSms ? '' : 'none';
+  moveTypeIndicator('smartModeTabs', 'smartModeIndicator', isSms ? 'smartModeSmsTab' : 'smartModeTypeTab', animate);
 
   const previewEl = document.getElementById('smartPreview');
   previewEl.classList.remove('show');
   previewEl.innerHTML = '';
-
-  const hint = document.getElementById('smartHint');
-  if (hint) {
-    hint.textContent = isSms
-      ? 'Tempel notifikasi transaksi dari SMS bank atau e-wallet (GoPay, OVO, DANA, dll). Nominal, jenis, dan merchant kebaca otomatis — nominal saldo diabaikan.'
-      : 'Contoh: "gaji bulanan 5jt", "bensin 20rb kemarin", "transfer ke rekening adik 500rb". Hasilnya bakal ngisi form di belakang — cek dulu sebelum simpan.';
-  }
 
   if (isSms) stopQuickNoteVoice();
   setTimeout(() => {
@@ -724,6 +718,7 @@ function moveTypeIndicator(toggleId, indicatorId, activeId, animate = true) {
 window.addEventListener('resize', () => {
   moveTypeIndicator('addtxTypeToggle', 'typeIndicator', 'type' + S.currentType.charAt(0).toUpperCase() + S.currentType.slice(1), false);
   moveTypeIndicator('recurTypeToggle', 'recurTypeIndicator', 'recurType' + (_recurType||'expense').charAt(0).toUpperCase() + (_recurType||'expense').slice(1), false);
+  moveTypeIndicator('smartModeTabs', 'smartModeIndicator', (S._smartMode === 'sms') ? 'smartModeSmsTab' : 'smartModeTypeTab', false);
 });
 
 function showPage(id) {
@@ -770,7 +765,7 @@ function showPage(id) {
   if (id === 'budget')          setTimeout(renderBudget, 30);
   if (id === 'akun')            renderWallets();
   if (id === 'goals')           renderGoals();
-  if (id === 'recurring')       renderRecurList();
+  if (id === 'recurring')       { renderRecurList(); renderSubDetections(); }
   if (id === 'riwayat')         { setTimeout(renderRiwayat, 60); }
   if (id === 'settings')        updateSettingsPage();
   if (id === 'kelolakategori')  renderKategoriList();
@@ -907,7 +902,7 @@ function openQuickNoteModal() {
   document.getElementById('quickNoteModalOverlay').classList.add('open');
   document.getElementById('quickNoteFab').classList.add('open');
   _qnRefreshVoiceButton();
-  setSmartMode('type');
+  setSmartMode('type', false);
   setTimeout(() => { const el = document.getElementById('smartInput'); if (el) el.focus(); }, 250);
 }
 function closeQuickNoteModal() {
@@ -2763,6 +2758,7 @@ function exportJSON() {
     budget: BUDGET,
     goals: GOALS,
     recurrings: RECURRINGS,
+    dismissedSubs: DISMISSED_SUBS,
   };
   const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });
   const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
@@ -2822,6 +2818,7 @@ function applyImportedBackup(data) {
     BUDGET.total   = (data.budget && typeof data.budget.total === 'number') ? data.budget.total : 0;
     GOALS          = Array.isArray(data.goals) ? data.goals : [];
     RECURRINGS     = Array.isArray(data.recurrings) ? data.recurrings : [];
+    DISMISSED_SUBS = Array.isArray(data.dismissedSubs) ? data.dismissedSubs : [];
 
     // Daftarkan ulang kategori anggaran custom (icon lookup + expense picker),
     // sama seperti alur load dari Firestore, biar tetap konsisten setelah restore.
@@ -2853,6 +2850,7 @@ function refreshAllUI() {
   if (typeof renderGoalsPreview === 'function') renderGoalsPreview();
   if (typeof renderRecurList === 'function')  renderRecurList();
   if (typeof renderRecurPreview === 'function') renderRecurPreview();
+  if (typeof renderSubDetections === 'function') renderSubDetections();
   if (typeof renderKategoriList === 'function') renderKategoriList();
   if (typeof renderRiwayat === 'function')    renderRiwayat();
   if (typeof updateAccountDropdown === 'function') updateAccountDropdown();
@@ -2864,6 +2862,10 @@ function refreshAllUI() {
    RECURRING TRANSACTIONS
 ══════════════════════════════════════════ */
 let RECURRINGS = [];
+
+// Kunci normalisasi (nama transaksi, lowercase+trim) yang sudah di-"Abaikan" user
+// dari daftar deteksi langganan otomatis, supaya tidak terus muncul lagi.
+let DISMISSED_SUBS = [];
 
 let _recurType = 'expense';
 
@@ -2968,6 +2970,7 @@ function deleteRecur(id) {
     saveToStorage();
     renderRecurList();
     renderRecurPreview();
+    renderSubDetections();
     showToast('Transaksi rutin dihapus', 'success');
   });
 }
@@ -3002,6 +3005,7 @@ function toggleRecur(id) {
   saveToStorage();
   renderRecurList();
   renderRecurPreview();
+  renderSubDetections();
   showToast(r.active ? 'Transaksi rutin diaktifkan' : 'Transaksi rutin dijeda', 'success');
 }
 
@@ -3053,7 +3057,152 @@ function submitRecur() {
   closeRecurModal();
   renderRecurList();
   renderRecurPreview();
+  renderSubDetections();
   showToast('Transaksi rutin ditambahkan', 'success');
+}
+
+/* ══════════════════════════════════════════
+   DETEKSI LANGGANAN BERULANG (dari histori transaksi)
+   Analisa transaksi pengeluaran yang sudah ada — cari nama transaksi yang
+   sama, nominal mirip, dan muncul di interval waktu yang konsisten
+   (mingguan/bulanan/tahunan) — lalu tawarkan ke user untuk dijadikan
+   Transaksi Rutin. Murni dari data lokal, tidak butuh integrasi luar.
+══════════════════════════════════════════ */
+let _lastSubDetections = [];
+
+function _normSubName(note) {
+  return (note || '').trim().toLowerCase().replace(/\s+/g, ' ');
+}
+
+// Klasifikasi rata-rata jarak hari antar transaksi ke salah satu frekuensi
+// yang didukung RECURRINGS (weekly/monthly/yearly), dengan toleransi wajar.
+function _classifySubFreq(avgGap) {
+  if (avgGap >= 5 && avgGap <= 10)   return 'weekly';
+  if (avgGap >= 24 && avgGap <= 37)  return 'monthly';
+  if (avgGap >= 340 && avgGap <= 390) return 'yearly';
+  return null;
+}
+
+function detectRecurringSubscriptions() {
+  const groups = {};
+  S.transactions.forEach(t => {
+    if (t.type !== 'expense' || t.isRecurring) return; // yang isRecurring udah ke-track lewat RECURRINGS
+    const key = _normSubName(t.note);
+    if (!key) return; // butuh nama transaksi buat dicocokkan antar transaksi
+    (groups[key] = groups[key] || []).push(t);
+  });
+
+  const existingRecurNames = new Set(RECURRINGS.map(r => _normSubName(r.name)));
+  const candidates = [];
+
+  Object.entries(groups).forEach(([key, txs]) => {
+    if (txs.length < 3) return; // minimal 3 kejadian biar polanya cukup meyakinkan
+    if (DISMISSED_SUBS.includes(key)) return;
+    if (existingRecurNames.has(key)) return; // sudah ada di Transaksi Rutin, gak usah disaranin lagi
+
+    const sorted = [...txs].sort((a, b) => a.date.localeCompare(b.date));
+    const amounts = sorted.map(t => t.amount);
+    const avgAmount = amounts.reduce((s, a) => s + a, 0) / amounts.length;
+    const minAmt = Math.min(...amounts), maxAmt = Math.max(...amounts);
+    if (avgAmount <= 0 || (maxAmt - minAmt) / avgAmount > 0.25) return; // nominal harus cukup konsisten
+
+    const gaps = [];
+    for (let i = 1; i < sorted.length; i++) {
+      const d1 = new Date(sorted[i - 1].date + 'T00:00:00');
+      const d2 = new Date(sorted[i].date + 'T00:00:00');
+      gaps.push(Math.round((d2 - d1) / SMART_DAY_MS));
+    }
+    const avgGap = gaps.reduce((s, g) => s + g, 0) / gaps.length;
+    if (avgGap <= 0) return;
+    const variance = gaps.reduce((s, g) => s + Math.pow(g - avgGap, 2), 0) / gaps.length;
+    const stddev = Math.sqrt(variance);
+    if (stddev / avgGap > 0.35) return; // interval antar transaksi harus cukup teratur
+
+    const freq = _classifySubFreq(avgGap);
+    if (!freq) return;
+
+    const last = sorted[sorted.length - 1];
+    const nextPredicted = new Date(last.date + 'T00:00:00');
+    if (freq === 'weekly')  nextPredicted.setDate(nextPredicted.getDate() + 7);
+    if (freq === 'monthly') nextPredicted.setMonth(nextPredicted.getMonth() + 1);
+    if (freq === 'yearly')  nextPredicted.setFullYear(nextPredicted.getFullYear() + 1);
+
+    candidates.push({
+      key,
+      name: last.note || last.cat,
+      avgAmount: Math.round(avgAmount),
+      freq,
+      occurrences: sorted.length,
+      lastDate: last.date,
+      nextPredicted,
+      catId: last.catId, catColor: last.catColor, cat: last.cat,
+      account: last.account,
+    });
+  });
+
+  candidates.sort((a, b) => b.occurrences - a.occurrences || b.avgAmount - a.avgAmount);
+  return candidates;
+}
+
+function renderSubDetections() {
+  const section = document.getElementById('subDetectSection');
+  const list = document.getElementById('subDetectList');
+  if (!section || !list) return;
+
+  _lastSubDetections = detectRecurringSubscriptions();
+
+  if (!_lastSubDetections.length) {
+    section.style.display = 'none';
+    list.innerHTML = '';
+    return;
+  }
+  section.style.display = '';
+
+  list.innerHTML = _lastSubDetections.map(c => `
+    <div class="insight-card glass-sm sub-detect-card">
+      <div class="insight-icon" style="background:${c.catColor}22;color:${c.catColor}">${ICON.refresh}</div>
+      <div class="insight-body">
+        <div class="insight-title">Kemungkinan langganan: ${escapeHtml(c.name)}</div>
+        <div class="insight-desc">Rp ${c.avgAmount.toLocaleString('id-ID')} · ${freqLabel(c.freq)} · terdeteksi ${c.occurrences}x · terakhir ${fmtDate(c.lastDate)}</div>
+        <div class="sub-detect-actions">
+          <button class="sub-detect-btn primary" onclick="quickAddDetectedSub('${c.key.replace(/'/g, "\\'")}')">+ Jadikan Rutin</button>
+          <button class="sub-detect-btn" onclick="dismissSubDetection('${c.key.replace(/'/g, "\\'")}')">Abaikan</button>
+        </div>
+      </div>
+    </div>`).join('');
+}
+
+function quickAddDetectedSub(key) {
+  const c = _lastSubDetections.find(x => x.key === key);
+  if (!c) return;
+  openRecurModal();
+  document.getElementById('recurName').value = c.name;
+  document.getElementById('recurAmount').value = c.avgAmount;
+  document.getElementById('recurFreqLabel').textContent = freqLabel(c.freq);
+  document.getElementById('recurFreq').value = c.freq;
+  document.getElementById('recurStart').value = c.lastDate;
+  document.getElementById('recurStartLabel').textContent = fmtDate(c.lastDate);
+  setRecurType('expense');
+  const cats = CATS.expense || [];
+  const cat = cats.find(x => x.id === c.catId);
+  if (cat) {
+    document.getElementById('recurCat').value = cat.id;
+    document.getElementById('recurCatLabel').innerHTML = `${ICON[catIcon(cat.id)] || ''} ${escapeHtml(cat.label)}`;
+  }
+  const accHid = document.getElementById('recurAccount');
+  const accLbl = document.getElementById('recurAccountLabel');
+  if (c.account && WALLETS.some(w => w.id === c.account)) {
+    if (accHid) accHid.value = c.account;
+    if (accLbl) accLbl.textContent = walletName(c.account);
+  }
+  showToast('Form udah diisi otomatis — cek dulu lalu simpan', 'success');
+}
+
+function dismissSubDetection(key) {
+  if (!DISMISSED_SUBS.includes(key)) DISMISSED_SUBS.push(key);
+  saveToStorage();
+  renderSubDetections();
+  showToast('Saran langganan diabaikan', 'success');
 }
 
 /* ══════════════════════════════════════════
@@ -3249,6 +3398,7 @@ async function _saveNow() {
       goals:        GOALS,
       wallets:      WALLETS,
       recurrings:   RECURRINGS,
+      dismissedSubs: DISMISSED_SUBS,
       username:     window._customUsername || null,
       updatedAt:    Date.now(),
     });
@@ -3281,6 +3431,7 @@ window._loadUserData = async function(uid) {
       if (data.goals)        GOALS          = data.goals;
       if (data.wallets)      WALLETS        = data.wallets;
       if (data.recurrings)   RECURRINGS     = data.recurrings;
+      if (Array.isArray(data.dismissedSubs)) DISMISSED_SUBS = data.dismissedSubs;
       window._customUsername = data.username || (window._currentUser && window._currentUser.displayName) || null;
       // Re-register custom budget categories (icon lookup + expense picker) so they still work after reload
       const knownExpIds = new Set(CATS.expense.map(c => c.id));
@@ -3453,10 +3604,37 @@ function showLockScreen(force) {
   const scr = document.getElementById('lockScreen');
   if (!scr) return;
   scr.classList.add('open');
-  const bioBtn = document.getElementById('lockBioBtn');
-  if (bioBtn) bioBtn.style.display = lockHasBio() ? 'flex' : 'none';
+  // Biometrik + PIN sekaligus aktif? Tampilkan biometrik duluan aja — jangan
+  // barengan sama PIN pad. User bisa pindah ke PIN lewat tombol "Gunakan PIN".
+  if (lockHasBio()) {
+    showLockBioView();
+  } else {
+    showLockPinView();
+  }
+}
+
+function showLockBioView() {
+  const bioView = document.getElementById('lockBioView');
+  const pinView = document.getElementById('lockPinView');
+  if (bioView) bioView.style.display = '';
+  if (pinView) pinView.style.display = 'none';
+  LOCKUI.active = false;
+  const sub = document.getElementById('lockScreenSub');
+  if (sub) sub.textContent = 'Verifikasi untuk melanjutkan';
+  setTimeout(() => attemptBiometricUnlock(true), 400);
+}
+
+function showLockPinView() {
+  const bioView = document.getElementById('lockBioView');
+  const pinView = document.getElementById('lockPinView');
+  if (bioView) bioView.style.display = 'none';
+  if (pinView) pinView.style.display = '';
   lockUiStart('screen', 'lock');
-  if (lockHasBio()) setTimeout(() => attemptBiometricUnlock(true), 400);
+}
+
+// Dipanggil dari tombol "Gunakan PIN" di layar biometrik
+function switchToPinFromBio() {
+  showLockPinView();
 }
 
 let _lockHiddenAt = null;

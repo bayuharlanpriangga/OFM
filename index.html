@@ -110,29 +110,39 @@
     <div class="lock-icon"><svg class="ic" viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg></div>
     <div class="lock-title">O<span style="color:var(--teal)">FM</span></div>
     <div class="lock-sub" id="lockScreenSub">Masukkan PIN</div>
-    <div class="pinpad-dots" id="lockScreenDots">
-      <span></span><span></span><span></span><span></span><span></span><span></span>
-    </div>
-    <div class="lock-error" id="lockScreenError"></div>
-    <div class="pinpad-grid">
-      <button class="pinpad-key" onclick="lockKeyPress('1')">1</button>
-      <button class="pinpad-key" onclick="lockKeyPress('2')">2</button>
-      <button class="pinpad-key" onclick="lockKeyPress('3')">3</button>
-      <button class="pinpad-key" onclick="lockKeyPress('4')">4</button>
-      <button class="pinpad-key" onclick="lockKeyPress('5')">5</button>
-      <button class="pinpad-key" onclick="lockKeyPress('6')">6</button>
-      <button class="pinpad-key" onclick="lockKeyPress('7')">7</button>
-      <button class="pinpad-key" onclick="lockKeyPress('8')">8</button>
-      <button class="pinpad-key" onclick="lockKeyPress('9')">9</button>
-      <button class="pinpad-key pinpad-key-ghost" id="lockBioBtn" onclick="attemptBiometricUnlock()" style="display:none" title="Buka dengan biometrik">
+
+    <!-- Ditampilkan duluan kalau biometrik aktif — PIN pad baru muncul setelah user tap "Gunakan PIN" -->
+    <div class="lock-bio-view" id="lockBioView" style="display:none">
+      <button class="lock-bio-btn" id="lockBioBigBtn" onclick="attemptBiometricUnlock(false)" title="Verifikasi biometrik">
         <svg class="ic" viewBox="0 0 24 24"><path d="M12 3a7 7 0 0 0-7 7v2c0 3 1 5 1 5"/><path d="M12 3a7 7 0 0 1 7 7v3"/><path d="M8 21c-1-2-2-4-2-9a6 6 0 0 1 12 0v2"/><path d="M12 21c-2-3-3-6-3-9a3 3 0 0 1 6 0c0 1 0 2 .5 3.5"/></svg>
       </button>
-      <button class="pinpad-key" onclick="lockKeyPress('0')">0</button>
-      <button class="pinpad-key pinpad-key-ghost" onclick="lockKeyBackspace()" title="Hapus">
-        <svg class="ic" viewBox="0 0 24 24"><path d="M21 12H8M11 6l-6 6 6 6"/></svg>
-      </button>
+      <div class="lock-bio-hint">Ketuk untuk verifikasi</div>
+      <div class="lock-forgot" onclick="switchToPinFromBio()">Gunakan PIN</div>
     </div>
-    <div class="lock-forgot" onclick="forgotPin()">Lupa PIN?</div>
+
+    <div class="lock-pin-view" id="lockPinView" style="display:none">
+      <div class="pinpad-dots" id="lockScreenDots">
+        <span></span><span></span><span></span><span></span><span></span><span></span>
+      </div>
+      <div class="lock-error" id="lockScreenError"></div>
+      <div class="pinpad-grid">
+        <button class="pinpad-key" onclick="lockKeyPress('1')">1</button>
+        <button class="pinpad-key" onclick="lockKeyPress('2')">2</button>
+        <button class="pinpad-key" onclick="lockKeyPress('3')">3</button>
+        <button class="pinpad-key" onclick="lockKeyPress('4')">4</button>
+        <button class="pinpad-key" onclick="lockKeyPress('5')">5</button>
+        <button class="pinpad-key" onclick="lockKeyPress('6')">6</button>
+        <button class="pinpad-key" onclick="lockKeyPress('7')">7</button>
+        <button class="pinpad-key" onclick="lockKeyPress('8')">8</button>
+        <button class="pinpad-key" onclick="lockKeyPress('9')">9</button>
+        <div></div>
+        <button class="pinpad-key" onclick="lockKeyPress('0')">0</button>
+        <button class="pinpad-key pinpad-key-ghost" onclick="lockKeyBackspace()" title="Hapus">
+          <svg class="ic" viewBox="0 0 24 24"><path d="M21 12H8M11 6l-6 6 6 6"/></svg>
+        </button>
+      </div>
+      <div class="lock-forgot" onclick="forgotPin()">Lupa PIN?</div>
+    </div>
   </div>
 </div>
 
@@ -179,7 +189,8 @@
         <button class="modal-close" onclick="closeQuickNoteModal()"><svg class="ic" viewBox="0 0 24 24"><path d="M5 5l14 14M19 5L5 19"/></svg></button>
       </div>
       <div class="smart-input-wrap">
-        <div class="smart-mode-tabs">
+        <div class="smart-mode-tabs" id="smartModeTabs">
+          <div class="smart-mode-indicator" id="smartModeIndicator"></div>
           <button type="button" class="smart-mode-tab active" id="smartModeTypeTab" onclick="setSmartMode('type')">
             <svg class="ic" viewBox="0 0 24 24"><path d="M12 2l1.5 4.5L18 8l-4.5 1.5L12 14l-1.5-4.5L6 8l4.5-1.5z"/></svg>
             Ketik
@@ -191,9 +202,9 @@
         </div>
 
         <div class="smart-mode-panel" id="smartTypePanel">
-          <div class="smart-input-row">
-            <input type="text" id="smartInput" placeholder="mis. makan siang 25rb kemarin"
-              onkeydown="if(event.key==='Enter'){event.preventDefault();applySmartParse();}">
+          <textarea id="smartInput" rows="3" placeholder="mis. makan siang 25rb kemarin"
+            onkeydown="if(event.key==='Enter'){event.preventDefault();applySmartParse();}"></textarea>
+          <div class="smart-sms-actions">
             <div class="smart-input-btn smart-input-mic" id="smartVoiceBtn" onclick="toggleQuickNoteVoice()" title="Catat pakai suara">
               <svg class="ic mic-icon-idle" viewBox="0 0 24 24"><path d="M12 2a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/><path d="M19 11a7 7 0 0 1-14 0"/><path d="M12 18v4M9 22h6"/></svg>
               <svg class="ic mic-icon-stop" viewBox="0 0 24 24" fill="currentColor" stroke="none"><rect x="7" y="7" width="10" height="10" rx="2"/></svg>
@@ -209,7 +220,7 @@
         </div>
 
         <div class="smart-mode-panel" id="smartSmsPanel" style="display:none">
-          <textarea id="smsInput" rows="3" placeholder="Tempel isi notifikasi SMS/e-wallet di sini, mis. &quot;Pembayaran GoPay Rp45.000 di INDOMARET berhasil. Saldo GoPay Rp230.000&quot;"></textarea>
+          <textarea id="smsInput" rows="3" placeholder="Tempel notifikasi SMS/e-wallet di sini"></textarea>
           <div class="smart-sms-actions">
             <button type="button" class="smart-sms-paste" onclick="pasteSmsClipboard()">
               <svg class="ic" viewBox="0 0 24 24"><rect x="5" y="4" width="14" height="17" rx="2"/><rect x="9" y="2" width="6" height="4" rx="1"/><path d="M9 11h6M9 15h6"/></svg>
@@ -222,7 +233,6 @@
         </div>
 
         <div class="smart-input-preview" id="smartPreview"></div>
-        <div class="smart-input-hint" id="smartHint">Contoh: "gaji bulanan 5jt", "bensin 20rb kemarin", "transfer ke rekening adik 500rb". Hasilnya bakal ngisi form di belakang — cek dulu sebelum simpan.</div>
       </div>
     </div>
   </div>
@@ -909,6 +919,12 @@
       </div>
     </div>
     <div class="recur-list" id="recurList"></div>
+
+    <div id="subDetectSection" style="display:none">
+      <div class="section-head" style="margin-top:8px"><h2>Kemungkinan Langganan</h2></div>
+      <div class="insight-list" id="subDetectList"></div>
+    </div>
+
     <div style="height:16px"></div>
   </div>
 
