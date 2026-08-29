@@ -704,21 +704,41 @@ function moveTypeIndicator(toggleId, indicatorId, activeId, animate = true) {
   if (!item) { indicator.classList.remove('ready'); return; }
   const toggleRect = toggle.getBoundingClientRect();
   const itemRect = item.getBoundingClientRect();
+  const w = Math.round(itemRect.width), h = Math.round(itemRect.height);
+  const t = Math.round(itemRect.top - toggleRect.top), l = Math.round(itemRect.left - toggleRect.left);
+  // Skip no-op relayouts. This matters most on mobile: the on-screen keyboard opening/
+  // closing (and the address-bar collapsing while scrolling) fires plain window "resize"
+  // events even though the pill's own geometry hasn't actually changed. Without this guard,
+  // every one of those events still forces `transition:none` below to snap the indicator
+  // instantly — and if one lands mid-tap, it eats the very transition the tap just started,
+  // which is why the slide animation could look like it "died" after enough taps.
+  if (indicator.classList.contains('ready') && indicator.dataset.w === String(w) &&
+      indicator.dataset.h === String(h) && indicator.dataset.t === String(t) && indicator.dataset.l === String(l)) {
+    return;
+  }
+  indicator.dataset.w = w; indicator.dataset.h = h; indicator.dataset.t = t; indicator.dataset.l = l;
   if (!animate) indicator.style.transition = 'none';
-  indicator.style.width     = itemRect.width + 'px';
-  indicator.style.height    = itemRect.height + 'px';
-  indicator.style.top       = (itemRect.top - toggleRect.top) + 'px';
-  indicator.style.transform = `translateX(${itemRect.left - toggleRect.left}px)`;
+  indicator.style.width     = w + 'px';
+  indicator.style.height    = h + 'px';
+  indicator.style.top       = t + 'px';
+  indicator.style.transform = `translateX(${l}px)`;
   indicator.classList.add('ready');
   if (!animate) {
     void indicator.offsetWidth; // force reflow so the transition re-enables cleanly
     indicator.style.transition = '';
   }
 }
+let _typeIndicatorResizeTimer = null;
 window.addEventListener('resize', () => {
-  moveTypeIndicator('addtxTypeToggle', 'typeIndicator', 'type' + S.currentType.charAt(0).toUpperCase() + S.currentType.slice(1), false);
-  moveTypeIndicator('recurTypeToggle', 'recurTypeIndicator', 'recurType' + (_recurType||'expense').charAt(0).toUpperCase() + (_recurType||'expense').slice(1), false);
-  moveTypeIndicator('smartModeTabs', 'smartModeIndicator', (S._smartMode === 'sms') ? 'smartModeSmsTab' : 'smartModeTypeTab', false);
+  // Debounced: a burst of resize events (mobile keyboard, toolbar collapse while
+  // scrolling) would otherwise re-run this many times a second — see the guard
+  // inside moveTypeIndicator() for why that broke the tap animation.
+  clearTimeout(_typeIndicatorResizeTimer);
+  _typeIndicatorResizeTimer = setTimeout(() => {
+    moveTypeIndicator('addtxTypeToggle', 'typeIndicator', 'type' + S.currentType.charAt(0).toUpperCase() + S.currentType.slice(1), false);
+    moveTypeIndicator('recurTypeToggle', 'recurTypeIndicator', 'recurType' + (_recurType||'expense').charAt(0).toUpperCase() + (_recurType||'expense').slice(1), false);
+    moveTypeIndicator('smartModeTabs', 'smartModeIndicator', (S._smartMode === 'sms') ? 'smartModeSmsTab' : 'smartModeTypeTab', false);
+  }, 150);
 });
 
 function showPage(id) {
@@ -899,10 +919,26 @@ function closeModal() { showPage(S._txReturnPage || 'dashboard'); }
 ══════════════════════════════════════════ */
 function openQuickNoteModal() {
   hideQuickNoteBubble();
-  document.getElementById('quickNoteModalOverlay').classList.add('open');
+  const overlay = document.getElementById('quickNoteModalOverlay');
+  overlay.classList.add('open');
   document.getElementById('quickNoteFab').classList.add('open');
   _qnRefreshVoiceButton();
   setSmartMode('type', false);
+  // The tab pill is measured against .modal-sheet, which is still mid-way through its own
+  // scale/translateY "pop in" transition at this exact point — so the very first measurement
+  // above can land a few px off (the pill looked slightly shifted up right as the modal opened).
+  // Re-measure once that sheet transition has actually settled so it snaps to its true spot.
+  const sheet = overlay.querySelector('.modal-sheet');
+  if (sheet) {
+    const resync = (e) => {
+      if (e && e.target !== sheet) return;
+      if (e && e.propertyName && e.propertyName !== 'transform') return;
+      sheet.removeEventListener('transitionend', resync);
+      setSmartMode(S._smartMode === 'sms' ? 'sms' : 'type', false);
+    };
+    sheet.addEventListener('transitionend', resync);
+    setTimeout(resync, 320); // fallback in case transitionend never fires
+  }
   setTimeout(() => { const el = document.getElementById('smartInput'); if (el) el.focus(); }, 250);
 }
 function closeQuickNoteModal() {
@@ -3584,7 +3620,14 @@ function lockUnlockSuccess() {
   LOCKUI.buffer = '';
   window._appUnlocked = true;
   const scr = document.getElementById('lockScreen');
-  if (scr) scr.classList.remove('open');
+  const icon = document.getElementById('lockIcon');
+  // Play the little padlock "ceklek" open animation (shackle pops open + icon turns white)
+  // before the whole lock screen disappears, instead of just vanishing instantly.
+  if (icon) icon.classList.add('unlocked');
+  setTimeout(() => {
+    if (scr) scr.classList.remove('open');
+    if (icon) icon.classList.remove('unlocked'); // reset so it shows locked+teal again next time
+  }, 380);
 }
 
 function lockDisable() {
