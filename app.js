@@ -661,38 +661,116 @@ function setSmartMode(mode, animate = true) {
 }
 
 /* ══════════════════════════════════════════
-   NAV
+   NAV — floating FAB that opens a vertical
+   liquid-glass rail of bubbles, dragged like
+   a speed-dial with a wave/label-reveal effect.
 ══════════════════════════════════════════ */
-// Pages visible directly in the pill nav
-const PILL_PAGES = ['dashboard', 'budget', 'riwayat'];
-// Pages accessible via more drawer
-const MORE_PAGES = ['analytics', 'settings'];
+// Every page reachable from the rail (bubble id "nav-<key>" must exist).
+const NAV_PAGES = ['dashboard', 'budget', 'riwayat', 'addtx', 'analytics', 'goals', 'recurring', 'kelolakategori', 'akun', 'settings'];
 
-// Tracks which nav slot is currently highlighted ('dashboard'|'budget'|'riwayat'|'more')
-// so the sliding glass indicator can be re-positioned correctly on resize.
+// Tracks which bubble is currently marked active, so it survives resizes/re-renders.
 let _activeNavKey = 'dashboard';
 
-function moveNavIndicator(key, animate = true) {
+function setActiveNavBubble(key) {
   _activeNavKey = key;
-  const nav = document.getElementById('bottomNav');
-  const indicator = document.getElementById('navIndicator');
+  document.querySelectorAll('.nav-bubble').forEach(b => b.classList.remove('active'));
   const item = document.getElementById('nav-' + key);
-  if (!nav || !indicator) return;
-  if (!item) { indicator.classList.remove('ready'); return; }
-  const navRect  = nav.getBoundingClientRect();
-  const itemRect = item.getBoundingClientRect();
-  if (!animate) indicator.style.transition = 'none';
-  indicator.style.width     = itemRect.width + 'px';
-  indicator.style.height    = itemRect.height + 'px';
-  indicator.style.top       = (itemRect.top - navRect.top) + 'px';
-  indicator.style.transform = `translateX(${itemRect.left - navRect.left}px)`;
-  indicator.classList.add('ready');
-  if (!animate) {
-    void indicator.offsetWidth; // force reflow so the transition re-enables cleanly
-    indicator.style.transition = '';
-  }
+  if (item) item.classList.add('active');
 }
-window.addEventListener('resize', () => moveNavIndicator(_activeNavKey, false));
+
+function toggleNavRail() {
+  const rail = document.getElementById('navRail');
+  if (!rail) return;
+  if (rail.classList.contains('open')) closeNavRail();
+  else openNavRail();
+}
+
+function openNavRail() {
+  document.getElementById('navRail')?.classList.add('open');
+  document.getElementById('navFab')?.classList.add('open');
+  document.getElementById('navRailScrim')?.classList.add('open');
+}
+
+function closeNavRail() {
+  document.getElementById('navRail')?.classList.remove('open');
+  document.getElementById('navFab')?.classList.remove('open');
+  document.getElementById('navRailScrim')?.classList.remove('open');
+  _railBubbles.forEach(b => { b.style.removeProperty('--wave'); b.classList.remove('nb-peek', 'nb-focus'); });
+}
+
+function navRailSelect(id) {
+  closeNavRail();
+  if (id === 'addtx') openModal();
+  else showPage(id);
+}
+
+// ── Drag-wave: pressing a bubble and dragging up/down ripples the label
+//    open on whichever bubble the finger is currently nearest to, like a
+//    dock magnifying under the cursor, and picks that item on release.
+let _railBubbles = [];
+let _railDragging = false;
+let _railNearest = null;
+
+function initNavRail() {
+  const rail = document.getElementById('navRail');
+  if (!rail) return;
+  _railBubbles = Array.from(rail.querySelectorAll('.nav-bubble'));
+  rail.addEventListener('pointerdown', onRailPointerDown);
+}
+
+function onRailPointerDown(e) {
+  const rail = document.getElementById('navRail');
+  if (!rail || !rail.classList.contains('open')) return;
+  _railDragging = true;
+  updateRailWave(e.clientY);
+  window.addEventListener('pointermove', onRailPointerMove);
+  window.addEventListener('pointerup', onRailPointerUp, { once: true });
+  window.addEventListener('pointercancel', onRailPointerUp, { once: true });
+}
+
+function onRailPointerMove(e) {
+  if (!_railDragging) return;
+  updateRailWave(e.clientY);
+}
+
+function updateRailWave(clientY) {
+  let nearest = null, nearestDist = Infinity;
+  _railBubbles.forEach(b => {
+    const r = b.getBoundingClientRect();
+    const cy = r.top + r.height / 2;
+    const dist = Math.abs(clientY - cy);
+    const falloff = Math.max(0, 1 - dist / 85); // wave falloff radius
+    b.style.setProperty('--wave', falloff.toFixed(3));
+    b.classList.toggle('nb-peek', falloff > 0.3);
+    if (dist < nearestDist) { nearestDist = dist; nearest = b; }
+  });
+  _railNearest = (nearestDist < 40) ? nearest : null;
+  _railBubbles.forEach(b => b.classList.toggle('nb-focus', b === _railNearest));
+}
+
+function onRailPointerUp() {
+  window.removeEventListener('pointermove', onRailPointerMove);
+  _railDragging = false;
+  const picked = _railNearest;
+  _railBubbles.forEach(b => { b.style.removeProperty('--wave'); b.classList.remove('nb-peek', 'nb-focus'); });
+  _railNearest = null;
+  // Only act on a real drag-select; a plain tap already fires the bubble's
+  // own onclick handler, so don't double-navigate.
+  if (picked && _railDidDragMove) navRailSelect(picked.dataset.nav);
+  _railDidDragMove = false;
+}
+let _railDidDragMove = false;
+window.addEventListener('pointermove', (e) => { if (_railDragging) _railDidDragMove = true; });
+
+// Close the rail when tapping anywhere outside it (the scrim already
+// handles this on touch, this covers mouse/keyboard users too).
+document.addEventListener('click', (e) => {
+  const rail = document.getElementById('navRail');
+  const fab = document.getElementById('navFab');
+  if (!rail || !rail.classList.contains('open')) return;
+  if (rail.contains(e.target) || (fab && fab.contains(e.target))) return;
+  closeNavRail();
+});
 
 // Generic sliding indicator for type-toggle groups (Keluar/Masuk/Transfer etc.) —
 // same glide-between-items behavior as the bottom nav pill.
@@ -765,18 +843,8 @@ function showPage(id) {
     hideQuickNoteBubble();
     clearTimeout(S._qnBubbleShowTimer);
     if (nav) nav.classList.remove('hidden');
-    document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
-    // Highlight pill nav item if it's a pill page
-    if (PILL_PAGES.includes(id)) {
-      const ni = document.getElementById('nav-' + id);
-      if (ni) ni.classList.add('active');
-      moveNavIndicator(id);
-    } else {
-      // Any other page (settings, analytics, goals, akun, recurring) is reached via "Lainnya"
-      const moreBtn = document.getElementById('nav-more');
-      if (moreBtn) moreBtn.classList.add('active');
-      moveNavIndicator('more');
-    }
+    closeNavRail();
+    if (NAV_PAGES.includes(id)) setActiveNavBubble(id);
   }
 
   if (id !== 'addtx') S._txReturnPage = id;
@@ -1100,7 +1168,7 @@ function renderBudgetCatPicker() {
     wrap.style.display = 'none';
     return;
   }
-  wrap.style.display = 'block';
+  wrap.style.display = 'flex';
   picker.innerHTML = matchingCats.map(c =>
     `<div class="cat-chip ${S.selectedBudgetCat===c.id?'selected':''}" onclick="selectBudgetCat('${c.id}')">${ICON[c.icon]||''} ${escapeHtml(c.label)}</div>`
   ).join('');
@@ -1324,43 +1392,45 @@ function submitTransaction() {
 ══════════════════════════════════════════ */
 function renderDashboard() {
   const txs = S.transactions;
+  // Keep BUDGET.total fresh (auto-summed from category limits) before this
+  // function's own meter/budget-left calculations read it further down.
+  BUDGET.total = computeBudgetTotal();
 
-  // Rp adalah mata uang utama di seluruh app ini (budget, goals, dsb semua
-  // dalam Rp). Angka headline di dashboard cuma menjumlah transaksi/wallet
-  // yang mata uangnya Rp — transaksi/wallet di mata uang lain (USD, dst)
-  // dijumlah TERPISAH per mata uang, tidak dicampur jadi satu angka.
-  // (Dulu ini bug: Rp dan USD ditambah mentah-mentah jadi satu total.)
+  // Rp adalah mata uang utama untuk logic internal lain (budget, goals,
+  // savings estimate dsb tetap dihitung dari transaksi ber-Rp saja).
   const income  = txs.filter(t => t.type === 'income'  && walletCurrencyCode(t.account) === 'IDR').reduce((s,t) => s+t.amount, 0);
   const expense = txs.filter(t => t.type === 'expense' && walletCurrencyCode(t.account) === 'IDR').reduce((s,t) => s+t.amount, 0);
 
-  // Total aset = saldo real-time tiap wallet, dikelompokkan per currency
+  // Total aset = saldo real-time tiap wallet, dikelompokkan per currency.
+  // Kalau user punya wallet lebih dari satu mata uang, headline Total Aset
+  // bergantian menampilkan tiap mata uang (papan iklan/ticker) — nggak
+  // dicampur jadi satu angka karena nggak ada konversi kurs di app ini.
   const totalsByCurrency = {};
   WALLETS.forEach(w => {
     const code = w.currency || 'IDR';
     totalsByCurrency[code] = (totalsByCurrency[code] || 0) + getWalletBalance(w.id);
   });
-  const total = totalsByCurrency.IDR || 0;
+  let balanceEntries = Object.entries(totalsByCurrency).map(([code, amount]) => ({ code, amount }));
+  if (!balanceEntries.length) balanceEntries = [{ code: 'IDR', amount: 0 }];
+  balanceEntries.sort((a,b) => (a.code==='IDR'?-1:1) - (b.code==='IDR'?-1:1));
+  runBalanceTicker(balanceEntries);
 
-  document.getElementById('totalBalance').textContent = total.toLocaleString('id-ID');
-  document.getElementById('totalIncome').textContent  = 'Rp ' + income.toLocaleString('id-ID');
-  document.getElementById('totalExpense').textContent = 'Rp ' + expense.toLocaleString('id-ID');
-
-  // Tampilkan saldo mata uang lain (kalau ada) sebagai baris terpisah,
-  // bukan digabung ke angka Rp di atas
-  const multiEl = document.getElementById('balanceMultiCurrency');
-  if (multiEl) {
-    const otherCodes = Object.keys(totalsByCurrency).filter(c => c !== 'IDR');
-    if (otherCodes.length) {
-      multiEl.style.display = 'block';
-      multiEl.textContent = '+ ' + otherCodes.map(code => {
-        const info = currencyInfo(code);
-        return info.symbol + ' ' + totalsByCurrency[code].toLocaleString(info.locale);
-      }).join(' · ') + ' (belum dikonversi ke Rp)';
-    } else {
-      multiEl.style.display = 'none';
-      multiEl.textContent = '';
-    }
-  }
+  // Pemasukan / Pengeluaran: sama, tapi cuma mata uang yang BENERAN ada
+  // transaksinya yang ikut dirotasi. Kalau semua transaksi cuma Rp, ya
+  // cuma Rp yang tampil (nggak dipaksa nampilin mata uang kosong).
+  const incomeByCurrency = {}, expenseByCurrency = {};
+  txs.forEach(t => {
+    if (t.type !== 'income' && t.type !== 'expense') return;
+    const code = walletCurrencyCode(t.account);
+    const bucket = t.type === 'income' ? incomeByCurrency : expenseByCurrency;
+    bucket[code] = (bucket[code] || 0) + t.amount;
+  });
+  let incomeEntries  = Object.entries(incomeByCurrency).map(([code, amount]) => ({ code, amount }));
+  let expenseEntries = Object.entries(expenseByCurrency).map(([code, amount]) => ({ code, amount }));
+  if (!incomeEntries.length)  incomeEntries  = [{ code: 'IDR', amount: 0 }];
+  if (!expenseEntries.length) expenseEntries = [{ code: 'IDR', amount: 0 }];
+  runAmountTicker('income',  document.getElementById('totalIncome'),  incomeEntries);
+  runAmountTicker('expense', document.getElementById('totalExpense'), expenseEntries);
 
   const spent = BUDGET.cats.filter(c => (c.currency || 'IDR') === 'IDR').reduce((s,c)=>s+c.spent,0);
   const pct   = BUDGET.total > 0 ? Math.min(100,Math.round(spent/BUDGET.total*100)) : 0;
@@ -1397,6 +1467,87 @@ function renderDashboard() {
   renderBudget();
   drawRiver();
   drawScore();
+}
+
+/* ══════════════════════════════════════════
+   MULTI-CURRENCY TICKER (dashboard "papan iklan")
+   Kalau ada lebih dari satu mata uang yang relevan, angka di Total Aset /
+   Pemasukan / Pengeluaran bergantian menampilkan tiap mata uang dengan
+   animasi fade+slide, mirip papan iklan berjalan. Kalau cuma satu mata
+   uang, tampil statis (nggak ada animasi yang nggak perlu).
+══════════════════════════════════════════ */
+const _tickerState = {}; // key -> { interval }
+
+function _tickerFade(el, apply) {
+  if (!el) { apply(); return; }
+  el.style.transition = 'opacity .28s ease, transform .28s ease';
+  el.style.opacity = '0';
+  el.style.transform = 'translateY(5px)';
+  setTimeout(() => {
+    apply();
+    el.style.transform = 'translateY(-5px)';
+    void el.offsetWidth; // force reflow supaya transisi baliknya kepakai
+    el.style.opacity = '1';
+    el.style.transform = 'translateY(0)';
+  }, 280);
+}
+
+function runBalanceTicker(entries) {
+  const key = 'balance';
+  if (_tickerState[key] && _tickerState[key].interval) clearInterval(_tickerState[key].interval);
+  const curEl  = document.getElementById('totalBalanceCur');
+  const numEl  = document.getElementById('totalBalance');
+  const wrapEl = numEl ? numEl.closest('.balance-amount') : null;
+  const dotsEl = document.getElementById('balanceCurDots');
+
+  const paint = i => {
+    const { code, amount } = entries[i];
+    const info = currencyInfo(code);
+    if (curEl) curEl.textContent = info.symbol;
+    if (numEl) numEl.textContent = amount.toLocaleString(info.locale);
+    if (dotsEl) dotsEl.querySelectorAll('.dot').forEach((d, di) => d.classList.toggle('active', di === i));
+  };
+
+  if (dotsEl) {
+    if (entries.length > 1) {
+      dotsEl.style.display = 'flex';
+      dotsEl.innerHTML = entries.map(() => `<span class="dot"></span>`).join('');
+    } else {
+      dotsEl.style.display = 'none';
+      dotsEl.innerHTML = '';
+    }
+  }
+
+  paint(0);
+  if (entries.length > 1) {
+    let idx = 0;
+    _tickerState[key] = { interval: setInterval(() => {
+      idx = (idx + 1) % entries.length;
+      _tickerFade(wrapEl, () => paint(idx));
+    }, 2800) };
+  } else {
+    _tickerState[key] = { interval: null };
+  }
+}
+
+function runAmountTicker(key, el, entries) {
+  if (_tickerState[key] && _tickerState[key].interval) clearInterval(_tickerState[key].interval);
+  if (!el) return;
+  const paint = i => {
+    const { code, amount } = entries[i];
+    const info = currencyInfo(code);
+    el.textContent = info.symbol + ' ' + amount.toLocaleString(info.locale);
+  };
+  paint(0);
+  if (entries.length > 1) {
+    let idx = 0;
+    _tickerState[key] = { interval: setInterval(() => {
+      idx = (idx + 1) % entries.length;
+      _tickerFade(el, () => paint(idx));
+    }, 2800) };
+  } else {
+    _tickerState[key] = { interval: null };
+  }
 }
 
 function fmtK(n) {
@@ -1517,7 +1668,16 @@ function fmtDate(s) {
 /* ══════════════════════════════════════════
    BUDGET
 ══════════════════════════════════════════ */
+// Total anggaran nggak lagi diinput manual — dihitung otomatis dari jumlah
+// limit tiap kategori anggaran (yang mata uangnya Rp), biar selalu nyambung
+// sama kategori per kategori di bawahnya alih-alih dua angka terpisah yang
+// bisa nggak sinkron.
+function computeBudgetTotal() {
+  return BUDGET.cats.filter(c => (c.currency || 'IDR') === 'IDR').reduce((s,c) => s + (c.limit || 0), 0);
+}
+
 function renderBudget() {
+  BUDGET.total = computeBudgetTotal();
   // Apply budget filter to compute real spent from transactions
   const bf   = typeof BUDGET_FILTER !== 'undefined' ? BUDGET_FILTER : {};
   const filtTx = S.transactions.filter(t => {
@@ -1549,22 +1709,112 @@ function renderBudget() {
     const pct   = c.limit > 0 ? Math.min(100, Math.round(spent/c.limit*100)) : 0;
     const color = pct>90?'var(--red)':pct>70?'var(--gold)':c.color;
     return `
-      <div class="bcat glass-sm">
-        <div class="bcat-head">
-          <div class="bcat-icon" style="background:${c.color}22">${ICON[c.icon]||''}</div>
-          <div class="bcat-name">${escapeHtml(c.label)}</div>
-          <div class="bcat-remain">sisa ${sym} ${fmtK(Math.max(0,c.limit-spent))}</div>
+      <div class="bcat-item-wrap">
+        <div class="bcat-actions">
+          <div class="wact-btn wact-edit" onclick="openEditBudgetModal('${c.id}')">${ICON.edit||''}<span>Edit</span></div>
+          <div class="wact-btn wact-del" onclick="removeBudgetCat('${c.id}')">${ICON.trash||''}<span>Hapus</span></div>
         </div>
-        <div class="bcat-bar-bg"><div class="bcat-bar-fill" style="width:${pct}%;background:${color}"></div></div>
-        <div class="bcat-amounts"><span>${sym} ${spent.toLocaleString(currencyInfo(cCode).locale)}</span><span>${sym} ${c.limit.toLocaleString(currencyInfo(cCode).locale)}</span></div>
+        <div class="bcat-item-slide" data-bcat-id="${c.id}">
+          <div class="bcat glass-sm">
+            <div class="bcat-head">
+              <div class="bcat-icon" style="background:${c.color}22">${ICON[c.icon]||''}</div>
+              <div class="bcat-name">${escapeHtml(c.label)}</div>
+              <div class="bcat-remain">sisa ${sym} ${fmtK(Math.max(0,c.limit-spent))}</div>
+            </div>
+            <div class="bcat-bar-bg"><div class="bcat-bar-fill" style="width:${pct}%;background:${color}"></div></div>
+            <div class="bcat-amounts"><span>${sym} ${spent.toLocaleString(currencyInfo(cCode).locale)}</span><span>${sym} ${c.limit.toLocaleString(currencyInfo(cCode).locale)}</span></div>
+          </div>
+        </div>
       </div>`;
   }).join('') : `
-    <div class="empty" onclick="openBudgetSettingsModal()" style="cursor:pointer">
-      <div class="empty-icon">${ICON.settings||''}</div>
+    <div class="empty" onclick="openAddBudgetModal()" style="cursor:pointer">
+      <div class="empty-icon">${ICON.wallet||ICON.settings||''}</div>
       <h3>Belum ada kategori anggaran</h3>
-      <p>Ketuk ikon setting di atas untuk membuat kategori anggaranmu sendiri</p>
+      <p>Ketuk ＋ di atas untuk membuat kategori anggaranmu sendiri</p>
     </div>`;
+  initBcatSwipe();
 }
+
+/* Swipe-to-reveal for budget category cards — same interaction as wallet
+   cards (see initWalletSwipe) and category rows (see initKcSwipe): drag a
+   card left to uncover its Edit/Hapus buttons underneath instead of
+   showing them permanently, or stuffing category management inside the
+   "Tambah Anggaran" modal. Only one card stays open at a time. */
+function initBcatSwipe() {
+  document.querySelectorAll('.bcat-item-slide').forEach(slide => {
+    const wrap    = slide.closest('.bcat-item-wrap');
+    const actions = wrap ? wrap.querySelector('.bcat-actions') : null;
+    if (!wrap || !actions) return;
+    const maxOffset = () => actions.offsetWidth;
+    let startX = 0, startY = 0, baseX = 0, dragging = false, decided = false, horiz = false;
+
+    slide.addEventListener('touchstart', e => {
+      closeOtherBcatSwipes(slide);
+      startX = e.touches[0].clientX;
+      startY = e.touches[0].clientY;
+      baseX  = getBcatSlideX(slide);
+      dragging = true; decided = false; horiz = false;
+      slide.classList.add('dragging');
+      actions.classList.add('dragging');
+    }, {passive:true});
+
+    slide.addEventListener('touchmove', e => {
+      if (!dragging) return;
+      const dx = e.touches[0].clientX - startX;
+      const dy = e.touches[0].clientY - startY;
+      if (!decided) {
+        if (Math.abs(dx) < 6 && Math.abs(dy) < 6) return;
+        decided = true;
+        horiz = Math.abs(dx) > Math.abs(dy);
+        if (!horiz) { dragging = false; slide.classList.remove('dragging'); actions.classList.remove('dragging'); return; }
+      }
+      const next = Math.max(-maxOffset(), Math.min(0, baseX + dx));
+      slide.style.transform = `translateX(${next}px)`;
+      setBcatActionsProgress(actions, Math.min(1, Math.abs(next) / maxOffset()));
+    }, {passive:true});
+
+    function endDrag() {
+      if (!dragging) return;
+      dragging = false;
+      slide.classList.remove('dragging');
+      actions.classList.remove('dragging');
+      if (!decided || !horiz) return;
+      const x = getBcatSlideX(slide);
+      const open = x < -maxOffset() * 0.35;
+      slide.style.transform = `translateX(${open ? -maxOffset() : 0}px)`;
+      setBcatActionsProgress(actions, open ? 1 : 0);
+      _bcatSwipeOpen = open ? slide : null;
+    }
+    slide.addEventListener('touchend', endDrag);
+    slide.addEventListener('touchcancel', endDrag);
+  });
+}
+let _bcatSwipeOpen = null;
+function getBcatSlideX(el) {
+  const m = /translateX\((-?[\d.]+)px\)/.exec(el.style.transform || '');
+  return m ? parseFloat(m[1]) : 0;
+}
+function setBcatActionsProgress(actions, progress) {
+  actions.style.opacity   = progress;
+  const scale = 0.86 + 0.14 * progress;
+  const tx    = (1 - progress) * 10;
+  actions.style.transform = `scale(${scale}) translateX(${tx}px)`;
+}
+function closeOtherBcatSwipes(except) {
+  document.querySelectorAll('.bcat-item-slide').forEach(s => {
+    if (s === except) return;
+    if (getBcatSlideX(s) === 0) return;
+    s.style.transform = 'translateX(0px)';
+    const actions = s.closest('.bcat-item-wrap')?.querySelector('.bcat-actions');
+    if (actions) setBcatActionsProgress(actions, 0);
+  });
+  if (_bcatSwipeOpen && _bcatSwipeOpen !== except) _bcatSwipeOpen = null;
+}
+document.addEventListener('touchstart', e => {
+  if (!_bcatSwipeOpen) return;
+  if (e.target.closest('.bcat-item-wrap')) return;
+  closeOtherBcatSwipes(null);
+}, {passive:true});
 
 /* ══════════════════════════════════════════
    WALLETS
@@ -1598,33 +1848,113 @@ function renderWallets() {
     list.innerHTML = `<div class="empty"><div class="empty-icon">${ICON.creditCard}</div><h3>Belum ada akun</h3><p>Tambahkan rekening atau dompetmu</p></div>`;
     return;
   }
-  const walletTypeLabel = w => {
-    if (w.id === 'tunai' || w.name.toLowerCase().includes('tunai') || w.name.toLowerCase().includes('cash')) return 'Tunai';
-    if (w.id === 'gopay' || w.name.toLowerCase().includes('pay') || w.name.toLowerCase().includes('ovo') || w.name.toLowerCase().includes('dana')) return 'E-Wallet';
-    return 'Rekening';
-  };
+  const WALLET_TYPE_LABELS = { bank:'Rekening', ewallet:'E-Wallet', tunai:'Tunai', invest:'Investasi' };
+  const walletTypeLabel = w => WALLET_TYPE_LABELS[w.type] || 'Rekening';
   document.getElementById('walletList').innerHTML = WALLETS.map(w => {
     const bal = getWalletBalance(w.id);
     const cur = currencyInfo(w.currency);
     return `
     <div class="wallet-item-wrap">
-      <div class="wallet-card" style="background:${w.bg}">
-        <div class="wallet-chip" style="color:${w.chipColor}">${walletTypeLabel(w)}</div>
-        <div class="wallet-name">${w.name}</div>
-        <div class="wallet-bank">${w.bank}</div>
-        <div class="wallet-bal"><span class="wr-cur">${cur.symbol}</span>${bal.toLocaleString(cur.locale)}</div>
-        <div class="wallet-footer">
-          <div class="wallet-last">Saldo awal: ${cur.symbol} ${w.bal.toLocaleString(cur.locale)}</div>
-          <div class="wallet-tag" style="color:${w.chipColor}">Aktif</div>
-        </div>
-      </div>
       <div class="wallet-actions">
-        <button class="wact-btn wact-edit" onclick="openEditWalletModal('${w.id}')">${ICON.edit} Edit</button>
-        <button class="wact-btn wact-del"  onclick="deleteWallet('${w.id}')">${ICON.trash} Hapus</button>
+        <button class="wact-btn wact-edit" onclick="openEditWalletModal('${w.id}')">${ICON.edit}<span>Edit</span></button>
+        <button class="wact-btn wact-del"  onclick="deleteWallet('${w.id}')">${ICON.trash}<span>Hapus</span></button>
+      </div>
+      <div class="wallet-card-slide" data-wallet-id="${w.id}">
+        <div class="wallet-card" style="background:${w.bg}">
+          <div class="wallet-chip" style="color:${w.chipColor}">${walletTypeLabel(w)}</div>
+          <div class="wallet-name">${w.name}</div>
+          <div class="wallet-bank">${w.bank}</div>
+          <div class="wallet-bal"><span class="wr-cur">${cur.symbol}</span>${bal.toLocaleString(cur.locale)}</div>
+          <div class="wallet-footer">
+            <div class="wallet-last">Saldo awal: ${cur.symbol} ${w.bal.toLocaleString(cur.locale)}</div>
+            <div class="wallet-tag" style="color:${w.chipColor}">Aktif</div>
+          </div>
+        </div>
       </div>
     </div>`;
   }).join('');
+  initWalletSwipe();
 }
+
+/* Swipe-to-reveal for wallet cards — drag a card left to uncover its
+   Edit/Hapus buttons underneath (like a standard swipeable list item)
+   instead of showing them under every card all the time. Only one card
+   stays open at a time. */
+function initWalletSwipe() {
+  document.querySelectorAll('.wallet-card-slide').forEach(slide => {
+    const wrap    = slide.closest('.wallet-item-wrap');
+    const actions = wrap ? wrap.querySelector('.wallet-actions') : null;
+    if (!wrap || !actions) return;
+    const maxOffset = () => actions.offsetWidth;
+    let startX = 0, startY = 0, baseX = 0, dragging = false, decided = false, horiz = false;
+
+    slide.addEventListener('touchstart', e => {
+      closeOtherWalletSwipes(slide);
+      startX = e.touches[0].clientX;
+      startY = e.touches[0].clientY;
+      baseX  = getWalletSlideX(slide);
+      dragging = true; decided = false; horiz = false;
+      slide.classList.add('dragging');
+      actions.classList.add('dragging');
+    }, {passive:true});
+
+    slide.addEventListener('touchmove', e => {
+      if (!dragging) return;
+      const dx = e.touches[0].clientX - startX;
+      const dy = e.touches[0].clientY - startY;
+      if (!decided) {
+        if (Math.abs(dx) < 6 && Math.abs(dy) < 6) return;
+        decided = true;
+        horiz = Math.abs(dx) > Math.abs(dy);
+        if (!horiz) { dragging = false; slide.classList.remove('dragging'); actions.classList.remove('dragging'); return; }
+      }
+      const next = Math.max(-maxOffset(), Math.min(0, baseX + dx));
+      slide.style.transform = `translateX(${next}px)`;
+      setWalletActionsProgress(actions, Math.min(1, Math.abs(next) / maxOffset()));
+    }, {passive:true});
+
+    function endDrag() {
+      if (!dragging) return;
+      dragging = false;
+      slide.classList.remove('dragging');
+      actions.classList.remove('dragging');
+      if (!decided || !horiz) return;
+      const x = getWalletSlideX(slide);
+      const open = x < -maxOffset() * 0.35;
+      slide.style.transform = `translateX(${open ? -maxOffset() : 0}px)`;
+      setWalletActionsProgress(actions, open ? 1 : 0);
+      _walletSwipeOpen = open ? slide : null;
+    }
+    slide.addEventListener('touchend', endDrag);
+    slide.addEventListener('touchcancel', endDrag);
+  });
+}
+let _walletSwipeOpen = null;
+function getWalletSlideX(el) {
+  const m = /translateX\((-?[\d.]+)px\)/.exec(el.style.transform || '');
+  return m ? parseFloat(m[1]) : 0;
+}
+function setWalletActionsProgress(actions, progress) {
+  actions.style.opacity   = progress;
+  const scale = 0.86 + 0.14 * progress;
+  const tx    = (1 - progress) * 10;
+  actions.style.transform = `scale(${scale}) translateX(${tx}px)`;
+}
+function closeOtherWalletSwipes(except) {
+  document.querySelectorAll('.wallet-card-slide').forEach(s => {
+    if (s === except) return;
+    if (getWalletSlideX(s) === 0) return;
+    s.style.transform = 'translateX(0px)';
+    const actions = s.closest('.wallet-item-wrap')?.querySelector('.wallet-actions');
+    if (actions) setWalletActionsProgress(actions, 0);
+  });
+  if (_walletSwipeOpen && _walletSwipeOpen !== except) _walletSwipeOpen = null;
+}
+document.addEventListener('touchstart', e => {
+  if (!_walletSwipeOpen) return;
+  if (e.target.closest('.wallet-item-wrap')) return;
+  closeOtherWalletSwipes(null);
+}, {passive:true});
 
 function deleteWallet(id) {
   showConfirm('Hapus akun ini?', 'Transaksi terkait tidak ikut terhapus.', () => {
@@ -1632,6 +1962,7 @@ function deleteWallet(id) {
     saveToStorage();
     renderWallets();
     updateAccountDropdown();
+    renderDashboard();
     showToast('Akun dihapus', 'success');
   });
 }
@@ -1644,10 +1975,14 @@ function openEditWalletModal(id) {
   document.getElementById('editWalletBankInput').value = w.bank;
   document.getElementById('editWalletBalInput').value  = w.bal;
   const n = w.name.toLowerCase();
-  let wType = 'bank';
-  if (n.includes('tunai') || n.includes('cash')) wType = 'tunai';
-  else if (n.includes('pay') || n.includes('ovo') || n.includes('dana') || n.includes('wallet')) wType = 'ewallet';
-  else if (n.includes('saham') || n.includes('invest') || n.includes('reksa')) wType = 'invest';
+  let wType = w.type;
+  if (!wType) {
+    // Fallback for akun lama yang belum punya field type tersimpan — tebak dari nama.
+    wType = 'bank';
+    if (n.includes('tunai') || n.includes('cash')) wType = 'tunai';
+    else if (n.includes('pay') || n.includes('ovo') || n.includes('dana') || n.includes('wallet')) wType = 'ewallet';
+    else if (n.includes('saham') || n.includes('invest') || n.includes('reksa')) wType = 'invest';
+  }
   const ewt = document.getElementById('editWalletTypeInput'); if(ewt) ewt.value = wType;
   const typeIcons  = {bank:'bank', ewallet:'smartphone', tunai:'cash', invest:'trendUp'};
   const typeLabels = {bank:'Rekening', ewallet:'E-Wallet', tunai:'Tunai', invest:'Investasi'};
@@ -1675,74 +2010,59 @@ function submitEditWallet() {
     invest:  { bg:'linear-gradient(135deg,#1a0a3a,#3a1a6a)', chipColor:'#C4A8FF' },
   };
   const theme = WALLET_THEMES[type] || WALLET_THEMES.bank;
-  WALLETS = WALLETS.map(w => w.id === id ? { ...w, name, bank, bal, currency, ...theme } : w);
+  WALLETS = WALLETS.map(w => w.id === id ? { ...w, name, bank, bal, currency, type, ...theme } : w);
   saveToStorage();
   closeEditWalletModal();
   renderWallets();
   updateAccountDropdown();
+  renderDashboard();
   showToast('Akun diperbarui', 'success');
 }
 
-function openBudgetSettingsModal() {
-  document.getElementById('budgetTotalInput').value = BUDGET.total || '';
-  document.getElementById('addBudgetCatForm').style.display = 'none';
-  const _trigger = document.getElementById('addBudgetCatTrigger');
-  if (_trigger) _trigger.style.display = '';
+/* ══════════════════════════════════════════
+   BUDGET MODAL (Tambah / Edit Anggaran)
+   Add-only trigger from the topbar (＋); editing and deleting an existing
+   budget category happens on the page itself via swipe-to-reveal
+   Edit/Hapus (see renderBudget() + initBcatSwipe below) — same pattern
+   as Kelola Kategori and Akun. This modal never lists existing
+   categories anymore.
+══════════════════════════════════════════ */
+let _editingBudgetCatId = null;
+
+function openAddBudgetModal() {
+  _editingBudgetCatId = null;
+  document.getElementById('budgetModalTitle').textContent = 'Tambah Anggaran';
+  document.getElementById('budgetModalSubmitBtn').textContent = 'Tambah Anggaran';
+  document.getElementById('editBudgetCatId').value = '';
   document.getElementById('newBudgetCatName').value = '';
+  document.getElementById('budgetCatLimitInput').value = '';
+  document.getElementById('newBudgetCatCurrency').value = 'IDR';
+  document.getElementById('newBudgetCatCurrencyLbl').textContent = currencyLabelText('IDR');
   _pendingBudgetCatIcon = null;
-  renderBudgetCatRows();
   renderBudgetCatIconGrid();
   document.getElementById('budgetSettingsModalOverlay').classList.add('open');
 }
-function closeBudgetSettingsModal() { document.getElementById('budgetSettingsModalOverlay').classList.remove('open'); }
+// Kept as an alias so any older onclick reference still opens the (now add-only) modal.
+function openBudgetSettingsModal() { openAddBudgetModal(); }
 
-function renderBudgetCatRows() {
-  const wrap = document.getElementById('budgetCatInputs');
-  wrap.innerHTML = BUDGET.cats.length ? BUDGET.cats.map(c => `
-    <div class="budget-cat-row">
-      <div class="bcr-icon" style="background:${c.color}22;color:${c.color}">${ICON[c.icon]||ICON.package}</div>
-      <div class="bcr-name">${escapeHtml(c.label)}</div>
-      <div class="bcr-currency" onclick="openBudgetCatCurrencyPicker('${c.id}')" title="Ganti mata uang kategori ini">${c.currency || 'IDR'} <span class="picker-arrow">▾</span></div>
-      <input type="number" class="bcr-limit-input budget-cat-input" data-cat="${c.id}" value="${c.limit || ''}" placeholder="0" inputmode="numeric">
-      <div class="bcr-del" onclick="removeBudgetCat('${c.id}')"><svg class="ic" viewBox="0 0 24 24"><path d="M5 5l14 14M19 5L5 19"/></svg></div>
-    </div>`).join('') : `<div class="budget-cat-empty-hint">Belum ada kategori — tambahkan kategori anggaranmu sendiri di bawah ini.</div>`;
-}
-
-// ── Ganti currency kategori anggaran yang udah ada (dipilih per baris) ──
-let _pickerBudgetCatId = null;
-function openBudgetCatCurrencyPicker(catId) {
-  const cat = BUDGET.cats.find(c => c.id === catId);
+function openEditBudgetModal(id) {
+  const cat = BUDGET.cats.find(c => c.id === id);
   if (!cat) return;
-  _pickerBudgetCatId = catId;
-  const curVal = cat.currency || 'IDR';
-  const opts = Object.keys(CURRENCIES).map(code => ({ value: code, text: currencyLabelText(code) }));
-  document.getElementById('pickerTitle').textContent = 'Mata Uang — ' + cat.label;
-  document.getElementById('pickerOpts').innerHTML = opts.map((o, i) => `
-    <div class="picker-opt ${o.value === curVal ? 'selected' : ''}" data-idx="${i}">${escapeHtml(o.text)}</div>`).join('');
-  document.querySelectorAll('#pickerOpts .picker-opt').forEach((el, i) => {
-    el.addEventListener('click', () => pickBudgetCatCurrency(opts[i].value));
-  });
-  document.getElementById('pickerOverlay').classList.add('open');
+  _editingBudgetCatId = id;
+  document.getElementById('budgetModalTitle').textContent = 'Edit Anggaran';
+  document.getElementById('budgetModalSubmitBtn').textContent = 'Simpan Perubahan';
+  document.getElementById('editBudgetCatId').value = id;
+  document.getElementById('newBudgetCatName').value = cat.label;
+  document.getElementById('budgetCatLimitInput').value = cat.limit || '';
+  const cur = cat.currency || 'IDR';
+  document.getElementById('newBudgetCatCurrency').value = cur;
+  document.getElementById('newBudgetCatCurrencyLbl').textContent = currencyLabelText(cur);
+  _pendingBudgetCatIcon = cat.icon;
+  renderBudgetCatIconGrid();
+  document.getElementById('budgetSettingsModalOverlay').classList.add('open');
 }
-function pickBudgetCatCurrency(code) {
-  const cat = BUDGET.cats.find(c => c.id === _pickerBudgetCatId);
-  if (cat) {
-    const changed = (cat.currency || 'IDR') !== code;
-    cat.currency = code;
-    if (changed && cat.spent > 0) {
-      // Progres "terpakai" lama dihitung dalam currency lama — nggak nyambung
-      // lagi sama limit di currency baru, jadi direset biar nggak nyesatin.
-      cat.spent = 0;
-      showToast('Mata uang diganti — progres terpakai kategori ini direset', 'info');
-    } else {
-      showToast('Mata uang kategori diperbarui', 'success');
-    }
-    saveToStorage();
-    renderBudgetCatRows();
-    renderBudget();
-  }
-  closePicker();
-}
+
+function closeBudgetSettingsModal() { document.getElementById('budgetSettingsModalOverlay').classList.remove('open'); }
 
 function renderBudgetCatIconGrid() {
   const grid = document.getElementById('budgetCatIconGrid');
@@ -1754,51 +2074,63 @@ function selectBudgetCatIcon(key) {
   _pendingBudgetCatIcon = key;
   renderBudgetCatIconGrid();
 }
-function toggleAddBudgetCatForm() {
-  const form = document.getElementById('addBudgetCatForm');
-  const trigger = document.getElementById('addBudgetCatTrigger');
-  const showing = form.style.display !== 'none';
-  form.style.display = showing ? 'none' : 'block';
-  if (trigger) trigger.style.display = showing ? '' : 'none';
-  if (!showing) {
-    document.getElementById('newBudgetCatName').value = '';
-    document.getElementById('newBudgetCatCurrency').value = 'IDR';
-    document.getElementById('newBudgetCatCurrencyLbl').textContent = currencyLabelText('IDR');
-    _pendingBudgetCatIcon = null;
-    renderBudgetCatIconGrid();
-  }
-}
-function addBudgetCat() {
+
+function submitBudgetCatModal() {
   const name = document.getElementById('newBudgetCatName').value.trim();
   if (!name) { showToast('Nama kategori wajib diisi', 'warning'); return; }
   if (!_pendingBudgetCatIcon) { showToast('Pilih ikon untuk kategori ini', 'warning'); return; }
+  const limit    = parseInt(document.getElementById('budgetCatLimitInput').value) || 0;
   const currency = document.getElementById('newBudgetCatCurrency').value || 'IDR';
-  const id = 'cat_' + name.toLowerCase().replace(/[^a-z0-9]+/g,'_').replace(/^_+|_+$/g,'').slice(0,20) + '_' + Date.now().toString(36);
-  const color = BUDGET_CAT_COLORS[BUDGET.cats.length % BUDGET_CAT_COLORS.length];
-  BUDGET.cats.push({ id, label:name, icon:_pendingBudgetCatIcon, color, limit:0, spent:0, currency });
-  CUSTOM_CAT_ICONS[id] = _pendingBudgetCatIcon;
-  // Make it selectable when logging expense transactions too, so spending actually tracks against this budget
-  const expCats = CATS.expense;
-  const insertAt = expCats.length && expCats[expCats.length-1].id === 'other' ? expCats.length - 1 : expCats.length;
-  expCats.splice(insertAt, 0, { id, label:name, color });
 
-  document.getElementById('addBudgetCatForm').style.display = 'none';
-  const trigger = document.getElementById('addBudgetCatTrigger');
-  if (trigger) trigger.style.display = '';
-  renderBudgetCatRows();
+  if (_editingBudgetCatId) {
+    // Edit mode
+    const cat = BUDGET.cats.find(c => c.id === _editingBudgetCatId);
+    if (!cat) { closeBudgetSettingsModal(); return; }
+    const currencyChanged = (cat.currency || 'IDR') !== currency;
+    cat.label    = name;
+    cat.icon     = _pendingBudgetCatIcon;
+    cat.limit    = limit;
+    cat.currency = currency;
+    CUSTOM_CAT_ICONS[cat.id] = _pendingBudgetCatIcon;
+    // Keep the matching expense category in sync (name/icon shown when logging transactions)
+    const expCat = CATS.expense.find(c => c.id === cat.id);
+    if (expCat) expCat.label = name;
+    if (currencyChanged && cat.spent > 0) {
+      // Progres "terpakai" lama dihitung dalam currency lama — nggak nyambung
+      // lagi sama limit di currency baru, jadi direset biar nggak nyesatin.
+      cat.spent = 0;
+      showToast('Anggaran diperbarui — progres terpakai direset karena mata uang berubah', 'info');
+    } else {
+      showToast('Anggaran diperbarui', 'success');
+    }
+  } else {
+    // Add mode
+    const id = 'cat_' + name.toLowerCase().replace(/[^a-z0-9]+/g,'_').replace(/^_+|_+$/g,'').slice(0,20) + '_' + Date.now().toString(36);
+    const color = BUDGET_CAT_COLORS[BUDGET.cats.length % BUDGET_CAT_COLORS.length];
+    BUDGET.cats.push({ id, label:name, icon:_pendingBudgetCatIcon, color, limit, spent:0, currency });
+    CUSTOM_CAT_ICONS[id] = _pendingBudgetCatIcon;
+    // Make it selectable when logging expense transactions too, so spending actually tracks against this budget
+    const expCats = CATS.expense;
+    const insertAt = expCats.length && expCats[expCats.length-1].id === 'other' ? expCats.length - 1 : expCats.length;
+    expCats.splice(insertAt, 0, { id, label:name, color });
+    showToast('Anggaran ditambahkan', 'success');
+  }
+
+  closeBudgetSettingsModal();
   saveToStorage();
   renderBudget();
-  showToast('Kategori anggaran ditambahkan', 'success');
+  updateSettingsPage();
 }
+
 function removeBudgetCat(id) {
-  showConfirm('Hapus kategori ini?', 'Limit anggaran untuk kategori ini akan dihapus.', () => {
+  showConfirm('Hapus kategori anggaran ini?', 'Limit anggaran untuk kategori ini akan dihapus.', () => {
     BUDGET.cats = BUDGET.cats.filter(c => c.id !== id);
     CATS.expense = CATS.expense.filter(c => c.id !== id);
     delete CUSTOM_CAT_ICONS[id];
-    renderBudgetCatRows();
     saveToStorage();
     renderBudget();
-    showToast('Kategori dihapus', 'success');
+    updateSettingsPage();
+    showToast('Anggaran dihapus', 'success');
   }, 'trash');
 }
 
@@ -1831,15 +2163,98 @@ function renderKategoriList() {
     return;
   }
   wrap.innerHTML = cats.map(c => `
-    <div class="kc-item glass-sm">
-      <div class="kc-icon" style="background:${c.color}22;color:${c.color}">${ICON[catIcon(c.id)]||ICON.package}</div>
-      <div class="kc-name">${escapeHtml(c.label)}</div>
+    <div class="kc-item-wrap">
       <div class="kc-actions">
         <div class="kc-act-btn" onclick="openEditCategoryModal('${KC_TYPE}','${c.id}')">${ICON.edit||''}</div>
         <div class="kc-act-btn kc-act-del" onclick="deleteCategory('${KC_TYPE}','${c.id}')">${ICON.trash||''}</div>
       </div>
+      <div class="kc-item kc-item-slide glass-sm" data-cat-id="${c.id}">
+        <div class="kc-icon" style="background:${c.color}22;color:${c.color}">${ICON[catIcon(c.id)]||ICON.package}</div>
+        <div class="kc-name">${escapeHtml(c.label)}</div>
+      </div>
     </div>`).join('');
+  initKcSwipe();
 }
+
+/* Swipe-to-reveal for category rows — same interaction as wallet cards
+   (see initWalletSwipe): drag a row left to uncover its Edit/Hapus
+   buttons underneath instead of showing them permanently on every row.
+   Only one row stays open at a time. */
+function initKcSwipe() {
+  document.querySelectorAll('.kc-item-slide').forEach(slide => {
+    const wrap    = slide.closest('.kc-item-wrap');
+    const actions = wrap ? wrap.querySelector('.kc-actions') : null;
+    if (!wrap || !actions) return;
+    const maxOffset = () => actions.offsetWidth;
+    let startX = 0, startY = 0, baseX = 0, dragging = false, decided = false, horiz = false;
+
+    slide.addEventListener('touchstart', e => {
+      closeOtherKcSwipes(slide);
+      startX = e.touches[0].clientX;
+      startY = e.touches[0].clientY;
+      baseX  = getKcSlideX(slide);
+      dragging = true; decided = false; horiz = false;
+      slide.classList.add('dragging');
+      actions.classList.add('dragging');
+    }, {passive:true});
+
+    slide.addEventListener('touchmove', e => {
+      if (!dragging) return;
+      const dx = e.touches[0].clientX - startX;
+      const dy = e.touches[0].clientY - startY;
+      if (!decided) {
+        if (Math.abs(dx) < 6 && Math.abs(dy) < 6) return;
+        decided = true;
+        horiz = Math.abs(dx) > Math.abs(dy);
+        if (!horiz) { dragging = false; slide.classList.remove('dragging'); actions.classList.remove('dragging'); return; }
+      }
+      const next = Math.max(-maxOffset(), Math.min(0, baseX + dx));
+      slide.style.transform = `translateX(${next}px)`;
+      setKcActionsProgress(actions, Math.min(1, Math.abs(next) / maxOffset()));
+    }, {passive:true});
+
+    function endDrag() {
+      if (!dragging) return;
+      dragging = false;
+      slide.classList.remove('dragging');
+      actions.classList.remove('dragging');
+      if (!decided || !horiz) return;
+      const x = getKcSlideX(slide);
+      const open = x < -maxOffset() * 0.35;
+      slide.style.transform = `translateX(${open ? -maxOffset() : 0}px)`;
+      setKcActionsProgress(actions, open ? 1 : 0);
+      _kcSwipeOpen = open ? slide : null;
+    }
+    slide.addEventListener('touchend', endDrag);
+    slide.addEventListener('touchcancel', endDrag);
+  });
+}
+let _kcSwipeOpen = null;
+function getKcSlideX(el) {
+  const m = /translateX\((-?[\d.]+)px\)/.exec(el.style.transform || '');
+  return m ? parseFloat(m[1]) : 0;
+}
+function setKcActionsProgress(actions, progress) {
+  actions.style.opacity   = progress;
+  const scale = 0.86 + 0.14 * progress;
+  const tx    = (1 - progress) * 10;
+  actions.style.transform = `scale(${scale}) translateX(${tx}px)`;
+}
+function closeOtherKcSwipes(except) {
+  document.querySelectorAll('.kc-item-slide').forEach(s => {
+    if (s === except) return;
+    if (getKcSlideX(s) === 0) return;
+    s.style.transform = 'translateX(0px)';
+    const actions = s.closest('.kc-item-wrap')?.querySelector('.kc-actions');
+    if (actions) setKcActionsProgress(actions, 0);
+  });
+  if (_kcSwipeOpen && _kcSwipeOpen !== except) _kcSwipeOpen = null;
+}
+document.addEventListener('touchstart', e => {
+  if (!_kcSwipeOpen) return;
+  if (e.target.closest('.kc-item-wrap')) return;
+  closeOtherKcSwipes(null);
+}, {passive:true});
 
 function renderCategoryIconGrid() {
   const grid = document.getElementById('categoryIconGrid');
@@ -1942,28 +2357,11 @@ function deleteCategory(type, id) {
     if (type === 'expense') {
       BUDGET.cats = BUDGET.cats.filter(c => c.id !== id);
       renderBudget();
-      renderBudgetCatRows();
     }
     saveToStorage();
     renderKategoriList();
     showToast('Kategori dihapus', 'success');
   }, 'trash');
-}
-
-/* ══════════════════════════════════════════
-   BUDGET (settings modal)
-══════════════════════════════════════════ */
-function submitBudgetSettings() {
-  BUDGET.total = parseInt(document.getElementById('budgetTotalInput').value) || 0;
-  document.querySelectorAll('.budget-cat-input').forEach(inp => {
-    const cat = BUDGET.cats.find(c => c.id === inp.dataset.cat);
-    if (cat) cat.limit = parseInt(inp.value) || 0;
-  });
-  closeBudgetSettingsModal();
-  renderBudget();
-  updateSettingsPage();
-  saveToStorage();
-  showToast('Anggaran berhasil disimpan', 'success');
 }
 
 function openUsernameModal() {
@@ -2020,11 +2418,12 @@ function submitWallet() {
   };
   const theme = WALLET_THEMES[type] || WALLET_THEMES.bank;
   const id = 'w_' + Date.now();
-  WALLETS = [...WALLETS, { id, name, bank, bal, currency, ...theme }];
+  WALLETS = [...WALLETS, { id, name, bank, bal, currency, type, ...theme }];
   saveToStorage();
   closeAddWalletModal();
   renderWallets();
   updateAccountDropdown();
+  renderDashboard();
   showToast('Akun ditambahkan', 'success');
 }
 
@@ -3620,7 +4019,7 @@ function lockUnlockSuccess() {
   LOCKUI.buffer = '';
   window._appUnlocked = true;
   const scr = document.getElementById('lockScreen');
-  const icon = document.getElementById('lockIcon');
+  const icon = document.getElementById('lockPadlockIcon');
   // Play the little padlock "ceklek" open animation (shackle pops open + icon turns white)
   // before the whole lock screen disappears, instead of just vanishing instantly.
   if (icon) icon.classList.add('unlocked');
@@ -4080,8 +4479,9 @@ function _initApp() {
   const greetEl = document.getElementById('topbarGreeting');
   if (greetEl) greetEl.textContent = getGreeting();
 
-  // Position the sliding nav indicator under Beranda instantly (no glide on first paint)
-  moveNavIndicator('dashboard', false);
+  // Mark Beranda active and wire up the floating nav rail
+  setActiveNavBubble('dashboard');
+  initNavRail();
 
   // Scroll detection for topbar glass
   setTimeout(initScrollDetection, 100);
@@ -5035,7 +5435,53 @@ const PICKER_REGISTRY = {
 let _pickerActiveField = null;
 let _pickerActiveOpts  = [];
 
-function openPicker(fieldId, title) {
+/* ══════════════════════════════════════════
+   DROPDOWN ANCHORING
+   Positions a floating glass panel (the option picker, a date picker, the
+   currency filter, ...) right under the field/button that opened it —
+   flipping above and clamping to the viewport edges when there isn't
+   enough room — instead of the old behaviour of popping up centered on
+   screen like a full modal.
+══════════════════════════════════════════ */
+function anchorDropdown(panel, trigger) {
+  if (!panel || !trigger) return;
+  const gap = 8, margin = 12;
+  const vw = window.innerWidth, vh = window.innerHeight;
+  const t  = trigger.getBoundingClientRect();
+
+  // Reset so we measure the panel's natural size for this content.
+  panel.style.left = margin + 'px';
+  panel.style.top  = margin + 'px';
+  panel.style.maxHeight = '';
+  panel.style.minWidth = t.width + 'px';
+  const pRect = panel.getBoundingClientRect();
+  const pw = pRect.width, ph = pRect.height;
+
+  let left = Math.min(Math.max(t.left, margin), vw - pw - margin);
+  if (left < margin) left = margin;
+
+  const spaceBelow = vh - t.bottom - gap - margin;
+  const spaceAbove = t.top - gap - margin;
+  let top, origin, ty;
+  if (spaceBelow >= Math.min(ph, 160) || spaceBelow >= spaceAbove) {
+    top = t.bottom + gap;
+    origin = 'top center'; ty = '-8px';
+    if (ph > spaceBelow) panel.style.maxHeight = spaceBelow + 'px';
+  } else {
+    origin = 'bottom center'; ty = '8px';
+    const h = Math.min(ph, spaceAbove);
+    top = t.top - gap - h;
+    if (ph > spaceAbove) panel.style.maxHeight = spaceAbove + 'px';
+  }
+  if (top < margin) top = margin;
+
+  panel.style.left = left + 'px';
+  panel.style.top  = top + 'px';
+  panel.style.setProperty('--dd-origin', origin);
+  panel.style.setProperty('--dd-ty', ty);
+}
+
+function openPicker(trigger, fieldId, title) {
   const reg = PICKER_REGISTRY[fieldId];
   if (!reg) return;
   _pickerActiveField = fieldId;
@@ -5046,7 +5492,7 @@ function openPicker(fieldId, title) {
   document.getElementById('pickerTitle').textContent = title || reg.title;
   document.getElementById('pickerOpts').innerHTML = opts.map((o, i) => `
     <div class="picker-opt ${o.value === curVal ? 'selected' : ''}" data-idx="${i}">
-      ${o.icon ? ICON[o.icon]||'' : ''} ${escapeHtml(o.text)}
+      ${o.icon ? ICON[o.icon]||'' : ''}<span>${escapeHtml(o.text)}</span>
     </div>`).join('');
   document.querySelectorAll('#pickerOpts .picker-opt').forEach(el => {
     el.addEventListener('click', () => {
@@ -5054,7 +5500,9 @@ function openPicker(fieldId, title) {
       pickOpt(fieldId, o);
     });
   });
-  document.getElementById('pickerOverlay').classList.add('open');
+  const overlay = document.getElementById('pickerOverlay');
+  overlay.classList.add('open');
+  if (trigger) anchorDropdown(overlay.querySelector('.picker-modal'), trigger);
 }
 
 function pickOpt(fieldId, o) {
@@ -5134,7 +5582,7 @@ function renderCurrencyFilterPanel() {
   panel.innerHTML = opts.map(code => {
     const label = code === 'all' ? 'Semua Mata Uang' : currencyLabelText(code);
     const sel   = RIWAYAT_FILTER.currency === code;
-    return `<div class="currency-opt ${sel?'selected':''}" onclick="setRiwayatCurrency('${code}')">${escapeHtml(label)}${sel ? ' ✓' : ''}</div>`;
+    return `<div class="currency-opt ${sel?'selected':''}" onclick="setRiwayatCurrency('${code}')">${escapeHtml(label)}</div>`;
   }).join('');
 }
 
@@ -5210,6 +5658,9 @@ function openDp(panel) {
   overlay.style.display = '';
   void overlay.offsetHeight; // commit the pre-open frame so the transition below actually plays
   overlay.classList.add('open');
+  const triggerId = overlay.dataset.trigger;
+  const trigger = triggerId && document.getElementById(triggerId);
+  if (trigger) anchorDropdown(panel, trigger);
   lockDpScroll();
 }
 
@@ -5490,4 +5941,21 @@ document.addEventListener('keydown', (e) => {
   openModal();
 });
 
-window.addEventListener('DOMContentLoaded',()=>setTimeout(init,80));
+/* Every dropdown-style popup (option picker, date pickers, currency
+   filter) is `position:fixed` and anchored to its trigger via
+   anchorDropdown(). That only works reliably if nothing between them and
+   <body> ever gets a transform/filter/backdrop-filter/will-change —
+   any of those turn an ancestor into the fixed element's containing
+   block instead of the viewport (e.g. .topbar picks up backdrop-filter
+   once scrolled), which silently breaks the positioning math. Moving
+   every .dp-overlay/.picker-overlay to be a direct child of <body> once,
+   on load, sidesteps that whole class of bugs for good — nothing in the
+   CSS targets them by ancestor, so relocating them is safe.
+*/
+function relocateDropdownsToBody() {
+  document.querySelectorAll('.dp-overlay, .picker-overlay').forEach(el => {
+    if (el.parentElement !== document.body) document.body.appendChild(el);
+  });
+}
+
+window.addEventListener('DOMContentLoaded',()=>{ relocateDropdownsToBody(); setTimeout(init,80); });

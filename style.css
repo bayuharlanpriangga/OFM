@@ -26,6 +26,19 @@
   --glass-shine:     rgba(255,255,255,0.55);
   --glass-shadow:    rgba(0,0,0,0.35);
 
+  /* Opaque "liquid glass" recipe for floating surfaces that sit ON TOP of
+     page content — modals and option-picker dropdowns. These keep the
+     same glossy shine/border/shadow language as the rest of the UI, but
+     sit on a solid dark tint instead of translucent glass, so the
+     animated #bg-canvas orbs don't bleed or glare through a big panel.
+     In-page glass (cards, buttons, wallet cards) is unaffected and stays
+     on the lighter --glass-bg recipe above. */
+  --surface-bg:
+    radial-gradient(circle at 12% -10%, rgba(94,179,255,0.18), transparent 55%),
+    radial-gradient(circle at 100% 110%, rgba(148,90,255,0.16), transparent 60%),
+    rgba(15,19,36,0.95);
+  --surface-blur: blur(24px) saturate(170%);
+
   /* Shared app icon (used by the logo-forming animation pieces) */
   --app-icon: url("data:image/png;base64,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");
 }
@@ -162,23 +175,32 @@ body {
 }
 #lockScreen.open { display: flex; }
 .lock-inner { width: 100%; max-width: 320px; text-align: center; }
-.lock-icon {
-  width: 52px; height: 52px; border-radius: 16px; margin: 0 auto 14px;
-  display: flex; align-items: center; justify-content: center; color: var(--teal);
-  background: var(--glass-bg); border: 1px solid var(--glass-border);
-  box-shadow: inset 0 1px 0 rgba(255,255,255,0.25);
+/* Bare padlock icon — no card/background, sits right above the app logo. */
+.lock-padlock {
+  width: 22px; height: 22px; margin: 0 auto 10px;
+  display: flex; align-items: center; justify-content: center;
+  color: var(--teal);
   transition: color 0.3s ease 0.05s;
 }
-/* Padlock "ceklek" unlock animation — only the shackle (the U-shaped loop) swings open on
-   its bottom-right corner like a real padlock popping loose, while the body stays put.
-   Icon color also flips from teal (locked) to white (just unlocked), see .unlocked below. */
-.lock-shackle {
+.lock-padlock .ic { width: 100%; height: 100%; }
+/* Unlock animation: the right leg is fixed/anchored in the body and never moves. The free
+   left leg + arc (the "kait") gets mirrored (scaleX flip, not rotated) around the hinge at
+   the top of the fixed right leg, so it flips over to hang on the right side. A flip keeps
+   the arc's exact curve — zero distortion — while still touching the hinge with no gap. */
+.lock-shackle-swing {
   transform-box: fill-box;
-  transform-origin: 100% 100%;
+  transform-origin: 100% 50%; /* pivot = top of the fixed right leg, i.e. (16,7) in the viewBox */
   transition: transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
-.lock-icon.unlocked { color: #fff; }
-.lock-icon.unlocked .lock-shackle { transform: translate(1px, -1.5px) rotate(-38deg); }
+.lock-padlock.unlocked { color: #fff; }
+.lock-padlock.unlocked .lock-shackle-swing { transform: scaleX(-1); }
+
+/* App logo — bare icon, no card, sits right below the padlock. */
+.lock-icon {
+  width: 40px; height: 40px; margin: 0 auto 14px;
+  display: flex; align-items: center; justify-content: center;
+}
+.lock-icon-img { width: 100%; height: 100%; object-fit: contain; }
 .lock-title { font-family: var(--disp); font-size: 22px; font-weight: 800; margin-bottom: 18px; }
 .lock-sub { font-size: 13px; color: var(--txt2); margin-bottom: 22px; }
 .pinpad-dots { display: flex; justify-content: center; gap: 12px; margin-bottom: 10px; }
@@ -556,94 +578,39 @@ body {
 .icon-btn:active { transform: scale(0.92); }
 
 /* ═══════════════════════════════════════
-   BOTTOM NAV — Floating Pill
+   BOTTOM NAV — Hidden rail, revealed from a
+   floating liquid-glass button (bottom-right).
+   Tapping the FAB grows a vertical trail of
+   round glass bubbles upward along the edge;
+   dragging across them ripples each one open
+   to show its label, like a wave.
 ═══════════════════════════════════════ */
 .bottom-nav {
   position: fixed;
-  bottom: 20px;
-  left: 50%;
-  transform: translateX(-50%);
-  width: auto;
-  height: 64px;
-  padding: 0 10px;
-  /* Liquid glass pill */
-  background: rgba(18, 24, 40, 0.55);
-  backdrop-filter: blur(40px) saturate(200%) brightness(1.15);
-  -webkit-backdrop-filter: blur(40px) saturate(200%) brightness(1.15);
-  border-radius: 99px;
-  border: 1px solid rgba(255,255,255,0.22);
-  border-bottom-color: rgba(255,255,255,0.08);
-  box-shadow:
-    inset 0 1.5px 0 rgba(255,255,255,0.45),
-    inset 0 -1px 0 rgba(0,0,0,0.25),
-    0 8px 32px rgba(0,0,0,0.45),
-    0 2px 8px rgba(0,0,0,0.2),
-    0 0 0 1px rgba(255,255,255,0.05);
-  display: flex;
-  align-items: center;
-  gap: 2px;
+  inset: 0;
+  pointer-events: none;
   z-index: 100;
 }
 .bottom-nav.hidden { display: none; }
 
-/* Specular shine on top of pill */
-.bottom-nav::before {
-  content: '';
-  position: absolute;
-  top: 0; left: 8px; right: 8px;
-  height: 50%;
-  background: linear-gradient(180deg, rgba(255,255,255,0.14) 0%, transparent 100%);
-  border-radius: 99px 99px 0 0;
-  pointer-events: none;
-}
-
-.nav-item {
-  display: flex; flex-direction: column; align-items: center; gap: 2px;
-  cursor: pointer; padding: 8px 12px; border-radius: 99px;
-  min-width: 52px; transition: all 0.2s cubic-bezier(0.22,1,0.36,1);
-  position: relative; z-index: 1;
-}
-.nav-item:active { transform: scale(0.9); }
-
-/* The moving glass highlight lives in a single shared element (#navIndicator)
-   that glides between items instead of popping in/out per item — see
-   moveNavIndicator() in JS. */
-.nav-indicator {
-  position: absolute;
-  left: 0; top: 0;
-  border-radius: 99px;
-  background: rgba(255,255,255,0.12);
-  box-shadow: inset 0 1px 0 rgba(255,255,255,0.3), inset 0 -1px 0 rgba(0,0,0,0.15);
-  transition: transform 0.45s cubic-bezier(0.22,1,0.36,1), width 0.45s cubic-bezier(0.22,1,0.36,1);
-  pointer-events: none;
+/* Dims the page while the rail is open; also closes it on tap */
+.nav-rail-scrim {
+  position: fixed; inset: 0;
+  background: radial-gradient(circle at calc(100% - 40px) 100%, rgba(6,9,18,0.35), rgba(6,9,18,0.55) 70%);
   opacity: 0;
-  z-index: 0;
-}
-.nav-indicator.ready { opacity: 1; }
-
-.nav-icon  { font-size: 20px; transition: transform 0.25s cubic-bezier(0.34,1.56,0.64,1); line-height: 1; }
-.nav-label { font-size: 9px; font-weight: 600; color: var(--txt3); letter-spacing: 0.3px; transition: color 0.15s; }
-.nav-item.active .nav-icon  { transform: scale(1.18) translateY(-1px); }
-.nav-item.active .nav-label { color: var(--teal); }
-
-/* Active teal dot indicator — fades in/out in sync with the sliding pill */
-.nav-item::after {
-  content: '';
-  position: absolute;
-  bottom: 4px; left: 50%; transform: translateX(-50%);
-  width: 4px; height: 4px;
-  border-radius: 50%;
-  background: var(--teal);
-  box-shadow: 0 0 6px rgba(42,232,196,0.8);
-  opacity: 0;
+  pointer-events: none;
   transition: opacity 0.3s ease;
 }
-.nav-item.active::after { opacity: 1; }
+.nav-rail-scrim.open { opacity: 1; pointer-events: auto; }
 
-.nav-center {
-  width: 48px; height: 48px; border-radius: 50%;
+/* The FAB — always visible (unless .bottom-nav is .hidden) */
+.nav-fab {
+  position: fixed;
+  right: 20px;
+  bottom: max(20px, env(safe-area-inset-bottom, 0px) + 14px);
+  width: 58px; height: 58px; border-radius: 50%;
   display: flex; align-items: center; justify-content: center;
-  cursor: pointer; font-size: 24px; color: #fff;
+  cursor: pointer; color: #fff;
   background: linear-gradient(145deg, rgba(42,232,196,0.95), rgba(0,180,150,0.9));
   backdrop-filter: blur(20px);
   border: 1px solid rgba(255,255,255,0.5);
@@ -651,13 +618,172 @@ body {
   box-shadow:
     inset 0 2px 0 rgba(255,255,255,0.6),
     inset 0 -1px 0 rgba(0,0,0,0.2),
-    0 0 8px rgba(42,232,196,0.25),
-    0 4px 14px rgba(0,0,0,0.35);
-  transition: transform 0.2s cubic-bezier(0.34,1.56,0.64,1), box-shadow 0.15s;
-  flex-shrink: 0;
-  margin: 0 2px;
+    0 0 10px rgba(42,232,196,0.3),
+    0 6px 18px rgba(0,0,0,0.4);
+  transition: transform 0.25s cubic-bezier(0.34,1.56,0.64,1), box-shadow 0.2s;
+  pointer-events: auto;
+  z-index: 102;
 }
-.nav-center:active { transform: scale(0.88); }
+.nav-fab:active { transform: scale(0.9); }
+.nav-fab-icon { width: 24px; height: 24px; transition: transform 0.35s cubic-bezier(0.22,1,0.36,1); }
+.nav-fab.open .nav-fab-icon { transform: rotate(45deg); }
+.nav-fab-dot {
+  position: absolute; top: 3px; right: 3px;
+  width: 9px; height: 9px; border-radius: 50%;
+  background: var(--teal);
+  border: 1.5px solid rgba(10,14,26,0.9);
+  box-shadow: 0 0 6px rgba(42,232,196,0.9);
+  transition: opacity 0.2s, background 0.2s;
+}
+.nav-fab.open .nav-fab-dot { opacity: 0; }
+
+/* The vertical trail of bubbles, anchored above the FAB, right-edge aligned
+   so each bubble only ever grows *leftward* off the screen edge. */
+.nav-rail {
+  position: fixed;
+  right: 20px;
+  bottom: max(90px, env(safe-area-inset-bottom, 0px) + 84px);
+  display: flex;
+  flex-direction: column-reverse;
+  align-items: flex-end;
+  gap: 10px;
+  z-index: 101;
+  max-height: min(62vh, 560px);
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: none;
+}
+
+/* The "bridge" the bubbles ride on — a liquid-glass lane whose raised glass
+   edge only shows along its own left/right sides (not a filled center),
+   so it reads as a rail the bubbles are threaded onto. */
+.nav-rail-track {
+  position: absolute;
+  top: 4px; bottom: 4px;
+  right: 15px;
+  width: 16px;
+  border-radius: 99px;
+  background: rgba(18,24,40,0.28);
+  backdrop-filter: blur(14px);
+  box-shadow:
+    inset 3px 0 5px -3px rgba(255,255,255,0.5),
+    inset -3px 0 5px -3px rgba(255,255,255,0.5),
+    inset 0 0 10px rgba(0,0,0,0.25);
+  opacity: 0;
+  transform: scaleY(0.6);
+  transform-origin: bottom;
+  transition: opacity 0.35s ease, transform 0.4s cubic-bezier(0.22,1,0.36,1);
+  pointer-events: none;
+  z-index: 0;
+}
+.nav-rail.open .nav-rail-track { opacity: 1; transform: scaleY(1); }
+
+.nav-bubble {
+  --wave: 0;
+  position: relative;
+  z-index: 1;
+  display: flex; flex-direction: row; align-items: center; justify-content: flex-end;
+  overflow: hidden;
+  height: 46px; width: 46px;
+  border-radius: 23px;
+  padding: 0;
+  cursor: pointer;
+  opacity: 0;
+  transform: translateY(18px) scale(0.35);
+  transition:
+    opacity 0.3s ease, transform 0.4s cubic-bezier(0.34,1.56,0.64,1),
+    width 0.32s cubic-bezier(0.22,1,0.36,1), background 0.2s, border-color 0.2s;
+  pointer-events: none;
+  /* Liquid glass bubble */
+  background: rgba(20,26,44,0.55);
+  backdrop-filter: blur(16px) saturate(180%);
+  -webkit-backdrop-filter: blur(16px) saturate(180%);
+  border: 1px solid rgba(255,255,255,0.28);
+  border-bottom-color: rgba(255,255,255,0.06);
+  box-shadow:
+    inset 0 1.5px 0 rgba(255,255,255,0.4),
+    inset 0 -1px 0 rgba(0,0,0,0.2),
+    0 4px 14px rgba(0,0,0,0.35);
+}
+.nav-rail.open .nav-bubble {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+  pointer-events: auto;
+}
+/* Stagger the reveal so the trail feels like it's creeping upward from the FAB */
+.nav-rail.open .nav-bubble:nth-child(1) { transition-delay: 0.02s; }
+.nav-rail.open .nav-bubble:nth-child(2) { transition-delay: 0.05s; }
+.nav-rail.open .nav-bubble:nth-child(3) { transition-delay: 0.08s; }
+.nav-rail.open .nav-bubble:nth-child(4) { transition-delay: 0.11s; }
+.nav-rail.open .nav-bubble:nth-child(5) { transition-delay: 0.14s; }
+.nav-rail.open .nav-bubble:nth-child(6) { transition-delay: 0.17s; }
+.nav-rail.open .nav-bubble:nth-child(7) { transition-delay: 0.20s; }
+.nav-rail.open .nav-bubble:nth-child(8) { transition-delay: 0.23s; }
+.nav-rail.open .nav-bubble:nth-child(9) { transition-delay: 0.26s; }
+.nav-rail.open .nav-bubble:nth-child(10){ transition-delay: 0.29s; }
+
+.nav-bubble:active { background: rgba(42,232,196,0.16); border-color: rgba(42,232,196,0.5); }
+.nav-bubble.active { background: rgba(42,232,196,0.15); border-color: rgba(42,232,196,0.45); box-shadow: inset 0 1.5px 0 rgba(210,255,245,0.4), inset 0 -1px 0 rgba(0,0,0,0.2), 0 0 10px rgba(42,232,196,0.25); }
+.nav-bubble.active .nb-glyph { color: var(--teal); }
+.nav-bubble.nb-accent { background: linear-gradient(145deg, rgba(42,232,196,0.28), rgba(0,180,150,0.18)); border-color: rgba(42,232,196,0.5); }
+.nav-bubble.nb-accent .nb-glyph { color: var(--teal); }
+
+/* Pressed, or caught by the drag-wave: pill grows leftward (right edge —
+   the icon — stays put) and the label slides into the freed space. */
+.nav-bubble:active,
+.nav-bubble.nb-peek,
+.nav-bubble.nb-focus {
+  width: var(--nb-w, 128px);
+}
+#nav-kelolakategori { --nb-w: 196px; }
+#nav-dashboard, #nav-analytics { --nb-w: 118px; }
+#nav-akun, #nav-goals { --nb-w: 104px; }
+.nav-bubble:active .nb-label,
+.nav-bubble.nb-peek .nb-label,
+.nav-bubble.nb-focus .nb-label {
+  opacity: 1;
+  transform: translateX(0);
+}
+/* --wave (0..1, set from JS while dragging) softly scales nearby bubbles,
+   so moving a finger up/down the rail reads as a ripple passing through it. */
+.nav-bubble { transform: translateY(0) scale(calc(1 + var(--wave) * 0.16)); }
+.nav-rail:not(.open) .nav-bubble { transform: translateY(18px) scale(0.35); }
+
+.nb-glyph {
+  order: 2;
+  flex-shrink: 0;
+  width: 44px; height: 44px;
+  display: flex; align-items: center; justify-content: center;
+  color: var(--txt2);
+}
+.nb-glyph .ic { width: 19px; height: 19px; }
+.nb-label {
+  order: 1;
+  font-family: var(--disp); font-size: 12.5px; font-weight: 600;
+  color: var(--txt); white-space: nowrap;
+  opacity: 0;
+  max-width: 0;
+  overflow: hidden;
+  transform: translateX(8px);
+  transition: opacity 0.22s ease, transform 0.28s cubic-bezier(0.22,1,0.36,1), max-width 0.32s cubic-bezier(0.22,1,0.36,1);
+}
+.nav-bubble:active .nb-label,
+.nav-bubble.nb-peek .nb-label,
+.nav-bubble.nb-focus .nb-label {
+  opacity: 1;
+  max-width: 160px;
+  transform: translateX(0);
+  padding-left: 4px;
+}
+
+/* Shorter viewports: shrink the bubbles/gap a touch so all 10 stops
+   still fit above the FAB without scrolling. */
+@media (max-height: 720px) {
+  .nav-rail { gap: 7px; bottom: max(84px, env(safe-area-inset-bottom, 0px) + 78px); }
+  .nav-bubble { width: 40px; height: 40px; border-radius: 20px; }
+  .nb-glyph { width: 38px; height: 38px; }
+  .nb-glyph .ic { width: 17px; height: 17px; }
+}
 
 /* ═══════════════════════════════════════
    QUICK NOTE — floating trigger (Catat Transaksi page only)
@@ -722,7 +848,7 @@ body {
 ═══════════════════════════════════════ */
 .section-head {
   display: flex; align-items: center; justify-content: space-between;
-  padding: 20px 20px 10px;
+  padding: 18px 20px 10px;
 }
 .section-head h2 {
   font-family: var(--disp); font-size: 17px; font-weight: 600; color: var(--txt);
@@ -746,9 +872,18 @@ body {
   line-height: 1; margin-bottom: 6px;
 }
 .balance-amount .cur { font-size: 20px; color: var(--teal); margin-right: 3px; }
-.balance-multi-currency {
-  font-size: 11.5px; color: var(--txt3); margin: -2px 0 10px;
-  font-family: var(--mono); letter-spacing: 0.2px;
+.balance-cur-dots {
+  display: flex; gap: 5px; align-items: center;
+  margin: -2px 0 10px;
+}
+.balance-cur-dots .dot {
+  width: 5px; height: 5px; border-radius: 50%;
+  background: rgba(255,255,255,0.25);
+  transition: background .3s ease, transform .3s ease;
+}
+.balance-cur-dots .dot.active { background: var(--teal); transform: scale(1.4); }
+.balance-amount, .bp-val.income, .bp-val.expense {
+  transition: opacity .28s ease, transform .28s ease;
 }
 .balance-change {
   font-size: 12px; font-weight: 500;
@@ -932,6 +1067,35 @@ body {
 }
 
 .budget-cats { padding: 0 20px; display: flex; flex-direction: column; gap: 10px; }
+/* Swipe-to-reveal for budget category cards — same interaction as wallet
+   cards (.wallet-item-wrap) and category rows (.kc-item-wrap): the card
+   slides left on drag, uncovering Edit/Hapus underneath on the right
+   instead of managing categories inside the "Tambah Anggaran" modal. */
+.bcat-item-wrap {
+  position: relative;
+  overflow: hidden;
+  border-radius: 18px;
+}
+.bcat-actions {
+  position: absolute; top: 0; right: 0; bottom: 0;
+  display: flex; flex-direction: column; gap: 6px;
+  width: 70px;
+  padding-left: 8px;
+  z-index: 0;
+  opacity: 0;
+  transform: scale(0.86) translateX(10px);
+  transform-origin: right center;
+  transition: opacity 0.22s ease, transform 0.22s cubic-bezier(0.22,1,0.36,1);
+}
+.bcat-actions.dragging { transition: none; }
+.bcat-item-slide {
+  position: relative; z-index: 1;
+  touch-action: pan-y;
+  transition: transform 0.25s cubic-bezier(0.22,1,0.36,1);
+  transform: translateX(0);
+}
+.bcat-item-slide.dragging { transition: none; }
+.bcat-item-slide .bcat { margin: 0; }
 .bcat { padding: 14px 16px; }
 .bcat-head { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; position: relative; z-index: 1; }
 .bcat-icon { width: 36px; height: 36px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 16px; }
@@ -950,35 +1114,6 @@ body {
 .bes-icon { width: 44px; height: 44px; margin: 0 auto 12px; border-radius: 12px; background: rgba(42,232,196,0.12); color: var(--teal); display: flex; align-items: center; justify-content: center; }
 .bes-title { font-size: 14px; font-weight: 600; margin-bottom: 4px; }
 .bes-sub   { font-size: 12px; color: var(--txt3); line-height: 1.4; }
-
-.budget-cat-row { display: flex; align-items: center; gap: 10px; padding: 8px 0; }
-.bcr-icon { width: 34px; height: 34px; border-radius: 9px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
-.bcr-icon .ic { width: 16px; height: 16px; }
-.bcr-name { font-size: 13px; font-weight: 500; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.bcr-currency {
-  font-family: var(--mono); font-size: 11px; font-weight: 600; color: var(--txt2);
-  background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.15);
-  border-radius: 8px; padding: 5px 7px; display: flex; align-items: center; gap: 2px;
-  flex-shrink: 0; cursor: pointer;
-}
-.bcr-currency .picker-arrow { font-size: 8px; opacity: 0.6; }
-.bcr-limit-input {
-  width: 84px; background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.15);
-  border-radius: 10px; padding: 8px 10px; color: var(--txt); font-family: var(--sans); font-size: 13px;
-  text-align: right;
-}
-.bcr-del {
-  width: 28px; height: 28px; border-radius: 50%; flex-shrink: 0; display: flex; align-items: center; justify-content: center;
-  background: rgba(255,107,132,0.12); color: var(--red); cursor: pointer;
-}
-.bcr-del .ic { width: 14px; height: 14px; }
-.budget-cat-empty-hint { font-size: 12px; color: var(--txt3); padding: 6px 0 2px; }
-
-.add-budget-cat-trigger {
-  margin-top: 8px; padding: 12px; border: 1.5px dashed rgba(42,232,196,0.4); border-radius: var(--r-sm);
-  display: flex; align-items: center; justify-content: center; gap: 8px; cursor: pointer; color: var(--teal);
-  font-size: 13px; font-weight: 500; background: rgba(42,232,196,0.06);
-}
 
 .icon-pick-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px; margin-top: 4px; }
 .icon-pick-item {
@@ -1027,7 +1162,7 @@ body {
 .compare-empty { margin: 0 20px 18px; padding: 14px 16px; font-size: 12px; color: var(--txt3); text-align: center; }
 
 /* Forecasting sederhana — proyeksi saldo akhir bulan */
-.forecast-card { margin: 0 20px 18px; padding: 18px; }
+.forecast-card { margin: 0 20px 0; padding: 18px; }
 .forecast-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
 .forecast-label { font-size: 10.5px; color: var(--txt3); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 7px; }
 .forecast-val { font-family: var(--disp); font-size: 26px; font-weight: 700; letter-spacing: -0.5px; line-height: 1.15; }
@@ -1050,7 +1185,7 @@ body {
 .forecast-warn svg { width: 16px; height: 16px; flex-shrink: 0; }
 
 /* Auto insight cards */
-.insight-list { display: flex; flex-direction: column; gap: 10px; margin: 0 20px 6px; }
+.insight-list { display: flex; flex-direction: column; gap: 10px; margin: 0 20px 0; }
 .insight-card { display: flex; align-items: flex-start; gap: 12px; padding: 14px; }
 .insight-icon { width: 36px; height: 36px; border-radius: 12px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
 .insight-icon svg { width: 17px; height: 17px; }
@@ -1087,7 +1222,10 @@ body {
   border-radius: inherit;
   pointer-events: none;
 }
-.wallet-card:active { transform: scale(0.97); }
+/* No :active press-scale here anymore — the card sits in front of its
+   own Edit/Hapus buttons (see the swipe-to-reveal block further down),
+   so shrinking it on tap would show slivers of those buttons through
+   the edges on every single tap. Swiping is the only interaction now. */
 .wallet-chip { font-size: 10px; font-weight: 600; letter-spacing: 1px; text-transform: uppercase; padding: 3px 9px; border-radius: 99px; display: inline-block; margin-bottom: 10px; background: rgba(255,255,255,0.15); position: relative; z-index: 1; }
 .wallet-name { font-family: var(--disp); font-size: 20px; font-weight: 600; margin-bottom: 3px; position: relative; z-index: 1; }
 .wallet-bank { font-size: 12px; opacity: 0.55; margin-bottom: 16px; position: relative; z-index: 1; }
@@ -1130,12 +1268,9 @@ body {
   width: 100%; max-width: 400px;
   margin: 0 auto;
   max-height: 85vh;
-  background:
-    radial-gradient(circle at 12% -10%, rgba(94,179,255,0.4), transparent 55%),
-    radial-gradient(circle at 100% 110%, rgba(148,90,255,0.32), transparent 60%),
-    rgba(255,255,255,0.12);
-  backdrop-filter: blur(50px) saturate(200%) brightness(1.1);
-  -webkit-backdrop-filter: blur(50px) saturate(200%) brightness(1.1);
+  background: var(--surface-bg);
+  backdrop-filter: var(--surface-blur);
+  -webkit-backdrop-filter: var(--surface-blur);
   border-radius: 24px;
   border: 1px solid rgba(255,255,255,0.28);
   box-shadow:
@@ -1217,9 +1352,12 @@ body {
 }
 .cat-chip.selected {
   background: rgba(42,232,196,0.15);
-  border-color: rgba(42,232,196,0.4);
+  border-color: rgba(42,232,196,0.45);
   color: var(--teal);
-  box-shadow: inset 0 1px 0 rgba(255,255,255,0.3), 0 0 10px rgba(42,232,196,0.2);
+  /* Inner sheen tinted teal (not plain white) so it blends into the
+     border color all the way around the pill's curve instead of reading
+     as a mismatched pale arc at the top. */
+  box-shadow: inset 0 1px 0 rgba(190,255,242,0.35), 0 0 10px rgba(42,232,196,0.25);
 }
 
 .modal-form { padding: 0 20px; display: flex; flex-direction: column; gap: 10px; position: relative; z-index: 1; }
@@ -1561,32 +1699,61 @@ body {
   #app { box-shadow: 0 0 80px rgba(0,0,0,0.6); }
 }
 
-/* Wallet action row */
-.wallet-item-wrap { margin: 0 20px 16px; }
-.wallet-actions {
-  display: flex; gap: 8px; margin-top: 8px;
+/* Wallet swipe-to-reveal actions — the card itself slides left on drag,
+   uncovering Edit/Hapus underneath on the right instead of showing them
+   permanently under every card. */
+.wallet-item-wrap {
+  margin: 0 20px 16px;
+  position: relative;
+  overflow: hidden;
+  border-radius: 22px;
 }
+.wallet-actions {
+  position: absolute; top: 0; right: 0; bottom: 0;
+  display: flex; flex-direction: column; gap: 6px;
+  width: 78px;
+  padding-left: 8px;
+  z-index: 0;
+  /* Hidden and slightly shrunk by default — revealed progressively as the
+     card is dragged (see initWalletSwipe in app.js), not just sitting
+     static behind the card waiting to be uncovered. */
+  opacity: 0;
+  transform: scale(0.86) translateX(10px);
+  transform-origin: right center;
+  transition: opacity 0.22s ease, transform 0.22s cubic-bezier(0.22,1,0.36,1);
+}
+.wallet-actions.dragging { transition: none; }
 .wact-btn {
-  flex: 1; padding: 10px 0;
-  border-radius: var(--r-sm);
-  font-size: 13px; font-weight: 600;
+  flex: 1;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;
+  border-radius: 16px;
+  font-size: 11px; font-weight: 600;
   cursor: pointer; border: 1px solid rgba(255,255,255,0.15);
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
-  transition: all 0.15s;
+  transition: background 0.15s;
 }
-.wact-btn:active { transform: scale(0.97); }
+.wact-btn:active { transform: scale(0.95); }
+.wact-btn .ic { width: 18px; height: 18px; }
 .wact-edit {
-  background: rgba(255,255,255,0.08);
+  background: rgba(255,255,255,0.1);
   color: var(--txt2);
 }
-.wact-edit:hover { background: rgba(255,255,255,0.14); }
+.wact-edit:active { background: rgba(255,255,255,0.16); }
 .wact-del {
-  background: rgba(255,107,132,0.10);
+  background: rgba(255,107,132,0.14);
   color: var(--red);
-  border-color: rgba(255,107,132,0.25);
+  border-color: rgba(255,107,132,0.3);
 }
-.wact-del:hover { background: rgba(255,107,132,0.18); }
+.wact-del:active { background: rgba(255,107,132,0.22); }
+.wallet-card-slide {
+  position: relative; z-index: 1;
+  touch-action: pan-y;
+  transition: transform 0.25s cubic-bezier(0.22,1,0.36,1);
+  transform: translateX(0);
+}
+.wallet-card-slide.dragging { transition: none; }
+.wallet-card-slide .wallet-card { margin: 0; }
 
 /* ═══════════════════════════════════════
    SAVING GOALS PAGE
@@ -1738,12 +1905,9 @@ body {
   left: 50%;
   transform: translateX(-50%) translateY(-14px) scale(0.97);
   width: calc(100% - 32px); max-width: 398px;
-  background:
-    radial-gradient(circle at 12% -10%, rgba(94,179,255,0.4), transparent 55%),
-    radial-gradient(circle at 100% 110%, rgba(148,90,255,0.32), transparent 60%),
-    rgba(255,255,255,0.12);
-  backdrop-filter: blur(50px) saturate(200%) brightness(1.1);
-  -webkit-backdrop-filter: blur(50px) saturate(200%) brightness(1.1);
+  background: var(--surface-bg);
+  backdrop-filter: var(--surface-blur);
+  -webkit-backdrop-filter: var(--surface-blur);
   border-radius: 26px;
   border: 1px solid rgba(255,255,255,0.28);
   border-bottom-color: rgba(255,255,255,0.08);
@@ -1831,79 +1995,75 @@ body {
 .picker-trigger:active { background: rgba(255,255,255,0.13); border-color: rgba(42,232,196,0.4); }
 .picker-arrow { font-size: 10px; color: var(--txt3); }
 
-/* ═══ PICKER MODAL (centered popup) ═══ */
+/* ═══ PICKER MODAL (anchored dropdown) ═══
+   Same glass panel as before, but instead of popping up centered on
+   screen it now appears right under (or, if there's no room, above) the
+   field that opened it — position/top/left are set inline by
+   anchorDropdown() in app.js. */
 .picker-overlay {
   position: fixed; inset: 0;
   background: transparent;
   z-index: 800;
-  display: flex; align-items: center; justify-content: center;
-  padding: 0 24px;
   opacity: 0; pointer-events: none;
   transition: opacity 0.2s;
 }
 .picker-overlay.open { opacity: 1; pointer-events: all; }
 .picker-modal {
-  width: 100%; max-width: 340px;
-  background:
-    radial-gradient(circle at 12% -10%, rgba(94,179,255,0.4), transparent 55%),
-    radial-gradient(circle at 100% 110%, rgba(148,90,255,0.32), transparent 60%),
-    rgba(255,255,255,0.12);
-  backdrop-filter: blur(50px) saturate(200%) brightness(1.1);
-  -webkit-backdrop-filter: blur(50px) saturate(200%) brightness(1.1);
-  border-radius: 24px;
-  border: 1px solid rgba(255,255,255,0.28);
+  position: fixed;
+  /* Slim-fit: sized to its own content, never forced to a fixed 280px.
+     min-width falls back to 120px here but is overridden inline by
+     anchorDropdown() in app.js to match the trigger field's width, so
+     the panel is never narrower than the field it belongs to either. */
+  width: max-content;
+  min-width: 120px;
+  max-width: calc(100vw - 24px);
+  /* Opaque instead of translucent, so the animated background canvas
+     doesn't bleed/glare through the panel — same glossy recipe as the
+     modal sheets (see --surface-bg). */
+  background: var(--surface-bg);
+  backdrop-filter: var(--surface-blur);
+  -webkit-backdrop-filter: var(--surface-blur);
+  border-radius: 16px;
+  border: 1px solid rgba(255,255,255,0.22);
   border-bottom-color: rgba(255,255,255,0.08);
-  box-shadow: inset 0 2px 0 rgba(255,255,255,0.55), 0 24px 60px rgba(0,0,0,0.45);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.4), 0 16px 40px rgba(0,0,0,0.4);
   overflow: hidden;
-  transform: scale(0.9) translateY(12px);
-  transition: transform 0.28s cubic-bezier(0.22,1,0.36,1);
-  position: relative;
+  display: flex; flex-direction: column;
+  transform-origin: var(--dd-origin, top center);
+  transform: scale(0.96) translateY(var(--dd-ty, -6px));
+  transition: transform 0.2s cubic-bezier(0.22,1,0.36,1);
 }
 .picker-overlay.open .picker-modal { transform: scale(1) translateY(0); }
 .picker-modal-title {
-  font-family: var(--disp); font-size: 13px; font-weight: 600;
-  color: var(--txt3); text-transform: uppercase; letter-spacing: 0.8px;
-  text-align: center; padding: 16px 20px 10px;
-  border-bottom: 1px solid rgba(255,255,255,0.1);
-  position: relative; z-index: 1;
+  /* Titles removed from option pickers by design — the options alone are
+     shown (see PICKER_REGISTRY in app.js). Element kept in the DOM since
+     JS still sets its textContent, just never displayed. */
+  display: none;
 }
 .picker-opts {
   display: flex; flex-direction: column;
   max-height: 320px; overflow-y: auto;
+  flex: 1; min-height: 0;
   position: relative; z-index: 1;
   scrollbar-width: none;
 }
 .picker-opts::-webkit-scrollbar { display: none; }
 .picker-opt {
-  display: flex; align-items: center; justify-content: space-between;
-  padding: 15px 20px;
-  font-size: 15px; color: var(--txt);
-  border-bottom: 1px solid rgba(255,255,255,0.08);
+  display: flex; align-items: center; gap: 8px;
+  padding: 13px 16px;
+  font-size: 14px; color: var(--txt);
+  white-space: nowrap;
+  border-top: 1px solid rgba(255,255,255,0.06);
   cursor: pointer;
   transition: background 0.12s;
   position: relative; z-index: 1;
 }
-.picker-opt:last-child { border-bottom: none; }
-.picker-opt:active { background: rgba(255,255,255,0.08); }
+.picker-opt:first-child { border-top: none; }
+.picker-opt:active { background: rgba(255,255,255,0.06); }
 .picker-opt.selected {
   color: var(--teal);
-  background: rgba(42,232,196,0.1);
+  background: rgba(42,232,196,0.08);
 }
-.picker-opt.selected::after {
-  content: '✓';
-  font-size: 14px; font-weight: 700;
-  color: var(--teal);
-}
-.picker-cancel {
-  text-align: center;
-  padding: 14px 20px;
-  font-size: 14px; font-weight: 600; color: var(--txt3);
-  border-top: 1px solid rgba(255,255,255,0.1);
-  cursor: pointer;
-  transition: color 0.12s;
-  position: relative; z-index: 1;
-}
-.picker-cancel:active { color: var(--red); }
 
 /* ═══════════════════════════════════════
    CONFIRM MODAL (Liquid Glass)
@@ -1920,12 +2080,9 @@ body {
 .confirm-overlay.open { opacity: 1; pointer-events: all; }
 .confirm-box {
   width: 100%; max-width: 360px;
-  background:
-    radial-gradient(circle at 12% -10%, rgba(94,179,255,0.4), transparent 55%),
-    radial-gradient(circle at 100% 110%, rgba(148,90,255,0.32), transparent 60%),
-    rgba(255,255,255,0.12);
-  backdrop-filter: blur(50px) saturate(200%) brightness(1.1);
-  -webkit-backdrop-filter: blur(50px) saturate(200%) brightness(1.1);
+  background: var(--surface-bg);
+  backdrop-filter: var(--surface-blur);
+  -webkit-backdrop-filter: var(--surface-blur);
   border-radius: 24px;
   border: 1px solid rgba(255,255,255,0.28);
   border-bottom-color: rgba(255,255,255,0.08);
@@ -2008,31 +2165,31 @@ body {
      instead of the date picker looking like a separate component. */
   background: transparent;
   z-index: 9999;
-  display: flex; align-items: center; justify-content: center;
-  padding: 0 24px;
   opacity: 0; pointer-events: none;
   transition: opacity 0.2s;
 }
 .dp-overlay.open { opacity: 1; pointer-events: all; }
+/* Anchored dropdown, same as .picker-modal — position/top/left set inline
+   by anchorDropdown() so the calendar opens right under the field that
+   triggered it instead of the middle of the screen. */
 .date-picker-panel {
+  position: fixed;
   width: 272px;
-  max-width: 100%;
-  /* Same glass recipe as .modal-sheet / .picker-modal, so every popup in
-     the app — category picker, goal modal, date picker — looks like one
-     consistent design system instead of each having its own glass. */
-  background:
-    radial-gradient(circle at 12% -10%, rgba(94,179,255,0.4), transparent 55%),
-    radial-gradient(circle at 100% 110%, rgba(148,90,255,0.32), transparent 60%),
-    rgba(255,255,255,0.12);
-  backdrop-filter: blur(50px) saturate(200%) brightness(1.1);
-  -webkit-backdrop-filter: blur(50px) saturate(200%) brightness(1.1);
-  border-radius: 20px;
-  border: 1px solid rgba(255,255,255,0.28);
+  max-width: calc(100vw - 24px);
+  /* Opaque instead of translucent, so the animated background canvas
+     doesn't bleed/glare through the panel — same glossy recipe as the
+     modal sheets and category picker (see --surface-bg). */
+  background: var(--surface-bg);
+  backdrop-filter: var(--surface-blur);
+  -webkit-backdrop-filter: var(--surface-blur);
+  border-radius: 16px;
+  border: 1px solid rgba(255,255,255,0.22);
   border-bottom-color: rgba(255,255,255,0.08);
-  box-shadow: inset 0 2px 0 rgba(255,255,255,0.55), 0 24px 60px rgba(0,0,0,0.45);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.4), 0 16px 40px rgba(0,0,0,0.4);
   padding: 14px;
-  transform: scale(0.92) translateY(10px);
-  transition: transform 0.25s cubic-bezier(0.22,1,0.36,1);
+  transform-origin: var(--dd-origin, top center);
+  transform: scale(0.96) translateY(var(--dd-ty, -6px));
+  transition: transform 0.2s cubic-bezier(0.22,1,0.36,1);
 }
 .dp-overlay.open .date-picker-panel { transform: scale(1) translateY(0); }
 .dp-header {
@@ -2225,21 +2382,22 @@ body {
   box-shadow: inset 0 1px 0 rgba(255,255,255,0.2), 0 0 10px rgba(42,232,196,0.15);
 }
 .currency-filter-panel {
+  position: fixed;
   width: 180px;
-  max-width: 100%;
-  background:
-    radial-gradient(circle at 12% -10%, rgba(94,179,255,0.4), transparent 55%),
-    radial-gradient(circle at 100% 110%, rgba(148,90,255,0.32), transparent 60%),
-    rgba(255,255,255,0.12);
-  backdrop-filter: blur(50px) saturate(200%) brightness(1.1);
-  -webkit-backdrop-filter: blur(50px) saturate(200%) brightness(1.1);
-  border-radius: 16px;
-  border: 1px solid rgba(255,255,255,0.28);
+  max-width: calc(100vw - 24px);
+  /* Opaque instead of translucent, so the animated background canvas
+     doesn't bleed/glare through the panel — see --surface-bg. */
+  background: var(--surface-bg);
+  backdrop-filter: var(--surface-blur);
+  -webkit-backdrop-filter: var(--surface-blur);
+  border-radius: 14px;
+  border: 1px solid rgba(255,255,255,0.22);
   border-bottom-color: rgba(255,255,255,0.08);
-  box-shadow: inset 0 2px 0 rgba(255,255,255,0.55), 0 24px 60px rgba(0,0,0,0.45);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.4), 0 16px 40px rgba(0,0,0,0.4);
   padding: 6px;
-  transform: scale(0.92) translateY(10px);
-  transition: transform 0.25s cubic-bezier(0.22,1,0.36,1);
+  transform-origin: var(--dd-origin, top center);
+  transform: scale(0.96) translateY(var(--dd-ty, -6px));
+  transition: transform 0.2s cubic-bezier(0.22,1,0.36,1);
   max-height: 260px; overflow-y: auto;
 }
 .dp-overlay.open .currency-filter-panel { transform: scale(1) translateY(0); }
@@ -2302,14 +2460,44 @@ body {
    PAGE: KELOLA KATEGORI
 ═══════════════════════════════════════ */
 .kc-list { padding: 0 20px; display: flex; flex-direction: column; gap: 8px; }
+/* Swipe-to-reveal for category rows — same interaction as wallet cards
+   (see .wallet-item-wrap): the row slides left on drag, uncovering
+   Edit/Hapus underneath on the right instead of showing them
+   permanently on every row. */
+.kc-item-wrap {
+  position: relative;
+  overflow: hidden;
+  border-radius: 14px;
+}
+.kc-actions {
+  position: absolute; top: 0; right: 0; bottom: 0;
+  display: flex; align-items: center; justify-content: flex-end; gap: 6px;
+  width: 76px;
+  padding-right: 2px;
+  z-index: 0;
+  /* Hidden and slightly shrunk by default — revealed progressively as the
+     row is dragged (see initKcSwipe in app.js), not sitting static next
+     to every row. */
+  opacity: 0;
+  transform: scale(0.86) translateX(10px);
+  transform-origin: right center;
+  transition: opacity 0.22s ease, transform 0.22s cubic-bezier(0.22,1,0.36,1);
+}
+.kc-actions.dragging { transition: none; }
 .kc-item {
   display: flex; align-items: center; gap: 10px;
   padding: 11px 13px; border-radius: 14px;
 }
+.kc-item-slide {
+  position: relative; z-index: 1;
+  touch-action: pan-y;
+  transition: transform 0.25s cubic-bezier(0.22,1,0.36,1);
+  transform: translateX(0);
+}
+.kc-item-slide.dragging { transition: none; }
 .kc-icon { width: 36px; height: 36px; border-radius: 10px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
 .kc-icon .ic { width: 17px; height: 17px; }
 .kc-name { font-size: 13px; font-weight: 500; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.kc-actions { display: flex; gap: 6px; flex-shrink: 0; }
 .kc-act-btn {
   width: 30px; height: 30px; border-radius: 9px;
   display: flex; align-items: center; justify-content: center;
