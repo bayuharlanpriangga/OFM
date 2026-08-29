@@ -715,6 +715,7 @@ function openModal() {
     if (hid) hid.value = '';
   }
   updateTxAmountCurrency();
+  renderBudgetCatPicker();
 }
 function closeModal() { showPage(S._txReturnPage || 'dashboard'); }
 
@@ -873,12 +874,20 @@ function renderBudgetCatPicker() {
   const wrap = document.getElementById('budgetCatWrap');
   const picker = document.getElementById('budgetCatPicker');
   if (!wrap || !picker) return;
-  if (S.currentType !== 'expense' || !BUDGET.cats.length) {
+  const accId = document.getElementById('txAccount') ? document.getElementById('txAccount').value : '';
+  const accCurrency = walletCurrencyCode(accId);
+  // Cuma tampilkan kategori anggaran yang currency-nya cocok sama akun yang
+  // lagi dipilih — biar transaksi nggak bisa ke-assign ke budget beda currency.
+  const matchingCats = BUDGET.cats.filter(c => (c.currency || 'IDR') === accCurrency);
+  if (S.selectedBudgetCat && !matchingCats.some(c => c.id === S.selectedBudgetCat)) {
+    S.selectedBudgetCat = null; // akun diganti, kategori lama gak relevan lagi
+  }
+  if (S.currentType !== 'expense' || !matchingCats.length) {
     wrap.style.display = 'none';
     return;
   }
   wrap.style.display = 'block';
-  picker.innerHTML = BUDGET.cats.map(c =>
+  picker.innerHTML = matchingCats.map(c =>
     `<div class="cat-chip ${S.selectedBudgetCat===c.id?'selected':''}" onclick="selectBudgetCat('${c.id}')">${ICON[c.icon]||''} ${escapeHtml(c.label)}</div>`
   ).join('');
 }
@@ -1078,7 +1087,15 @@ function submitTransaction() {
     // (covers custom budget categories that also appear as a regular category chip).
     const bc = (S.selectedBudgetCat && BUDGET.cats.find(b=>b.id===S.selectedBudgetCat))
              || BUDGET.cats.find(b=>b.id===catId);
-    if (bc) bc.spent += S.amountRaw;
+    if (bc) {
+      if (walletCurrencyCode(account) === (bc.currency || 'IDR')) {
+        bc.spent += S.amountRaw;
+      } else {
+        // Currency wallet & kategori anggaran beda — jangan dicampur ke limit
+        // kategori ini. Transaksinya tetap tersimpan, cuma nggak masuk hitungan budget.
+        showToast(`Tercatat, tapi nggak dihitung ke budget "${bc.label}" karena beda mata uang`, 'info');
+      }
+    }
   }
   saveToStorage();
   closeModal();
@@ -1092,17 +1109,46 @@ function submitTransaction() {
    DASHBOARD
 ══════════════════════════════════════════ */
 function renderDashboard() {
-  const txs     = S.transactions;
-  const income  = txs.filter(t=>t.type==='income').reduce((s,t)=>s+t.amount,0);
-  const expense = txs.filter(t=>t.type==='expense').reduce((s,t)=>s+t.amount,0);
-  // Total aset = sum of real-time wallet balances (base + transactions)
-  const total   = WALLETS.reduce((s,w) => s + getWalletBalance(w.id), 0);
+  const txs = S.transactions;
+
+  // Rp adalah mata uang utama di seluruh app ini (budget, goals, dsb semua
+  // dalam Rp). Angka headline di dashboard cuma menjumlah transaksi/wallet
+  // yang mata uangnya Rp — transaksi/wallet di mata uang lain (USD, dst)
+  // dijumlah TERPISAH per mata uang, tidak dicampur jadi satu angka.
+  // (Dulu ini bug: Rp dan USD ditambah mentah-mentah jadi satu total.)
+  const income  = txs.filter(t => t.type === 'income'  && walletCurrencyCode(t.account) === 'IDR').reduce((s,t) => s+t.amount, 0);
+  const expense = txs.filter(t => t.type === 'expense' && walletCurrencyCode(t.account) === 'IDR').reduce((s,t) => s+t.amount, 0);
+
+  // Total aset = saldo real-time tiap wallet, dikelompokkan per currency
+  const totalsByCurrency = {};
+  WALLETS.forEach(w => {
+    const code = w.currency || 'IDR';
+    totalsByCurrency[code] = (totalsByCurrency[code] || 0) + getWalletBalance(w.id);
+  });
+  const total = totalsByCurrency.IDR || 0;
 
   document.getElementById('totalBalance').textContent = total.toLocaleString('id-ID');
   document.getElementById('totalIncome').textContent  = 'Rp ' + income.toLocaleString('id-ID');
   document.getElementById('totalExpense').textContent = 'Rp ' + expense.toLocaleString('id-ID');
 
-  const spent = BUDGET.cats.reduce((s,c)=>s+c.spent,0);
+  // Tampilkan saldo mata uang lain (kalau ada) sebagai baris terpisah,
+  // bukan digabung ke angka Rp di atas
+  const multiEl = document.getElementById('balanceMultiCurrency');
+  if (multiEl) {
+    const otherCodes = Object.keys(totalsByCurrency).filter(c => c !== 'IDR');
+    if (otherCodes.length) {
+      multiEl.style.display = 'block';
+      multiEl.textContent = '+ ' + otherCodes.map(code => {
+        const info = currencyInfo(code);
+        return info.symbol + ' ' + totalsByCurrency[code].toLocaleString(info.locale);
+      }).join(' · ') + ' (belum dikonversi ke Rp)';
+    } else {
+      multiEl.style.display = 'none';
+      multiEl.textContent = '';
+    }
+  }
+
+  const spent = BUDGET.cats.filter(c => (c.currency || 'IDR') === 'IDR').reduce((s,c)=>s+c.spent,0);
   const pct   = BUDGET.total > 0 ? Math.min(100,Math.round(spent/BUDGET.total*100)) : 0;
   document.getElementById('meterBar').style.width  = pct + '%';
   document.getElementById('meterPct').textContent  = pct + '%';
@@ -1205,10 +1251,13 @@ function renderTxList() {
 function deleteTx(id) {
   const tx = S.transactions.find(t=>t.id===id);
   if (!tx) return;
-  // reverse budget impact
+  // reverse budget impact (only if it was actually counted toward that budget,
+  // i.e. same currency — mirrors the guard in submitTransaction())
   if (tx.type==='expense') {
     const bc = BUDGET.cats.find(b=>b.id===tx.catId);
-    if (bc) bc.spent = Math.max(0, bc.spent - tx.amount);
+    if (bc && walletCurrencyCode(tx.account) === (bc.currency || 'IDR')) {
+      bc.spent = Math.max(0, bc.spent - tx.amount);
+    }
   }
   S.transactions = S.transactions.filter(t=>t.id!==id);
   saveToStorage();
@@ -1263,12 +1312,9 @@ function renderBudget() {
     if (bf.dateTo   && t.date > bf.dateTo)   return false;
     return true;
   });
-  // Build spent per catId from filtered transactions
-  const spentMap = {};
-  filtTx.forEach(t => {
-    spentMap[t.catId] = (spentMap[t.catId] || 0) + t.amount;
-  });
-  const used = Object.values(spentMap).reduce((s,v) => s+v, 0);
+  // Overview (bov-*) dibandingkan ke BUDGET.total yang Rp — jadi cuma
+  // transaksi ber-currency IDR yang dihitung di sini, konsisten sama dashboard.
+  const used = filtTx.filter(t => walletCurrencyCode(t.account) === 'IDR').reduce((s,t) => s+t.amount, 0);
   const left = Math.max(0, BUDGET.total - used);
   document.getElementById('bov-total').textContent = 'Rp ' + BUDGET.total.toLocaleString('id-ID');
   document.getElementById('bov-used').textContent  = 'Rp ' + used.toLocaleString('id-ID');
@@ -1282,7 +1328,10 @@ function renderBudget() {
     else periodEl.textContent = fmtDateShort(bf.dateFrom) + ' – ' + fmtDateShort(bf.dateTo);
   }
   document.getElementById('budgetCats').innerHTML = BUDGET.cats.length ? BUDGET.cats.map(c => {
-    const spent = spentMap[c.id] || 0;
+    const cCode = c.currency || 'IDR';
+    const sym   = currencyInfo(cCode).symbol;
+    // Spent kategori ini cuma dari transaksi yang wallet-nya se-currency sama kategorinya
+    const spent = filtTx.filter(t => t.catId === c.id && walletCurrencyCode(t.account) === cCode).reduce((s,t) => s+t.amount, 0);
     const pct   = c.limit > 0 ? Math.min(100, Math.round(spent/c.limit*100)) : 0;
     const color = pct>90?'var(--red)':pct>70?'var(--gold)':c.color;
     return `
@@ -1290,10 +1339,10 @@ function renderBudget() {
         <div class="bcat-head">
           <div class="bcat-icon" style="background:${c.color}22">${ICON[c.icon]||''}</div>
           <div class="bcat-name">${escapeHtml(c.label)}</div>
-          <div class="bcat-remain">sisa Rp ${fmtK(Math.max(0,c.limit-spent))}</div>
+          <div class="bcat-remain">sisa ${sym} ${fmtK(Math.max(0,c.limit-spent))}</div>
         </div>
         <div class="bcat-bar-bg"><div class="bcat-bar-fill" style="width:${pct}%;background:${color}"></div></div>
-        <div class="bcat-amounts"><span>Rp ${spent.toLocaleString('id-ID')}</span><span>Rp ${c.limit.toLocaleString('id-ID')}</span></div>
+        <div class="bcat-amounts"><span>${sym} ${spent.toLocaleString(currencyInfo(cCode).locale)}</span><span>${sym} ${c.limit.toLocaleString(currencyInfo(cCode).locale)}</span></div>
       </div>`;
   }).join('') : `
     <div class="empty" onclick="openBudgetSettingsModal()" style="cursor:pointer">
@@ -1439,9 +1488,46 @@ function renderBudgetCatRows() {
     <div class="budget-cat-row">
       <div class="bcr-icon" style="background:${c.color}22;color:${c.color}">${ICON[c.icon]||ICON.package}</div>
       <div class="bcr-name">${escapeHtml(c.label)}</div>
+      <div class="bcr-currency" onclick="openBudgetCatCurrencyPicker('${c.id}')" title="Ganti mata uang kategori ini">${c.currency || 'IDR'} <span class="picker-arrow">▾</span></div>
       <input type="number" class="bcr-limit-input budget-cat-input" data-cat="${c.id}" value="${c.limit || ''}" placeholder="0" inputmode="numeric">
       <div class="bcr-del" onclick="removeBudgetCat('${c.id}')"><svg class="ic" viewBox="0 0 24 24"><path d="M5 5l14 14M19 5L5 19"/></svg></div>
     </div>`).join('') : `<div class="budget-cat-empty-hint">Belum ada kategori — tambahkan kategori anggaranmu sendiri di bawah ini.</div>`;
+}
+
+// ── Ganti currency kategori anggaran yang udah ada (dipilih per baris) ──
+let _pickerBudgetCatId = null;
+function openBudgetCatCurrencyPicker(catId) {
+  const cat = BUDGET.cats.find(c => c.id === catId);
+  if (!cat) return;
+  _pickerBudgetCatId = catId;
+  const curVal = cat.currency || 'IDR';
+  const opts = Object.keys(CURRENCIES).map(code => ({ value: code, text: currencyLabelText(code) }));
+  document.getElementById('pickerTitle').textContent = 'Mata Uang — ' + cat.label;
+  document.getElementById('pickerOpts').innerHTML = opts.map((o, i) => `
+    <div class="picker-opt ${o.value === curVal ? 'selected' : ''}" data-idx="${i}">${escapeHtml(o.text)}</div>`).join('');
+  document.querySelectorAll('#pickerOpts .picker-opt').forEach((el, i) => {
+    el.addEventListener('click', () => pickBudgetCatCurrency(opts[i].value));
+  });
+  document.getElementById('pickerOverlay').classList.add('open');
+}
+function pickBudgetCatCurrency(code) {
+  const cat = BUDGET.cats.find(c => c.id === _pickerBudgetCatId);
+  if (cat) {
+    const changed = (cat.currency || 'IDR') !== code;
+    cat.currency = code;
+    if (changed && cat.spent > 0) {
+      // Progres "terpakai" lama dihitung dalam currency lama — nggak nyambung
+      // lagi sama limit di currency baru, jadi direset biar nggak nyesatin.
+      cat.spent = 0;
+      showToast('Mata uang diganti — progres terpakai kategori ini direset', 'info');
+    } else {
+      showToast('Mata uang kategori diperbarui', 'success');
+    }
+    saveToStorage();
+    renderBudgetCatRows();
+    renderBudget();
+  }
+  closePicker();
 }
 
 function renderBudgetCatIconGrid() {
@@ -1462,6 +1548,8 @@ function toggleAddBudgetCatForm() {
   if (trigger) trigger.style.display = showing ? '' : 'none';
   if (!showing) {
     document.getElementById('newBudgetCatName').value = '';
+    document.getElementById('newBudgetCatCurrency').value = 'IDR';
+    document.getElementById('newBudgetCatCurrencyLbl').textContent = currencyLabelText('IDR');
     _pendingBudgetCatIcon = null;
     renderBudgetCatIconGrid();
   }
@@ -1470,9 +1558,10 @@ function addBudgetCat() {
   const name = document.getElementById('newBudgetCatName').value.trim();
   if (!name) { showToast('Nama kategori wajib diisi', 'warning'); return; }
   if (!_pendingBudgetCatIcon) { showToast('Pilih ikon untuk kategori ini', 'warning'); return; }
+  const currency = document.getElementById('newBudgetCatCurrency').value || 'IDR';
   const id = 'cat_' + name.toLowerCase().replace(/[^a-z0-9]+/g,'_').replace(/^_+|_+$/g,'').slice(0,20) + '_' + Date.now().toString(36);
   const color = BUDGET_CAT_COLORS[BUDGET.cats.length % BUDGET_CAT_COLORS.length];
-  BUDGET.cats.push({ id, label:name, icon:_pendingBudgetCatIcon, color, limit:0, spent:0 });
+  BUDGET.cats.push({ id, label:name, icon:_pendingBudgetCatIcon, color, limit:0, spent:0, currency });
   CUSTOM_CAT_ICONS[id] = _pendingBudgetCatIcon;
   // Make it selectable when logging expense transactions too, so spending actually tracks against this budget
   const expCats = CATS.expense;
@@ -2162,13 +2251,12 @@ function renderBudgetOverlay() {
   }
   const _af = typeof ANALYTICS_FILTER !== 'undefined' ? ANALYTICS_FILTER : {};
   const inRange = t => (!_af.dateFrom || t.date >= _af.dateFrom) && (!_af.dateTo || t.date <= _af.dateTo);
-  const spentMap = {};
-  S.transactions.filter(t => t.type === 'expense' && inRange(t)).forEach(t => {
-    spentMap[t.catId] = (spentMap[t.catId] || 0) + t.amount;
-  });
+  const expTx = S.transactions.filter(t => t.type === 'expense' && inRange(t));
 
   wrap.innerHTML = catsWithLimit.map(c => {
-    const spent = spentMap[c.id] || 0;
+    const cCode = c.currency || 'IDR';
+    const sym   = currencyInfo(cCode).symbol;
+    const spent = expTx.filter(t => t.catId === c.id && walletCurrencyCode(t.account) === cCode).reduce((s,t) => s+t.amount, 0);
     const pct = Math.round((spent / c.limit) * 100);
     const over = spent > c.limit;
     const barColor = over ? 'var(--red)' : c.color;
@@ -2176,7 +2264,7 @@ function renderBudgetOverlay() {
       <div class="dl-item">
         <div class="dl-color" style="background:${barColor}"></div>
         <div class="dl-name">${escapeHtml(c.label)}
-          <div class="dl-sub">${over ? 'Lebih ' : ''}Rp ${spent.toLocaleString('id-ID')} / Rp ${c.limit.toLocaleString('id-ID')}</div>
+          <div class="dl-sub">${over ? 'Lebih ' : ''}${sym} ${spent.toLocaleString(currencyInfo(cCode).locale)} / ${sym} ${c.limit.toLocaleString(currencyInfo(cCode).locale)}</div>
         </div>
         <div class="dl-bar"><div class="dl-fill" style="width:${Math.min(100,pct)}%;background:${barColor}"></div></div>
         <div class="dl-pct" style="color:${over?'var(--red)':'var(--txt2)'}">${pct}%</div>
@@ -2481,18 +2569,24 @@ function daysUntil(d) {
 function processRecurringDue() {
   const today = new Date().toISOString().split('T')[0];
   let processed = 0;
+  let skippedNoWallet = false;
   RECURRINGS.forEach(r => {
     if (!r.active) return;
     const next = nextOccurrence(r.start, r.freq);
     const nextStr = next.toISOString().split('T')[0];
     if (nextStr === today && r.lastProcessed !== today) {
+      // Pakai akun yang dipilih user pas bikin tagihan rutin ini. Fallback ke
+      // wallet pertama cuma buat data lama (dibuat sebelum field ini ada) atau
+      // kalau wallet-nya udah dihapus — bukan lagi hardcode 'bca'.
+      const account = (r.account && WALLETS.some(w => w.id === r.account)) ? r.account : (WALLETS[0] && WALLETS[0].id);
+      if (!account) { skippedNoWallet = true; return; } // belum ada akun sama sekali — tunda, jangan catat ke akun ngasal
       const cats = CATS[r.type] || [];
       const cat  = cats.find(c => c.id === r.catId) || { label:'Lainnya', color: r.catColor };
       S.transactions.unshift({
         id: Date.now() + processed,
         type: r.type, amount: r.amount,
         note: r.name + ' (Rutin)',
-        date: today, account: 'bca',
+        date: today, account,
         cat: cat.label, catId: r.catId, catColor: r.catColor,
         isRecurring: true,
       });
@@ -2503,6 +2597,9 @@ function processRecurringDue() {
   if (processed > 0) {
     saveToStorage();
     addNotif('Transaksi Rutin', `${processed} transaksi rutin dicatat hari ini`, 'teal');
+  }
+  if (skippedNoWallet) {
+    addNotif('Transaksi rutin tertunda', 'Tambahkan akun dulu supaya transaksi rutin bisa dicatat', 'warn');
   }
 }
 
@@ -2516,6 +2613,7 @@ function renderRecurList() {
   el.innerHTML = RECURRINGS.map(r => {
     const next  = nextOccurrence(r.start, r.freq);
     const color = r.type === 'income' ? 'var(--teal)' : 'var(--red)';
+    const accName = walletName(r.account) || 'Akun tak dikenal';
     return `
       <div class="recur-item glass-sm">
         <div class="recur-icon" style="background:${r.catColor}22">${ICON[catIcon(r.catId)]||''}</div>
@@ -2524,6 +2622,7 @@ function renderRecurList() {
           <div class="recur-meta">
             <span class="recur-freq">${freqLabel(r.freq)}</span>
             <span>${daysUntil(next)}</span>
+            <span>· ${escapeHtml(accName)}</span>
           </div>
         </div>
         <div class="recur-right">
@@ -2599,6 +2698,15 @@ function openRecurModal() {
   document.getElementById('recurName').value   = '';
   document.getElementById('recurAmount').value = '';
   setRecurType('expense');
+  const accLbl = document.getElementById('recurAccountLabel');
+  const accHid = document.getElementById('recurAccount');
+  if (WALLETS.length) {
+    if (accHid) accHid.value = WALLETS[0].id;
+    if (accLbl) accLbl.textContent = WALLETS[0].name;
+  } else {
+    if (accHid) accHid.value = '';
+    if (accLbl) accLbl.textContent = 'Tambah akun dulu';
+  }
 }
 function closeRecurModal() { document.getElementById('recurModalOverlay').classList.remove('open'); }
 function closeRecurModalOutside(e) { if (e.target === document.getElementById('recurModalOverlay')) closeRecurModal(); }
@@ -2609,12 +2717,14 @@ function submitRecur() {
   const freq   = document.getElementById('recurFreq').value;
   const start  = document.getElementById('recurStart').value;
   const catId  = document.getElementById('recurCat').value;
+  const account = document.getElementById('recurAccount').value;
   if (!name)   { showToast('Nama wajib diisi', 'warning'); return; }
   if (!amount) { showToast('Nominal harus lebih dari 0', 'warning'); return; }
+  if (!account) { showToast('Tambahkan akun dulu di halaman Akun', 'warning'); return; }
   const catColors = { bill:'#5EB3FF', food:'#FF8C00', trans:'#5EB3FF', ent:'#FF6B84', salary:'#2AE8C4', other:'#888' };
   RECURRINGS = [...RECURRINGS, {
     id: Date.now(), name, type: _recurType, amount, freq,
-    catId, catColor: catColors[catId] || '#888', start, active: true,
+    catId, catColor: catColors[catId] || '#888', start, active: true, account,
   }];
   saveToStorage();
   closeRecurModal();
@@ -2767,12 +2877,13 @@ function renderNotifPanel() {
 function checkBudgetAlerts() {
   BUDGET.cats.forEach(c => {
     const pct = c.limit > 0 ? Math.round(c.spent / c.limit * 100) : 0;
+    const sym = currencyInfo(c.currency || 'IDR').symbol;
     if (pct >= 100 && !c._alerted100) {
       c._alerted100 = true;
-      addNotif(`Budget ${c.label} Habis!`, `Pengeluaran sudah melampaui limit Rp ${c.limit.toLocaleString('id-ID')}`, 'danger');
+      addNotif(`Budget ${c.label} Habis!`, `Pengeluaran sudah melampaui limit ${sym} ${c.limit.toLocaleString('id-ID')}`, 'danger');
     } else if (pct >= 80 && !c._alerted80) {
       c._alerted80 = true;
-      addNotif(`Budget ${c.label} ${pct}%`, `Sisa Rp ${fmtK(Math.max(0, c.limit - c.spent))} dari Rp ${fmtK(c.limit)}`, 'warn');
+      addNotif(`Budget ${c.label} ${pct}%`, `Sisa ${sym} ${fmtK(Math.max(0, c.limit - c.spent))} dari ${sym} ${fmtK(c.limit)}`, 'warn');
     }
   });
 
@@ -4329,6 +4440,11 @@ const PICKER_REGISTRY = {
     getOpts: () => Object.keys(CURRENCIES).map(code => ({ value: code, text: currencyLabelText(code) })),
     labelId: 'editWalletCurrencyLbl',
   },
+  newBudgetCatCurrency: {
+    title: 'Mata Uang',
+    getOpts: () => Object.keys(CURRENCIES).map(code => ({ value: code, text: currencyLabelText(code) })),
+    labelId: 'newBudgetCatCurrencyLbl',
+  },
   recurFreq: {
     title: 'Frekuensi',
     getOpts: () => [
@@ -4349,6 +4465,11 @@ const PICKER_REGISTRY = {
       { value: 'other',  text: 'Lainnya',   icon: 'package' },
     ],
     labelId: 'recurCatLabel',
+  },
+  recurAccount: {
+    title: 'Pilih Akun',
+    getOpts: () => WALLETS.map(w => ({ value: w.id, text: w.name })),
+    labelId: 'recurAccountLabel',
   },
   goalIcon: {
     title: 'Ikon Goal',
@@ -4399,6 +4520,7 @@ function pickOpt(fieldId, o) {
   if (hidden) hidden.value = o.value;
   if (lbl)    lbl.innerHTML = (o.icon ? ICON[o.icon]||'' : '') + ' ' + escapeHtml(o.text);
   if (fieldId === 'txAccount' && typeof updateTxAmountCurrency === 'function') updateTxAmountCurrency();
+  if (fieldId === 'txAccount' && typeof renderBudgetCatPicker === 'function') renderBudgetCatPicker();
   if (fieldId === 'txCategory') S.selectedCat = o.value;
   closePicker();
 }

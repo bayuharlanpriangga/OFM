@@ -217,6 +217,7 @@
     <div class="balance-hero glass-heavy">
       <div class="balance-label">TOTAL ASET</div>
       <div class="balance-amount"><span class="cur">Rp</span><span id="totalBalance">0</span></div>
+      <div class="balance-multi-currency" id="balanceMultiCurrency" style="display:none"></div>
       <div class="balance-change" id="balanceChange"></div>
       <div class="balance-pills">
         <div class="b-pill">
@@ -811,6 +812,7 @@
           <label>Total Anggaran Bulanan (Rp)</label>
           <input type="number" id="budgetTotalInput" placeholder="0" inputmode="numeric">
         </div>
+        <div style="font-size:11px;color:var(--txt3);line-height:1.5;margin-top:6px">Total di atas selalu dalam Rp. Tiap kategori di bawah bisa punya mata uangnya sendiri — ketuk kode mata uang di sampingnya buat ganti.</div>
         <div style="font-size:12px;color:var(--txt3);font-weight:600;margin:14px 0 2px">Kategori Anggaran</div>
         <div id="budgetCatInputs"></div>
 
@@ -822,6 +824,14 @@
           </div>
           <div style="font-size:11px;color:var(--txt3);text-transform:uppercase;letter-spacing:0.5px;margin:10px 0 4px">Pilih Ikon</div>
           <div class="icon-pick-grid" id="budgetCatIconGrid"></div>
+          <div class="field" style="margin-top:12px">
+            <label>Mata Uang</label>
+            <div class="picker-trigger" onclick="openPicker('newBudgetCatCurrency','Mata Uang')">
+              <span id="newBudgetCatCurrencyLbl">Rp Rupiah Indonesia (IDR)</span>
+              <span class="picker-arrow">▾</span>
+            </div>
+            <input type="hidden" id="newBudgetCatCurrency" value="IDR">
+          </div>
           <button class="modal-submit" style="margin-top:12px" onclick="addBudgetCat()">Simpan Kategori</button>
         </div>
       </div>
@@ -923,6 +933,14 @@
             </div>
             <input type="hidden" id="recurCat" value="bill">
           </div>
+        </div>
+        <div class="field">
+          <label>Akun</label>
+          <div class="picker-trigger" onclick="openPicker('recurAccount','Akun')">
+            <span id="recurAccountLabel">Pilih akun</span>
+            <span class="picker-arrow">▾</span>
+          </div>
+          <input type="hidden" id="recurAccount">
         </div>
       </div>
       <button class="modal-submit" onclick="submitRecur()">Simpan Rutin</button>
