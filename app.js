@@ -692,6 +692,8 @@ function openNavRail() {
 }
 
 function closeNavRail() {
+  clearTimeout(_railLongPressTimer);
+  _railWaveActive = false;
   document.getElementById('navRail')?.classList.remove('open');
   document.getElementById('navRail')?.classList.remove('dragging');
   document.getElementById('navFab')?.classList.remove('open');
@@ -708,30 +710,72 @@ function navRailSelect(id) {
 // ── Drag-wave: pressing a bubble and dragging up/down ripples the label
 //    open on whichever bubble the finger is currently nearest to, like a
 //    dock magnifying under the cursor, and picks that item on release.
+//    A plain quick tap does NOT open the label — only a genuine drag, or
+//    holding still on one bubble for ~1s, does.
 let _railBubbles = [];
 let _railDragging = false;
 let _railNearest = null;
+let _railWaveActive = false;
+let _railLongPressTimer = null;
+let _railPressStartX = 0;
+let _railPressStartY = 0;
 
 function initNavRail() {
   const rail = document.getElementById('navRail');
   if (!rail) return;
   _railBubbles = Array.from(rail.querySelectorAll('.nav-bubble'));
+  sizeNavBubblesToLabels();
   rail.addEventListener('pointerdown', onRailPointerDown);
 }
+
+// Each pill's expanded width = icon area + its own label's natural text
+// width + a little breathing room — not a size shared/borrowed from
+// whichever label happens to be the longest.
+function sizeNavBubblesToLabels() {
+  const GLYPH_W = 44, LABEL_PAD = 4, TRAILING_SPACE = 16, MIN_W = 90;
+  _railBubbles.forEach(b => {
+    const label = b.querySelector('.nb-label');
+    if (!label) return;
+    const textW = label.scrollWidth;
+    const w = Math.max(MIN_W, GLYPH_W + LABEL_PAD + textW + TRAILING_SPACE);
+    b.style.setProperty('--nb-w', w + 'px');
+  });
+}
+
+const RAIL_LONGPRESS_MS = 1000;
+const RAIL_DRAG_THRESHOLD = 6; // px of movement before it counts as a drag, not a hold
 
 function onRailPointerDown(e) {
   const rail = document.getElementById('navRail');
   if (!rail || !rail.classList.contains('open')) return;
-  _railDragging = true;
-  rail.classList.add('dragging');
-  updateRailWave(e.clientY);
+  _railPressStartX = e.clientX;
+  _railPressStartY = e.clientY;
+  _railWaveActive = false;
+  clearTimeout(_railLongPressTimer);
+  _railLongPressTimer = setTimeout(() => {
+    // Held still for 1s without dragging — reveal this bubble's label.
+    _railWaveActive = true;
+    rail.classList.add('dragging');
+    updateRailWave(e.clientY);
+  }, RAIL_LONGPRESS_MS);
   window.addEventListener('pointermove', onRailPointerMove);
   window.addEventListener('pointerup', onRailPointerUp, { once: true });
   window.addEventListener('pointercancel', onRailPointerUp, { once: true });
 }
 
 function onRailPointerMove(e) {
-  if (!_railDragging) return;
+  if (!_railWaveActive) {
+    const moved = Math.abs(e.clientX - _railPressStartX) > RAIL_DRAG_THRESHOLD ||
+                  Math.abs(e.clientY - _railPressStartY) > RAIL_DRAG_THRESHOLD;
+    if (!moved) return; // still just holding in place — wait for the 1s timer
+    // Real drag detected before the 1s hold elapsed — skip the wait and
+    // start following the finger immediately, same as before.
+    clearTimeout(_railLongPressTimer);
+    _railWaveActive = true;
+    _railDragging = true;
+    document.getElementById('navRail')?.classList.add('dragging');
+  }
+  _railDidDragMove = true;
   updateRailWave(e.clientY);
 }
 
@@ -752,7 +796,9 @@ function updateRailWave(clientY) {
 
 function onRailPointerUp() {
   window.removeEventListener('pointermove', onRailPointerMove);
+  clearTimeout(_railLongPressTimer);
   _railDragging = false;
+  _railWaveActive = false;
   document.getElementById('navRail')?.classList.remove('dragging');
   const picked = _railNearest;
   _railBubbles.forEach(b => { b.style.removeProperty('--wave'); b.classList.remove('nb-peek', 'nb-focus'); });
@@ -5466,7 +5512,14 @@ function anchorDropdown(panel, trigger) {
   const spaceBelow = vh - t.bottom - gap - margin;
   const spaceAbove = t.top - gap - margin;
   let top, origin, ty;
-  if (spaceBelow >= Math.min(ph, 160) || spaceBelow >= spaceAbove) {
+  // The calendar can't scroll its own content (a clipped max-height would
+  // just cut days off), so it needs to flip above when it doesn't fully
+  // fit below. Every other dropdown here scrolls internally, so they keep
+  // the old, more lenient rule and are fine staying below and scrolling.
+  const mustFitFully = panel.classList.contains('date-picker-panel');
+  const fitsBelow = mustFitFully ? spaceBelow >= ph : spaceBelow >= Math.min(ph, 160);
+  const fitsAbove = spaceAbove >= ph;
+  if (fitsBelow || (!fitsAbove && spaceBelow >= spaceAbove)) {
     top = t.bottom + gap;
     origin = 'top center'; ty = '-8px';
     if (ph > spaceBelow) panel.style.maxHeight = spaceBelow + 'px';

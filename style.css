@@ -605,10 +605,11 @@ body {
 
 /* The FAB — always visible (unless .bottom-nav is .hidden).
    Shaped like the app's own hexagon mark (pointed top/bottom, flat sides —
-   matching icon-512.png). Same plain neutral glass recipe as the
-   Keluar/Masuk/Transfer/Akun buttons below it (--glass-bg-heavy) — no
-   color tint, no colored glow. Only the trend-line glyph inside stays
-   teal/gold, same as the real icon. */
+   matching icon-512.png). Clear, mostly-flat glass body with a thick,
+   glossy rim (drawn below as an SVG stroke) — the "thick glass" look
+   lives in the edge, not smeared across the whole face. No color tint,
+   no colored glow. Only the trend-line glyph inside stays teal/gold,
+   same as the real icon. */
 .nav-fab {
   position: fixed;
   right: 18px;
@@ -617,30 +618,32 @@ body {
   display: flex; align-items: center; justify-content: center;
   cursor: pointer; color: #fff;
   clip-path: polygon(50% 0%, 93.3% 25%, 93.3% 75%, 50% 100%, 6.7% 75%, 6.7% 25%);
-  background: var(--glass-bg-heavy);
-  backdrop-filter: blur(var(--glass-blur)) brightness(1.1);
-  -webkit-backdrop-filter: blur(var(--glass-blur)) brightness(1.1);
+  background: rgba(30,38,58,0.8);
+  backdrop-filter: blur(22px) saturate(150%) brightness(1.2);
+  -webkit-backdrop-filter: blur(22px) saturate(150%) brightness(1.2);
   box-shadow: 0 4px 16px rgba(0,0,0,0.3);
   transition: transform 0.25s cubic-bezier(0.34,1.56,0.64,1);
   pointer-events: auto;
   z-index: 102;
 }
-/* A pseudo-element carries the border/shine so it can clip to the hexagon
-   too (box-shadow can't follow a clip-path outline). */
-.nav-fab::before {
-  content: '';
+/* Crisp hexagon rim, drawn as a real SVG stroke instead of a CSS border —
+   a CSS border clipped by clip-path renders a soft/blurred blob right at
+   the hexagon's sharp points (the antialiasing can't clip a miter join
+   cleanly against an angled clip path). An SVG stroke has no such issue,
+   so the tip stays a clean point instead of a milky smudge. This is the
+   part that should read as "thick glass" — the rim, not the whole face. */
+.nav-fab-rim {
   position: absolute; inset: 0;
-  clip-path: inherit;
-  border: 1px solid var(--glass-border);
+  width: 100%; height: 100%;
+  overflow: visible;
   pointer-events: none;
 }
-/* Top-half shine, same trick .glass-sm uses, clipped to the hex too. */
-.nav-fab::after {
-  content: '';
-  position: absolute; top: 0; left: 0; right: 0; height: 50%;
-  clip-path: inherit;
-  background: linear-gradient(180deg, rgba(255,255,255,0.14) 0%, transparent 100%);
-  pointer-events: none;
+.nav-fab-rim polygon {
+  fill: none;
+  stroke: rgba(255,255,255,0.65);
+  stroke-width: 3px;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
 }
 .nav-fab:active { transform: scale(0.9); }
 
@@ -660,16 +663,6 @@ body {
   color: #fff;
 }
 .nav-fab.open .nav-fab-close { opacity: 1; transform: scale(1) rotate(0deg); }
-
-.nav-fab-dot {
-  position: absolute; top: 6px; right: 9px;
-  width: 8px; height: 8px; border-radius: 50%;
-  background: var(--teal);
-  border: 1.5px solid rgba(10,14,26,0.9);
-  box-shadow: 0 0 6px rgba(42,232,196,0.9);
-  transition: opacity 0.2s, background 0.2s;
-}
-.nav-fab.open .nav-fab-dot { opacity: 0; }
 
 /* The vertical trail of bubbles, anchored above the FAB, right-edge aligned
    so each bubble only ever grows *leftward* off the screen edge. */
@@ -741,32 +734,23 @@ body {
 .nav-rail.open .nav-bubble:nth-child(10){ transition-delay: 0.29s; }
 
 .nav-bubble:active { background: rgba(42,232,196,0.16); border-color: rgba(42,232,196,0.5); }
-/* The selected bubble's highlight rides the exact same white↔green cycle
-   as the floating button, so the two always feel like one animation. */
+/* The selected bubble is a plain, static teal highlight — no more
+   color-cycling, so it's reliably the same green every time. */
 .nav-bubble.active {
-  animation: navActiveShift 7s ease-in-out infinite;
+  background: rgba(42,232,196,0.85);
+  border-color: rgba(42,232,196,0.95);
   box-shadow: inset 0 1.5px 0 rgba(210,255,245,0.4), inset 0 -1px 0 rgba(0,0,0,0.2), 0 0 10px rgba(42,232,196,0.25);
 }
-.nav-bubble.active .nb-glyph { animation: navGlyphShift 7s ease-in-out infinite; }
-@keyframes navActiveShift {
-  0%   { background: rgba(42,232,196,0.58); border-color: rgba(42,232,196,0.9); }
-  50%  { background: rgba(255,255,255,0.92); border-color: rgba(255,255,255,0.95); }
-  100% { background: rgba(42,232,196,0.58); border-color: rgba(42,232,196,0.9); }
-}
-@keyframes navGlyphShift {
-  0%   { color: var(--teal); }
-  50%  { color: #ffffff; }
-  100% { color: var(--teal); }
-}
+.nav-bubble.active .nb-glyph { color: #06231d; }
 
-/* Pressed, or caught by the drag-wave: pill grows leftward (right edge —
-   the icon — stays put) and the label slides into the freed space. */
-.nav-rail:not(.dragging) .nav-bubble:active,
+/* Expands only when JS says so — either after holding a bubble still for
+   ~1s, or while genuinely dragging across the rail. A quick tap does NOT
+   trigger this (see onRailPointerDown/updateRailWave in app.js), so the
+   label never flashes open on a plain click. */
 .nav-bubble.nb-peek,
 .nav-bubble.nb-focus {
-  width: 196px;
+  width: var(--nb-w, 128px);
 }
-.nav-rail:not(.dragging) .nav-bubble:active .nb-label,
 .nav-bubble.nb-peek .nb-label,
 .nav-bubble.nb-focus .nb-label {
   opacity: 1;
@@ -795,7 +779,6 @@ body {
   transform: translateX(8px);
   transition: opacity 0.22s ease, transform 0.28s cubic-bezier(0.22,1,0.36,1), max-width 0.32s cubic-bezier(0.22,1,0.36,1);
 }
-.nav-rail:not(.dragging) .nav-bubble:active .nb-label,
 .nav-bubble.nb-peek .nb-label,
 .nav-bubble.nb-focus .nb-label {
   opacity: 1;
@@ -2205,6 +2188,7 @@ body {
   position: fixed;
   width: 272px;
   max-width: calc(100vw - 24px);
+  overflow: hidden;
   /* Opaque instead of translucent, so the animated background canvas
      doesn't bleed/glare through the panel — same glossy recipe as the
      modal sheets and category picker (see --surface-bg). */
