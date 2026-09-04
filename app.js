@@ -123,6 +123,26 @@
       info: '<svg class="ic" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8v.01"/></svg>',
       lock: '<svg class="ic" viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>',
       fingerprint: '<svg class="ic" viewBox="0 0 24 24"><path d="M12 3a7 7 0 0 0-7 7v2c0 3 1 5 1 5"/><path d="M12 3a7 7 0 0 1 7 7v3"/><path d="M8 21c-1-2-2-4-2-9a6 6 0 0 1 12 0v2"/><path d="M12 21c-2-3-3-6-3-9a3 3 0 0 1 6 0c0 1 0 2 .5 3.5"/></svg>',
+      /* Set ikon tambahan — dipakai buat modal Pilih Ikon (goalIcon dkk), biar
+         variasinya cukup luas buat berbagai skenario goal/tabungan pengguna. */
+      piggyBank: '<svg class="ic" viewBox="0 0 24 24"><ellipse cx="12" cy="13" rx="8" ry="6"/><path d="M4 13H1.5M17 8l2-2M9 19v2M15 19v2"/><circle cx="15.5" cy="11" r="0.7" fill="currentColor" stroke="none"/></svg>',
+      shirt: '<svg class="ic" viewBox="0 0 24 24"><path d="M8 4L3 7l2 3 3-1v11h8V9l3 1 2-3-5-3-2 2h-4l-2-2z"/></svg>',
+      dumbbell: '<svg class="ic" viewBox="0 0 24 24"><path d="M4 9v6M2 10v4M20 9v6M22 10v4M7 12h10"/><rect x="6" y="8" width="2" height="8" rx="1"/><rect x="16" y="8" width="2" height="8" rx="1"/></svg>',
+      baby: '<svg class="ic" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M9 8c0 1 1 2 3 2s3-1 3-2"/><path d="M6 21c0-4 3-7 6-7s6 3 6 7"/></svg>',
+      pawprint: '<svg class="ic" viewBox="0 0 24 24"><circle cx="7" cy="9" r="1.6"/><circle cx="12" cy="7" r="1.6"/><circle cx="17" cy="9" r="1.6"/><path d="M12 12c-3 0-5 2-5 4.5S9 21 12 21s5-2 5-4.5S15 12 12 12z"/></svg>',
+      music: '<svg class="ic" viewBox="0 0 24 24"><path d="M9 18V5l11-2v13"/><circle cx="6.5" cy="18" r="2.5"/><circle cx="17.5" cy="16" r="2.5"/></svg>',
+      camera: '<svg class="ic" viewBox="0 0 24 24"><path d="M4 8h3l2-3h6l2 3h3a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1z"/><circle cx="12" cy="13" r="4"/></svg>',
+      wrench: '<svg class="ic" viewBox="0 0 24 24"><path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L3 18l3 3 6.3-6.3a4 4 0 0 0 5.4-5.4l-2.6 2.6-2-2z"/></svg>',
+      umbrella: '<svg class="ic" viewBox="0 0 24 24"><path d="M3 12a9 9 0 0 1 18 0z"/><path d="M12 12v7a2 2 0 0 1-4 0"/><path d="M12 3v2"/></svg>',
+      trophy: '<svg class="ic" viewBox="0 0 24 24"><path d="M7 4h10v5a5 5 0 0 1-10 0V4z"/><path d="M7 5H3v2a4 4 0 0 0 4 4M17 5h4v2a4 4 0 0 1-4 4"/><path d="M12 14v4M9 21h6M9.5 18h5"/></svg>',
+      mountain: '<svg class="ic" viewBox="0 0 24 24"><path d="M3 19l6-10 4 6 2-3 6 7z"/><circle cx="17" cy="6" r="2"/></svg>',
+      building: '<svg class="ic" viewBox="0 0 24 24"><rect x="4" y="3" width="10" height="18"/><path d="M14 8h6v13h-6"/><path d="M7 7h1M7 11h1M7 15h1M11 7h1M11 11h1M11 15h1"/></svg>',
+      globe: '<svg class="ic" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/></svg>',
+      bike: '<svg class="ic" viewBox="0 0 24 24"><circle cx="6" cy="17" r="3.3"/><circle cx="18" cy="17" r="3.3"/><path d="M6 17l4-9h4l3 9M10 8H8M13 13l3 4"/></svg>',
+      fuel: '<svg class="ic" viewBox="0 0 24 24"><path d="M4 21V6a2 2 0 0 1 2-2h6a2 2 0 0 1 2 2v15"/><path d="M4 12h8M14 8l3 3v6a1.5 1.5 0 0 0 3 0v-4l-2-2"/><path d="M2 21h14"/></svg>',
+      ring: '<svg class="ic" viewBox="0 0 24 24"><circle cx="12" cy="15" r="6"/><path d="M12 9L9 4h6l-3 5z"/></svg>',
+      tree: '<svg class="ic" viewBox="0 0 24 24"><path d="M12 2l5 7h-3l4 6h-4v7h-4v-7H6l4-6H7z"/></svg>',
+      anchor: '<svg class="ic" viewBox="0 0 24 24"><circle cx="12" cy="5" r="2"/><path d="M12 7v14M6 12H2a10 10 0 0 0 10 9 10 10 0 0 0 10-9h-4"/><path d="M8 9h8"/></svg>',
     };
 
     // Escape user-provided text before inserting into innerHTML, to prevent XSS
@@ -261,6 +281,20 @@ const BUDGET_CAT_ICON_LABELS = {
 };
 const BUDGET_CAT_COLORS = ['#FF8C00','#5EB3FF','#C4A8FF','#FF6B84','#2AE8C4','#FFD166','#7CE38B','#FF9EC4'];
 let _pendingBudgetCatIcon = null;
+
+// Ikon-ikon buat modal "Pilih Ikon" (dipakai field goalIcon) — sengaja dibuat
+// luas macam-macam skenario (gadget, rumah/kendaraan, keuangan, keluarga,
+// hobi, kesehatan, liburan, dst) supaya user hampir selalu nemu yang pas
+// tanpa harus balik ke ikon generik "target". Tampil sebagai grid ikon polos
+// tanpa teks di modalnya — lihat openIconPickerModal().
+const GOAL_ICON_OPTIONS = [
+  'laptop','smartphone','camera','gamepad',
+  'home','building','car','bike','fuel',
+  'plane','globe','mountain','anchor','tree',
+  'wallet','coins','cash','piggyBank','creditCard','bank','gem','ring',
+  'graduationCap','book','briefcase','gift','heart','baby','pawprint',
+  'health','dumbbell','umbrella','utensils','cart','shirt','music','trophy','sparkles','target','package',
+];
 
 let WALLETS = [];
 
@@ -837,10 +871,19 @@ function moveTypeIndicator(toggleId, indicatorId, activeId, animate = true) {
   const item = document.getElementById(activeId);
   if (!toggle || !indicator) return;
   if (!item) { indicator.classList.remove('ready'); return; }
-  const toggleRect = toggle.getBoundingClientRect();
-  const itemRect = item.getBoundingClientRect();
-  const w = Math.round(itemRect.width), h = Math.round(itemRect.height);
-  const t = Math.round(itemRect.top - toggleRect.top), l = Math.round(itemRect.left - toggleRect.left);
+  // Use offset* geometry (relative to `toggle`, which is `item`'s offsetParent
+  // since it's the nearest position:relative ancestor) instead of
+  // getBoundingClientRect(). The latter reports post-transform screen pixels —
+  // while a parent modal-sheet is still mid-transition (transform: scale(0.92)
+  // → 1 on open), that comes back shrunk by the in-progress scale. Baking that
+  // shrunk size into the indicator's own (untransformed) inline style, which
+  // then gets scaled AGAIN by the same ancestor transform, is what made the
+  // pill land visibly undersized/misaligned right when a modal opens — it only
+  // "fixed itself" once something re-measured after the transition settled.
+  // offsetWidth/offsetTop/offsetLeft reflect pre-transform layout, so they're
+  // correct immediately, even while the modal is still animating in.
+  const w = item.offsetWidth, h = item.offsetHeight;
+  const t = item.offsetTop, l = item.offsetLeft;
   // Skip no-op relayouts. This matters most on mobile: the on-screen keyboard opening/
   // closing (and the address-bar collapsing while scrolling) fires plain window "resize"
   // events even though the pill's own geometry hasn't actually changed. Without this guard,
@@ -874,6 +917,7 @@ window.addEventListener('resize', () => {
     moveTypeIndicator('recurTypeToggle', 'recurTypeIndicator', 'recurType' + (_recurType||'expense').charAt(0).toUpperCase() + (_recurType||'expense').slice(1), false);
     moveTypeIndicator('smartModeTabs', 'smartModeIndicator', (S._smartMode === 'sms') ? 'smartModeSmsTab' : 'smartModeTypeTab', false);
     moveTypeIndicator('debtKindToggle', 'debtKindIndicator', 'debtKind' + (S._debtKind||'utang').charAt(0).toUpperCase() + (S._debtKind||'utang').slice(1), false);
+    if (S.currentPage === 'kelolakategori') moveTypeIndicator('kcTypeToggle', 'kcTypeIndicator', 'kcType' + KC_TYPE.charAt(0).toUpperCase() + KC_TYPE.slice(1), false);
   }, 150);
 });
 
@@ -914,7 +958,10 @@ function showPage(id) {
   if (id === 'recurring')       { renderRecurList(); renderSubDetections(); }
   if (id === 'riwayat')         { setTimeout(renderRiwayat, 60); }
   if (id === 'settings')        updateSettingsPage();
-  if (id === 'kelolakategori')  renderKategoriList();
+  if (id === 'kelolakategori')  {
+    renderKategoriList();
+    setTimeout(() => moveTypeIndicator('kcTypeToggle', 'kcTypeIndicator', 'kcType' + KC_TYPE.charAt(0).toUpperCase() + KC_TYPE.slice(1), false), 30);
+  }
   if (id === 'utang')           renderDebts();
 }
 
@@ -2267,9 +2314,7 @@ function openEditBudgetModal(id) {
   document.getElementById('newBudgetCatCurrency').value = cur;
   document.getElementById('newBudgetCatCurrencyLbl').textContent = currencyLabelText(cur);
   document.getElementById('budgetCatIcon').value = cat.icon || '';
-  document.getElementById('budgetCatIconLbl').innerHTML = cat.icon
-    ? (ICON[cat.icon] || '') + ' ' + escapeHtml(BUDGET_CAT_ICON_LABELS[cat.icon] || cat.icon)
-    : 'Pilih ikon';
+  document.getElementById('budgetCatIconLbl').innerHTML = cat.icon ? (ICON[cat.icon] || '') : 'Pilih ikon';
   document.getElementById('budgetSettingsModalOverlay').classList.add('open');
 }
 
@@ -2341,13 +2386,13 @@ function removeBudgetCat(id) {
 ══════════════════════════════════════════ */
 let KC_TYPE = 'expense';
 let _editingCatId = null;
-let _pendingCatIcon = null;
 let _pendingCatColor = null;
 
 function setKategoriType(type) {
   KC_TYPE = type;
   document.getElementById('kcTypeExpense').classList.toggle('active', type === 'expense');
   document.getElementById('kcTypeIncome').classList.toggle('active', type === 'income');
+  moveTypeIndicator('kcTypeToggle', 'kcTypeIndicator', 'kcType' + type.charAt(0).toUpperCase() + type.slice(1));
   renderKategoriList();
 }
 
@@ -2458,18 +2503,6 @@ document.addEventListener('touchstart', e => {
   closeOtherKcSwipes(null);
 }, {passive:true});
 
-function renderCategoryIconGrid() {
-  const grid = document.getElementById('categoryIconGrid');
-  if (!grid) return;
-  grid.innerHTML = BUDGET_CAT_ICONS.map(key => `
-    <div class="icon-pick-item ${_pendingCatIcon===key?'selected':''}" onclick="selectCategoryIcon('${key}')">${ICON[key]||''}</div>
-  `).join('');
-}
-function selectCategoryIcon(key) {
-  _pendingCatIcon = key;
-  renderCategoryIconGrid();
-}
-
 function renderCategoryColorGrid() {
   const grid = document.getElementById('categoryColorGrid');
   if (!grid) return;
@@ -2488,9 +2521,10 @@ function openAddCategoryModal() {
   document.getElementById('categoryModalSubmitBtn').textContent = 'Simpan Kategori';
   document.getElementById('editCategoryId').value = '';
   document.getElementById('categoryNameInput').value = '';
-  _pendingCatIcon  = BUDGET_CAT_ICONS[0];
+  const defaultIcon = BUDGET_CAT_ICONS[0];
+  document.getElementById('categoryIcon').value = defaultIcon;
+  document.getElementById('categoryIconLabel').innerHTML = ICON[defaultIcon] || '';
   _pendingCatColor = BUDGET_CAT_COLORS[(CATS[KC_TYPE]||[]).length % BUDGET_CAT_COLORS.length];
-  renderCategoryIconGrid();
   renderCategoryColorGrid();
   document.getElementById('categoryModalOverlay').classList.add('open');
 }
@@ -2504,9 +2538,10 @@ function openEditCategoryModal(type, id) {
   document.getElementById('categoryModalSubmitBtn').textContent = 'Simpan Perubahan';
   document.getElementById('editCategoryId').value = id;
   document.getElementById('categoryNameInput').value = cat.label;
-  _pendingCatIcon  = catIcon(id);
+  const icon = catIcon(id);
+  document.getElementById('categoryIcon').value = icon;
+  document.getElementById('categoryIconLabel').innerHTML = ICON[icon] || '';
   _pendingCatColor = cat.color;
-  renderCategoryIconGrid();
   renderCategoryColorGrid();
   document.getElementById('categoryModalOverlay').classList.add('open');
 }
@@ -2517,8 +2552,9 @@ function closeCategoryModal() {
 
 function submitCategoryModal() {
   const name = document.getElementById('categoryNameInput').value.trim();
+  const icon = document.getElementById('categoryIcon').value;
   if (!name) { showToast('Nama kategori wajib diisi', 'warning'); return; }
-  if (!_pendingCatIcon)  { showToast('Pilih ikon untuk kategori ini', 'warning'); return; }
+  if (!icon)  { showToast('Pilih ikon untuk kategori ini', 'warning'); return; }
   if (!_pendingCatColor) { showToast('Pilih warna untuk kategori ini', 'warning'); return; }
 
   if (_editingCatId) {
@@ -2528,11 +2564,11 @@ function submitCategoryModal() {
     if (!cat) { closeCategoryModal(); return; }
     cat.label = name;
     cat.color = _pendingCatColor;
-    CUSTOM_CAT_ICONS[id] = _pendingCatIcon;
+    CUSTOM_CAT_ICONS[id] = icon;
     // Keep budget category in sync if this category also has a spending limit
     if (KC_TYPE === 'expense') {
       const bc = BUDGET.cats.find(b => b.id === id);
-      if (bc) { bc.label = name; bc.color = _pendingCatColor; bc.icon = _pendingCatIcon; }
+      if (bc) { bc.label = name; bc.color = _pendingCatColor; bc.icon = icon; }
     }
     showToast('Kategori diperbarui', 'success');
   } else {
@@ -2541,7 +2577,7 @@ function submitCategoryModal() {
     const cats = CATS[KC_TYPE];
     const insertAt = cats.length && cats[cats.length-1].id === 'other' ? cats.length - 1 : cats.length;
     cats.splice(insertAt, 0, { id, label: name, color: _pendingCatColor });
-    CUSTOM_CAT_ICONS[id] = _pendingCatIcon;
+    CUSTOM_CAT_ICONS[id] = icon;
     showToast('Kategori ditambahkan', 'success');
   }
 
@@ -4456,7 +4492,8 @@ function renderLockModal() {
 ══════════════════════════════════════════ */
 let GOALS = [];
 
-// Utang-piutang: { id, kind:'utang'|'piutang', person, amount, paid, note,
+// Utang-piutang: { id, kind:'utang'|'piutang', person, amount, interest (persen,
+// 0 kalau tanpa bunga), paid, note,
 // period:'none'|'monthly'|'yearly', periodCount (jumlah total cicilan bulan/
 // tahun, null kalau period 'none'),
 // dueDate — selalu "YYYY-MM-DD" biasa (atau null) apapun periodenya. Untuk
@@ -4634,7 +4671,7 @@ function openGoalModal() {
   document.getElementById('goalTarget').value = '';
   document.getElementById('goalSaved').value  = '0';
   const gi = document.getElementById('goalIcon'); if(gi) gi.value='laptop';
-  const gl = document.getElementById('goalIconLabel'); if(gl) gl.innerHTML = ICON.laptop + ' Laptop';
+  const gl = document.getElementById('goalIconLabel'); if(gl) gl.innerHTML = ICON.laptop;
   // Reset picker display
   const gta = document.getElementById('txAccountLabel'); if(gta && WALLETS.length) gta.textContent = WALLETS[0].name;
 }
@@ -4812,6 +4849,28 @@ function openDebtBreakdown(id) {
 function closeDebtBreakdown() { document.getElementById('debtBreakdownOverlay').classList.remove('open'); }
 function closeDebtBreakdownOutside(e) { if (e.target === document.getElementById('debtBreakdownOverlay')) closeDebtBreakdown(); }
 
+// Interpolasi warna merah → kuning/oranye → hijau berdasarkan progress 0-100,
+// dipakai buat badge persentase kartu utang/piutang (bukan buat warna bar-nya
+// sendiri, yang tetap ikut warna utang/piutang seperti biasa).
+function debtPctColor(pct) {
+  const stops = [
+    { p: 0,   c: [220, 38, 38]  },  // --red
+    { p: 50,  c: [245, 158, 11] },  // amber
+    { p: 100, c: [22, 163, 74]  },  // green
+  ];
+  const clamped = Math.max(0, Math.min(100, pct));
+  let a = stops[0], b = stops[1];
+  for (let i = 0; i < stops.length - 1; i++) {
+    if (clamped >= stops[i].p && clamped <= stops[i+1].p) { a = stops[i]; b = stops[i+1]; break; }
+  }
+  const span = b.p - a.p || 1;
+  const t = (clamped - a.p) / span;
+  const r = Math.round(a.c[0] + (b.c[0]-a.c[0]) * t);
+  const g = Math.round(a.c[1] + (b.c[1]-a.c[1]) * t);
+  const bl = Math.round(a.c[2] + (b.c[2]-a.c[2]) * t);
+  return `rgb(${r},${g},${bl})`;
+}
+
 function renderDebts() {
   renderDebtSummary();
   const list = document.getElementById('debtList');
@@ -4849,18 +4908,20 @@ function renderDebts() {
               <div class="goal-icon" style="background:${color}22">${isPiutang ? ICON.coins : ICON.creditCard}</div>
               <div class="goal-meta">
                 <div class="goal-name">${escapeHtml(d.person)}${d.note ? ' · ' + escapeHtml(d.note) : ''}</div>
-                <div class="goal-days">${dueLabel} · ${isPiutang ? 'Piutang' : 'Utang'}</div>
+                <div class="goal-days">${dueLabel} · ${isPiutang ? 'Piutang' : 'Utang'}${d.interest ? ' · Bunga ' + d.interest + '%' : ''}</div>
               </div>
               <div class="goal-amount">
                 <div class="goal-saved">${cur.symbol} ${sisa.toLocaleString(cur.locale)}</div>
                 <div class="goal-target">dari ${cur.symbol} ${d.amount.toLocaleString(cur.locale)}</div>
               </div>
             </div>
+            <div class="debt-pct-row">
+              <div class="debt-pct" style="color:${debtPctColor(pct)}">${pct}%</div>
+            </div>
             <div class="goal-bar-bg">
               <div class="goal-bar-fill" style="width:${pct}%;background:linear-gradient(90deg,${color},${color}99)"></div>
             </div>
-            <div class="goal-footer">
-              <div class="goal-pct" style="color:${color}">${pct}%</div>
+            <div class="goal-footer" style="justify-content:flex-end">
               ${!lunas ? `<div class="goal-add-btn" onclick="event.stopPropagation();openDebtPayModal(${d.id})">＋ ${isPiutang ? 'Terima' : 'Bayar'}</div>` : ''}
             </div>
           </div>
@@ -4978,6 +5039,7 @@ function openDebtModal(id) {
   document.getElementById('debtModalTitle').textContent = d ? 'Edit Catatan' : 'Tambah Utang/Piutang';
   document.getElementById('debtPerson').value = d ? d.person : '';
   document.getElementById('debtAmount').value = d ? d.amount : '';
+  document.getElementById('debtInterest').value = d && d.interest ? d.interest : '';
   document.getElementById('debtNote').value   = d ? (d.note || '') : '';
   const period = d ? (d.period || 'none') : 'none';
   document.getElementById('debtPeriod').value = period;
@@ -4998,6 +5060,7 @@ function closeDebtModalOutside(e) { if (e.target === document.getElementById('de
 function submitDebt() {
   const person   = document.getElementById('debtPerson').value.trim();
   const amount   = parseInt(document.getElementById('debtAmount').value) || 0;
+  const interest = parseFloat(document.getElementById('debtInterest').value) || 0;
   const note     = document.getElementById('debtNote').value.trim();
   const dueDate  = document.getElementById('debtDueDate').value || null;
   const period   = document.getElementById('debtPeriod').value || 'none';
@@ -5013,13 +5076,13 @@ function submitDebt() {
   if (_editingDebtId) {
     const d = DEBTS.find(x => x.id === _editingDebtId);
     if (d) {
-      d.person = person; d.amount = amount; d.note = note; d.dueDate = dueDate; d.period = period; d.periodCount = periodCount; d.kind = kind; d.currency = currency;
+      d.person = person; d.amount = amount; d.interest = interest; d.note = note; d.dueDate = dueDate; d.period = period; d.periodCount = periodCount; d.kind = kind; d.currency = currency;
       if (d.paid >= d.amount) d.status = 'lunas'; else d.status = 'aktif';
       d._alertedDue = false; d._alertedOverdue = false;
     }
   } else {
     DEBTS = [...DEBTS, {
-      id: Date.now(), kind, person, amount, paid: 0, note, dueDate, period, periodCount,
+      id: Date.now(), kind, person, amount, interest, paid: 0, note, dueDate, period, periodCount,
       currency, status: 'aktif', createdAt: Date.now(),
     }];
   }
@@ -6209,11 +6272,6 @@ const PICKER_REGISTRY = {
     getOpts: () => Object.keys(CURRENCIES).map(code => ({ value: code, text: currencyLabelText(code) })),
     labelId: 'newBudgetCatCurrencyLbl',
   },
-  budgetCatIcon: {
-    title: 'Pilih Ikon',
-    getOpts: () => BUDGET_CAT_ICONS.map(key => ({ value: key, text: BUDGET_CAT_ICON_LABELS[key] || key, icon: key })),
-    labelId: 'budgetCatIconLbl',
-  },
   debtCurrencyInput: {
     title: 'Mata Uang',
     getOpts: () => Object.keys(CURRENCIES).map(code => ({ value: code, text: currencyLabelText(code) })),
@@ -6254,25 +6312,49 @@ const PICKER_REGISTRY = {
     getOpts: () => WALLETS.map(w => ({ value: w.id, text: w.name })),
     labelId: 'recurAccountLabel',
   },
-  goalIcon: {
-    title: 'Ikon Goal',
-    getOpts: () => [
-      { value: 'laptop',  text: 'Laptop',        icon: 'laptop' },
-      { value: 'home',    text: 'Rumah',         icon: 'home' },
-      { value: 'car',     text: 'Kendaraan',     icon: 'car' },
-      { value: 'plane',   text: 'Liburan',       icon: 'plane' },
-      { value: 'gem',     text: 'Menikah',       icon: 'gem' },
-      { value: 'smartphone', text: 'Gadget',     icon: 'smartphone' },
-      { value: 'graduationCap', text: 'Pendidikan', icon: 'graduationCap' },
-      { value: 'wallet',  text: 'Dana Darurat',  icon: 'wallet' },
-      { value: 'target',  text: 'Lainnya',       icon: 'target' },
-    ],
-    labelId: 'goalIconLabel',
-  },
 };
 
 let _pickerActiveField = null;
 let _pickerActiveOpts  = [];
+
+/* ══════════════════════════════════════════
+   MODAL PILIH IKON (khusus field icon)
+   Beda dari PICKER_REGISTRY di atas (dropdown anchored, list bertext) — ini
+   kartu melayang di tengah layar isinya grid ikon polos tanpa nama, dipakai
+   buat field yang murni "isi ikon" (bukan field pilih kategori — kategori
+   tetap pakai grid ikon inline yang sudah ada di modal Tambah Kategori).
+══════════════════════════════════════════ */
+const ICON_PICKER_REGISTRY = {
+  goalIcon:      { options: () => GOAL_ICON_OPTIONS,  labelId: 'goalIconLabel',      hiddenId: 'goalIcon' },
+  budgetCatIcon: { options: () => BUDGET_CAT_ICONS,    labelId: 'budgetCatIconLbl',  hiddenId: 'budgetCatIcon' },
+  categoryIcon:  { options: () => BUDGET_CAT_ICONS,    labelId: 'categoryIconLabel', hiddenId: 'categoryIcon' },
+};
+let _iconPickerActiveField = null;
+
+function openIconPickerModal(fieldId) {
+  const reg = ICON_PICKER_REGISTRY[fieldId];
+  if (!reg) return;
+  _iconPickerActiveField = fieldId;
+  const hidden  = document.getElementById(reg.hiddenId);
+  const curVal  = hidden ? hidden.value : '';
+  const opts    = reg.options();
+  const grid    = document.getElementById('iconPickerGrid');
+  grid.innerHTML = opts.map(key => `
+    <div class="icon-pick-item ${key === curVal ? 'selected' : ''}" onclick="selectPickerIcon('${key}')">${ICON[key] || ''}</div>`).join('');
+  document.getElementById('iconPickerOverlay').classList.add('open');
+}
+function closeIconPickerModal() { document.getElementById('iconPickerOverlay').classList.remove('open'); _iconPickerActiveField = null; }
+function closeIconPickerModalOutside(e) { if (e.target === document.getElementById('iconPickerOverlay')) closeIconPickerModal(); }
+
+function selectPickerIcon(key) {
+  const reg = ICON_PICKER_REGISTRY[_iconPickerActiveField];
+  if (!reg) return;
+  const hidden = document.getElementById(reg.hiddenId);
+  const label  = document.getElementById(reg.labelId);
+  if (hidden) hidden.value = key;
+  if (label)  label.innerHTML = ICON[key] || '';
+  closeIconPickerModal();
+}
 
 /* ══════════════════════════════════════════
    DROPDOWN ANCHORING
@@ -6538,13 +6620,22 @@ function openDp(panel) {
   if (!panel) return;
   const overlay = panel.closest('.dp-overlay');
   if (!overlay) return;
+  const triggerId = overlay.dataset.trigger;
+  const trigger = triggerId && document.getElementById(triggerId);
+  // If the trigger sits mid-modal with a tall panel (e.g. a full calendar) that
+  // can't fit in the space below it within the viewport, anchorDropdown() flips
+  // the panel above the trigger — which can cover other controls earlier in the
+  // very same modal (e.g. a type toggle) behind the picker's full-screen
+  // transparent overlay, so the first tap on them just closes the picker
+  // instead of reaching them. Scrolling the trigger toward the center of its
+  // scrollable container first (the modal-sheet) gives the panel room to open
+  // below it instead, so it never has to overlap sibling controls.
+  if (trigger && trigger.scrollIntoView) trigger.scrollIntoView({ block: 'center', behavior: 'auto' });
   overlay.style.display = 'none';
   void overlay.offsetHeight; // discard any stale compositing layer
   overlay.style.display = '';
   void overlay.offsetHeight; // commit the pre-open frame so the transition below actually plays
   overlay.classList.add('open');
-  const triggerId = overlay.dataset.trigger;
-  const trigger = triggerId && document.getElementById(triggerId);
   if (trigger) anchorDropdown(panel, trigger);
   lockDpScroll();
 }

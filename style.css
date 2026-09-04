@@ -1130,6 +1130,26 @@ body {
   background: rgba(42,232,196,0.18); border-color: rgba(42,232,196,0.5); color: var(--teal);
   box-shadow: 0 0 10px rgba(42,232,196,0.25);
 }
+.icon-pick-item:active { transform: scale(0.92); }
+
+/* Field trigger showing just the chosen icon (no name text) — used by fields
+   whose modal is icon-only, e.g. the Goal "Ikon" field. */
+.picker-icon-only { display: flex; align-items: center; }
+.picker-icon-only .ic { width: 16px; height: 16px; }
+
+/* Modal "Pilih Ikon" — centered floating card (reuses .debt-float-overlay/
+   .debt-float-card for the same glide-in/backdrop behavior), just with a
+   header + scrollable icon grid instead of the debt breakdown rows. */
+.icon-picker-card { padding: 18px 18px 16px; max-height: 68vh; }
+.icon-picker-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; flex-shrink: 0; }
+.icon-picker-grid {
+  grid-template-columns: repeat(5, 1fr);
+  gap: 10px;
+  overflow-y: auto; scrollbar-width: none;
+  flex: 1; min-height: 0; padding-bottom: 2px;
+}
+.icon-picker-grid::-webkit-scrollbar { display: none; }
+.icon-picker-grid .icon-pick-item .ic { width: 19px; height: 19px; }
 
 /* ═══════════════════════════════════════
    ANALYTICS
@@ -1841,6 +1861,12 @@ body {
 
 .goal-footer { display: flex; justify-content: space-between; align-items: center; position: relative; z-index: 1; }
 .goal-pct    { font-family: var(--disp); font-size: 20px; font-weight: 700; }
+
+/* Utang/Piutang: badge persentase kecil di pojok kiri-atas bar (bukan yang
+   gede seperti .goal-pct di Goals) — warnanya dihitung per-kartu lewat
+   debtPctColor() di JS, gradasi merah → hijau sesuai progress. */
+.debt-pct-row { display: flex; justify-content: flex-start; margin-bottom: 4px; position: relative; z-index: 1; }
+.debt-pct     { font-family: var(--disp); font-size: 11px; font-weight: 700; }
 .goal-add-btn {
   font-size: 11px; font-weight: 600; padding: 5px 12px;
   border-radius: 99px; cursor: pointer; color: var(--teal);
