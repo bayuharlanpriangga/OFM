@@ -1474,7 +1474,10 @@ function handleCameraGallerySelect(event) {
    dipakai buat isi form yang sama kayak alur "Catat Cepat" — user tetap
    review chip-nya sebelum Simpan, OCR ga pernah auto-submit.
 ══════════════════════════════════════════ */
-const RECEIPT_TOTAL_KEYWORDS = ['grand total', 'total belanja', 'total bayar', 'total tagihan', 'jumlah bayar', 'total', 'jumlah', 'sub total', 'subtotal'];
+// Keyword "kuat" — beneran nunjuk ke grand total, dipercaya penuh kalau ketemu.
+const RECEIPT_TOTAL_KEYWORDS_STRONG = ['grand total', 'total belanja', 'total bayar', 'total tagihan', 'jumlah bayar', 'total', 'jumlah'];
+// Keyword "lemah" — subtotal doang, BUKAN total akhir (belum termasuk pajak/service).
+const RECEIPT_TOTAL_KEYWORDS_WEAK = ['sub total', 'subtotal'];
 
 // "Rp45.000" / "45.000" / "45,000" -> 45000 (titik/koma dianggap pemisah ribuan ala struk ID)
 function receiptParseNumber(str) {
@@ -1484,14 +1487,11 @@ function receiptParseNumber(str) {
   return isNaN(n) ? 0 : n;
 }
 
-function receiptFindTotal(text) {
-  const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
-  const numRe = /\d{1,3}(?:[.,]\d{3})+|\d{4,}/g;
-
-  // 1) Baris yang mengandung kata kunci total — ambil angka terbesar di baris itu.
-  //    Urutan keyword sengaja dari yang paling spesifik ("grand total") ke paling umum,
-  //    supaya "Total" murni tidak kalah sama "Subtotal" kalau keduanya ada.
-  for (const kw of RECEIPT_TOTAL_KEYWORDS) {
+// Cari baris yang mengandung salah satu keyword, ambil angka terbesar di baris itu.
+// Urutan keyword dari yang paling spesifik ("grand total") ke paling umum,
+// supaya "Total" murni tidak kalah sama "Subtotal" kalau keduanya ada.
+function receiptFindByKeywords(lines, numRe, keywords) {
+  for (const kw of keywords) {
     for (const line of lines) {
       const lower = line.toLowerCase();
       if (!lower.includes(kw)) continue;
@@ -1503,13 +1503,30 @@ function receiptFindTotal(text) {
       if (nums.length) return Math.max(...nums);
     }
   }
-
-  // 2) Fallback: ga ada kata kunci ketemu sama sekali — ambil angka terbesar
-  //    di seluruh struk (biasanya total lebih gede dari harga per item).
-  const allNums = [...text.matchAll(numRe)].map(m => receiptParseNumber(m[0])).filter(n => n >= 500);
-  if (allNums.length) return Math.max(...allNums);
-
   return 0;
+}
+
+function receiptFindTotal(text) {
+  const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
+  const numRe = /\d{1,3}(?:[.,]\d{3})+|\d{4,}/g;
+  const allNums = [...text.matchAll(numRe)].map(m => receiptParseNumber(m[0])).filter(n => n >= 500);
+  const overallMax = allNums.length ? Math.max(...allNums) : 0;
+
+  // 1) Keyword total yang kuat (bukan subtotal) — paling dipercaya, langsung pakai.
+  const strong = receiptFindByKeywords(lines, numRe, RECEIPT_TOTAL_KEYWORDS_STRONG);
+  if (strong > 0) return strong;
+
+  // 2) Cuma "subtotal"/"sub total" yang ke-baca — sinyal lemah, karena kemungkinan
+  //    baris "Total" aslinya gagal ke-OCR (biasanya fontnya beda/lebih tebal dari baris
+  //    lain di struk, jadi lebih rawan salah baca). Total akhir struk (subtotal +
+  //    pajak + service charge) hampir selalu angka terbesar di seluruh struk, jadi
+  //    kalau ada angka lain yang lebih gede dari subtotal ini, itu kemungkinan gedenya
+  //    total asli yang gagal ke-tag — pakai yang lebih besar di antara keduanya.
+  const weak = receiptFindByKeywords(lines, numRe, RECEIPT_TOTAL_KEYWORDS_WEAK);
+  if (weak > 0) return Math.max(weak, overallMax);
+
+  // 3) Ga ada kata kunci ketemu sama sekali — ambil angka terbesar di seluruh struk.
+  return overallMax;
 }
 
 // Tebak nama toko/keterangan dari baris atas struk (biasanya nama merchant ada di paling atas)
@@ -1623,6 +1640,16 @@ function submitTransaction() {
 /* ══════════════════════════════════════════
    DASHBOARD
 ══════════════════════════════════════════ */
+// Dipakai khusus buat billboard Pemasukan/Pengeluaran di Home — biar
+// nominalnya nggak terus membesar (beda sama Piutang/Utang yang memang
+// harus real-time tanpa filter tanggal, karena saldonya bisa berkurang).
+function isThisMonth(dateStr) {
+  if (!dateStr) return false;
+  const now = new Date();
+  const ym  = now.getFullYear() + '-' + String(now.getMonth()+1).padStart(2,'0');
+  return dateStr.slice(0,7) === ym;
+}
+
 function renderDashboard() {
   const txs = S.transactions;
   // Keep BUDGET.total fresh (auto-summed from category limits) before this
@@ -1648,38 +1675,43 @@ function renderDashboard() {
   balanceEntries.sort((a,b) => (a.code==='IDR'?-1:1) - (b.code==='IDR'?-1:1));
   runBalanceTicker(balanceEntries);
 
-  // Pemasukan / Pengeluaran: sama, tapi cuma mata uang yang BENERAN ada
-  // transaksinya yang ikut dirotasi. Kalau semua transaksi cuma Rp, ya
-  // cuma Rp yang tampil (nggak dipaksa nampilin mata uang kosong).
+  // Pemasukan / Pengeluaran di billboard Home: cuma transaksi BULAN INI
+  // (biar nominalnya nggak terus membesar seiring waktu — beda dengan
+  // Piutang/Utang di bawah yang memang real-time tanpa filter tanggal,
+  // karena saldonya bisa berkurang seiring dibayar/diterima). Dan cuma
+  // mata uang yang BENERAN ada transaksinya bulan ini yang ikut dirotasi
+  // — nggak dipaksa default ke Rp kalau memang belum ada transaksi sama
+  // sekali (lihat blank-entry di bawah).
   const incomeByCurrency = {}, expenseByCurrency = {};
   txs.forEach(t => {
     if (t.type !== 'income' && t.type !== 'expense') return;
+    if (!isThisMonth(t.date)) return;
     const code = walletCurrencyCode(t.account);
     const bucket = t.type === 'income' ? incomeByCurrency : expenseByCurrency;
     bucket[code] = (bucket[code] || 0) + t.amount;
   });
   let incomeEntries  = Object.entries(incomeByCurrency).map(([code, amount]) => ({ code, amount }));
   let expenseEntries = Object.entries(expenseByCurrency).map(([code, amount]) => ({ code, amount }));
-  if (!incomeEntries.length)  incomeEntries  = [{ code: 'IDR', amount: 0 }];
-  if (!expenseEntries.length) expenseEntries = [{ code: 'IDR', amount: 0 }];
 
   // Kartu Pemasukan digabung dengan Piutang, kartu Pengeluaran digabung
   // dengan Utang — bergantian menampilkan label+nominalnya kayak papan
   // iklan (sama seperti Total Aset kalau akunnya lebih dari satu mata
   // uang), dan papan ini terus aktif jalan meski nominal di kedua sisi
-  // sama-sama 0 (karena selalu ada minimal 2 entry: pemasukan & piutang).
+  // sama-sama 0. Kalau salah satu sisi memang kosong (belum ada transaksi
+  // bulan ini / belum ada catatan piutang-utang aktif), sisinya tampil
+  // "0" polos tanpa simbol mata uang apapun (lewat blank-entry), bukan
+  // dipaksa nampilin "Rp".
   let piutangEntries = debtCurrencyBreakdown('piutang');
   let utangEntries   = debtCurrencyBreakdown('utang');
-  if (!piutangEntries.length) piutangEntries = [{ code: 'IDR', amount: 0 }];
-  if (!utangEntries.length)   utangEntries   = [{ code: 'IDR', amount: 0 }];
 
+  const blankEntry = label => ({ code: null, amount: 0, label, blank: true });
   const incomeCombined = [
-    ...incomeEntries.map(e => ({ ...e, label: 'Pemasukan' })),
-    ...piutangEntries.map(e => ({ ...e, label: 'Piutang' })),
+    ...(incomeEntries.length ? incomeEntries.map(e => ({ ...e, label: 'Pemasukan' })) : [blankEntry('Pemasukan')]),
+    ...(piutangEntries.length ? piutangEntries.map(e => ({ ...e, label: 'Piutang' }))  : [blankEntry('Piutang')]),
   ];
   const expenseCombined = [
-    ...expenseEntries.map(e => ({ ...e, label: 'Pengeluaran' })),
-    ...utangEntries.map(e => ({ ...e, label: 'Utang' })),
+    ...(expenseEntries.length ? expenseEntries.map(e => ({ ...e, label: 'Pengeluaran' })) : [blankEntry('Pengeluaran')]),
+    ...(utangEntries.length ? utangEntries.map(e => ({ ...e, label: 'Utang' }))            : [blankEntry('Utang')]),
   ];
   runAmountTicker('income',  document.getElementById('totalIncome'),  incomeCombined,  document.getElementById('incomeLabelTxt'));
   runAmountTicker('expense', document.getElementById('totalExpense'), expenseCombined, document.getElementById('expenseLabelTxt'));
@@ -1764,6 +1796,58 @@ function _tickerFadeMulti(els, apply) {
   }, 280);
 }
 
+/* ══════════════════════════════════════════
+   SEMBUNYIKAN NOMINAL (tombol mata)
+   Total Aset diganti titik-titik beranimasi gradasi (warna sama seperti
+   orb #bg-canvas) yang mengalir dari kiri ke kanan; klik titik-titiknya
+   sendiri memicu efek "bergelombang" sesaat. Pemasukan/Pengeluaran/
+   Piutang/Utang di billboard cukup diganti strip — tidak ada info nominal
+   sama sekali yang bisa dibaca sekilas.
+══════════════════════════════════════════ */
+let AMOUNTS_HIDDEN = localStorage.getItem('ofm_amounts_hidden') === '1';
+
+function toggleAmountsHidden() {
+  AMOUNTS_HIDDEN = !AMOUNTS_HIDDEN;
+  localStorage.setItem('ofm_amounts_hidden', AMOUNTS_HIDDEN ? '1' : '0');
+  applyAmountsHiddenUI();
+  renderDashboard();
+}
+
+function applyAmountsHiddenUI() {
+  const btn = document.getElementById('amtEyeBtn');
+  if (btn) btn.classList.toggle('active', AMOUNTS_HIDDEN);
+  const iconOpen   = document.getElementById('amtEyeIconOpen');
+  const iconClosed = document.getElementById('amtEyeIconClosed');
+  if (iconOpen)   iconOpen.style.display   = AMOUNTS_HIDDEN ? 'none' : '';
+  if (iconClosed) iconClosed.style.display = AMOUNTS_HIDDEN ? '' : 'none';
+}
+
+// Render titik-titik pengganti nominal Total Aset — tiap titik punya delay
+// animasi sendiri (--i) biar gradasinya kelihatan mengalir, bukan cuma
+// nge-blink bareng semua titik.
+function renderHiddenDots(el, count) {
+  if (!el) return;
+  el.innerHTML = Array.from({ length: count }).map((_, i) =>
+    `<span class="hd-dot" style="--i:${i}">•</span>`
+  ).join('');
+  el.classList.add('hd-active');
+  bindHiddenDotsWave(el);
+}
+
+// Klik langsung di titik-titiknya (bukan tombol mata) memicu respons
+// "bergelombang" sesaat — cuma efek iseng, nggak membuka nominalnya.
+function bindHiddenDotsWave(el) {
+  if (!el || el._hdWaveBound) return;
+  el._hdWaveBound = true;
+  el.addEventListener('click', () => {
+    if (!AMOUNTS_HIDDEN) return;
+    el.classList.remove('waving');
+    void el.offsetWidth; // reflow supaya animasinya bisa diulang dari awal
+    el.classList.add('waving');
+    setTimeout(() => el.classList.remove('waving'), 900);
+  });
+}
+
 function runBalanceTicker(entries) {
   const key = 'balance';
   if (_tickerState[key] && _tickerState[key].interval) clearInterval(_tickerState[key].interval);
@@ -1775,8 +1859,14 @@ function runBalanceTicker(entries) {
   const paint = i => {
     const { code, amount } = entries[i];
     const info = currencyInfo(code);
-    if (curEl) curEl.textContent = amount === 0 ? '' : info.symbol;
-    if (numEl) numEl.textContent = amount.toLocaleString(info.locale);
+    if (AMOUNTS_HIDDEN) {
+      if (curEl) curEl.textContent = info.symbol;
+      renderHiddenDots(numEl, 8);
+    } else {
+      if (numEl) numEl.classList.remove('hd-active', 'waving');
+      if (curEl) curEl.textContent = amount === 0 ? '' : info.symbol;
+      if (numEl) numEl.textContent = amount.toLocaleString(info.locale);
+    }
     if (dotsEl) dotsEl.querySelectorAll('.dot').forEach((d, di) => d.classList.toggle('active', di === i));
   };
 
@@ -1811,9 +1901,15 @@ function runAmountTicker(key, el, entries, labelEl) {
   if (_tickerState[key] && _tickerState[key].interval) clearInterval(_tickerState[key].interval);
   if (!el) return;
   const paint = i => {
-    const { code, amount, label } = entries[i];
-    const info = currencyInfo(code);
-    el.textContent = info.symbol + ' ' + amount.toLocaleString(info.locale);
+    const { code, amount, label, blank } = entries[i];
+    if (AMOUNTS_HIDDEN) {
+      el.textContent = '—';
+    } else if (blank) {
+      el.textContent = '0';
+    } else {
+      const info = currencyInfo(code);
+      el.textContent = info.symbol + ' ' + amount.toLocaleString(info.locale);
+    }
     if (labelEl && label) labelEl.textContent = label;
   };
   paint(0);
@@ -1822,6 +1918,87 @@ function runAmountTicker(key, el, entries, labelEl) {
     _tickerState[key] = { interval: setInterval(() => {
       idx = (idx + 1) % entries.length;
       _tickerFadeMulti([el, labelEl], () => paint(idx));
+    }, 2800) };
+  } else {
+    _tickerState[key] = { interval: null };
+  }
+}
+
+// Only show a currency symbol once the user actually has an account —
+// before that, there's no determined currency to speak of, so numbers
+// (Riwayat/Anggaran summary cards, etc.) show plain digits instead of
+// defaulting to "Rp" like they used to.
+function hasWalletCurrency() { return WALLETS.length > 0; }
+
+// Build a [{code, amount}] entry list from a {code: amount} sum map,
+// keeping only currencies that actually carry a nonzero nominal (per
+// "yang ditampilkan hanya yang mata uangnya memiliki nominal") — falls
+// back to a single zero entry (in fallbackCode, or the first wallet's
+// currency, or IDR) so callers always have at least one entry to paint.
+function buildCurrencyEntries(sumsByCurrency, fallbackCode) {
+  let entries = Object.entries(sumsByCurrency)
+    .filter(([, amt]) => amt !== 0)
+    .map(([code, amount]) => ({ code, amount }));
+  if (!entries.length) {
+    const fc = fallbackCode || (WALLETS[0] && WALLETS[0].currency) || 'IDR';
+    entries = [{ code: fc, amount: 0 }];
+  }
+  return entries;
+}
+
+// Format one ticker entry as display text — blanks the currency symbol
+// entirely while the user has no account yet (see hasWalletCurrency()),
+// otherwise always shows it (even at zero) since the currency IS known.
+// opts.compact uses the short "1,2jt/rb" form (fmtK) for tight layouts
+// like the Riwayat summary row instead of the full grouped number.
+function fmtTickerAmount(entry, opts = {}) {
+  const info = currencyInfo(entry.code);
+  const showSymbol = opts.forceSymbol || hasWalletCurrency();
+  const sign = opts.sign ? (entry.amount > 0 ? '+' : entry.amount < 0 ? '−' : '') : '';
+  const abs  = Math.abs(entry.amount);
+  const num  = opts.compact ? fmtK(abs) : abs.toLocaleString(info.locale);
+  return (showSymbol ? info.symbol + ' ' : '') + sign + num;
+}
+
+// Generic single-element multi-currency ticker (see the block comment
+// above runBalanceTicker) — used wherever a summary number just needs to
+// rotate through currencies as plain text, without the split symbol/label
+// layout runBalanceTicker/runAmountTicker are built around (Riwayat's
+// Pemasukan/Pengeluaran/Selisih, for instance).
+function runTextTicker(key, el, entries, renderFn, onPaint) {
+  if (_tickerState[key] && _tickerState[key].interval) clearInterval(_tickerState[key].interval);
+  if (!el) return;
+  const paint = i => {
+    el.textContent = renderFn(entries[i]);
+    if (onPaint) onPaint(entries[i]);
+  };
+  paint(0);
+  if (entries.length > 1) {
+    let idx = 0;
+    _tickerState[key] = { interval: setInterval(() => {
+      idx = (idx + 1) % entries.length;
+      _tickerFade(el, () => paint(idx));
+    }, 2800) };
+  } else {
+    _tickerState[key] = { interval: null };
+  }
+}
+
+// Same idea as runTextTicker, but paints several elements in lockstep off
+// one shared currency index (e.g. Anggaran/Terpakai/Sisa/Hemat, which are
+// all facets of the same per-currency budget and should flip together
+// rather than drift out of sync with independent tickers).
+function runGroupTicker(key, els, entries, onPaint) {
+  if (_tickerState[key] && _tickerState[key].interval) clearInterval(_tickerState[key].interval);
+  const valid = (els || []).filter(Boolean);
+  if (!valid.length) return;
+  const paint = i => onPaint(entries[i]);
+  paint(0);
+  if (entries.length > 1) {
+    let idx = 0;
+    _tickerState[key] = { interval: setInterval(() => {
+      idx = (idx + 1) % entries.length;
+      _tickerFadeMulti(valid, () => paint(idx));
     }, 2800) };
   } else {
     _tickerState[key] = { interval: null };
@@ -1964,14 +2141,44 @@ function renderBudget() {
     if (bf.dateTo   && t.date > bf.dateTo)   return false;
     return true;
   });
-  // Overview (bov-*) dibandingkan ke BUDGET.total yang Rp — jadi cuma
-  // transaksi ber-currency IDR yang dihitung di sini, konsisten sama dashboard.
-  const used = filtTx.filter(t => walletCurrencyCode(t.account) === 'IDR').reduce((s,t) => s+t.amount, 0);
-  const left = Math.max(0, BUDGET.total - used);
-  document.getElementById('bov-total').textContent = 'Rp ' + BUDGET.total.toLocaleString('id-ID');
-  document.getElementById('bov-used').textContent  = 'Rp ' + used.toLocaleString('id-ID');
-  document.getElementById('bov-left').textContent  = 'Rp ' + left.toLocaleString('id-ID');
-  document.getElementById('bov-save').textContent  = BUDGET.total > 0 ? Math.round(left/BUDGET.total*100)+'%' : '—';
+  // Overview (bov-*) — dipecah per mata uang KATEGORI ANGGARAN (bukan per
+  // wallet): tiap kategori anggaran sudah punya currency-nya sendiri, jadi
+  // overview-nya harus ikut semua currency yang dipakai anggaran, bukan
+  // cuma Rp. Kalau anggarannya lebih dari satu mata uang, keempat angka
+  // (Anggaran/Terpakai/Sisa/Hemat) jalan bareng sebagai papan iklan.
+  const totalByCur = {}, usedByCur = {};
+  BUDGET.cats.forEach(c => {
+    const cCode = c.currency || 'IDR';
+    totalByCur[cCode] = (totalByCur[cCode] || 0) + (c.limit || 0);
+  });
+  filtTx.forEach(t => {
+    const cat = BUDGET.cats.find(c => c.id === t.catId);
+    if (!cat) return;
+    const cCode = cat.currency || 'IDR';
+    if (walletCurrencyCode(t.account) !== cCode) return; // beda mata uang, gak dihitung ke budget ini (sama seperti submitTransaction())
+    usedByCur[cCode] = (usedByCur[cCode] || 0) + t.amount;
+  });
+  const fallbackCode = WALLETS.length ? (WALLETS[0].currency || 'IDR') : 'IDR';
+  const bovCodes = Object.keys(totalByCur);
+  const bovEntries = bovCodes.length
+    ? bovCodes.sort((a,b) => (a==='IDR'?-1:1) - (b==='IDR'?-1:1)).map(code => {
+        const total = totalByCur[code] || 0;
+        const used  = usedByCur[code]  || 0;
+        const left  = Math.max(0, total - used);
+        return { code, total, used, left, savePct: total > 0 ? Math.round(left / total * 100) : null };
+      })
+    : [{ code: fallbackCode, total: 0, used: 0, left: 0, savePct: null }];
+
+  const bovTotalEl = document.getElementById('bov-total');
+  const bovUsedEl  = document.getElementById('bov-used');
+  const bovLeftEl  = document.getElementById('bov-left');
+  const bovSaveEl  = document.getElementById('bov-save');
+  runGroupTicker('budgetOverview', [bovTotalEl, bovUsedEl, bovLeftEl, bovSaveEl], bovEntries, e => {
+    if (bovTotalEl) bovTotalEl.textContent = fmtTickerAmount({ code: e.code, amount: e.total });
+    if (bovUsedEl)  bovUsedEl.textContent  = fmtTickerAmount({ code: e.code, amount: e.used });
+    if (bovLeftEl)  bovLeftEl.textContent  = fmtTickerAmount({ code: e.code, amount: e.left });
+    if (bovSaveEl)  bovSaveEl.textContent  = e.savePct === null ? '—' : e.savePct + '%';
+  });
   // Period label
   const periodEl = document.getElementById('budgetPeriod');
   if (periodEl) {
@@ -2848,7 +3055,70 @@ function drawScore() {
 ══════════════════════════════════════════ */
 let _donutType = 'expense';
 
+// Per-card currency filter (Proyeksi Saldo / Kategori / Perbandingan / Tren) —
+// only relevant once the user's wallets actually span more than one
+// currency; each card remembers its own pick independently. null = "belum
+// dipilih manual", pakai primaryCurrencyCode() sebagai default.
+const ANALYTICS_CUR_FILTER = { forecast: null, donut: null, compare: null, trend: null };
+
+function analyticsCurrencyCodes() {
+  const codes = [...new Set(WALLETS.map(w => w.currency || 'IDR'))];
+  return codes.length ? codes : ['IDR'];
+}
+// Mata uang default kalau card belum di-filter manual — IDR kalau ada
+// wallet Rp, kalau enggak ya mata uang wallet pertama.
+function primaryCurrencyCode() {
+  if (!WALLETS.length) return 'IDR';
+  return WALLETS.some(w => (w.currency||'IDR') === 'IDR') ? 'IDR' : (WALLETS[0].currency || 'IDR');
+}
+function analyticsEffectiveCur(key) {
+  return ANALYTICS_CUR_FILTER[key] || primaryCurrencyCode();
+}
+
+function toggleAnalyticsCurFilter(key) {
+  const panel = document.getElementById('acf' + key + 'Panel');
+  if (!panel) return;
+  const isOpen = isDpOpen(panel);
+  document.querySelectorAll('.dp-overlay.open').forEach(o => { if (o.id !== 'acf'+key+'Overlay') o.classList.remove('open'); });
+  if (isOpen) { closeDp(panel); return; }
+  renderAnalyticsCurPanel(key);
+  openDp(panel);
+}
+function renderAnalyticsCurPanel(key) {
+  const panel = document.getElementById('acf' + key + 'Panel');
+  if (!panel) return;
+  const codes = analyticsCurrencyCodes();
+  const activeCode = analyticsEffectiveCur(key);
+  panel.innerHTML = codes.map(code => {
+    const sel = activeCode === code;
+    return `<div class="currency-opt ${sel?'selected':''}" onclick="setAnalyticsCurFilter('${key}','${code}')">${escapeHtml(currencyLabelText(code))}</div>`;
+  }).join('');
+}
+function setAnalyticsCurFilter(key, code) {
+  ANALYTICS_CUR_FILTER[key] = code;
+  const lbl = document.getElementById('acf' + key + 'Label');
+  if (lbl) lbl.textContent = code;
+  closeDp(document.getElementById('acf' + key + 'Panel'));
+  if (key === 'forecast') renderForecast();
+  if (key === 'donut')    drawDonut();
+  if (key === 'compare')  { renderCompare(); renderAverages(); }
+  if (key === 'trend')    drawTrend();
+}
+// Filter pill only makes sense once there's actually more than one wallet
+// currency to pick from — otherwise it's hidden entirely (nothing to filter).
+function updateAnalyticsCurFilterVisibility() {
+  const codes = analyticsCurrencyCodes();
+  const show = codes.length > 1;
+  ['forecast','donut','compare','trend'].forEach(key => {
+    const wrap = document.getElementById('acf' + key + 'Wrap');
+    if (wrap) wrap.style.display = show ? '' : 'none';
+    const lbl = document.getElementById('acf' + key + 'Label');
+    if (lbl) lbl.textContent = analyticsEffectiveCur(key);
+  });
+}
+
 function renderAnalytics() {
+  updateAnalyticsCurFilterVisibility();
   moveTypeIndicator('donutTabs', 'donutTabIndicator', _donutType === 'income' ? 'donutTabIncome' : 'donutTabExpense', false);
   renderForecast();
   drawDonut();
@@ -2879,11 +3149,13 @@ function drawDonut() {
 
   const type = _donutType || 'expense';
   const _af = typeof ANALYTICS_FILTER !== 'undefined' ? ANALYTICS_FILTER : {};
+  const curCode = analyticsEffectiveCur('donut');
 
   // Build data from real transactions for the selected type (expense or income)
   const catMap = {};
   S.transactions.filter(t => {
     if (t.type !== type) return false;
+    if (walletCurrencyCode(t.account) !== curCode) return false;
     if (_af.dateFrom && t.date < _af.dateFrom) return false;
     if (_af.dateTo   && t.date > _af.dateTo)   return false;
     return true;
@@ -2932,7 +3204,7 @@ function drawDonut() {
 
   // Update center text — share of the selected type within total money flow (income + expense)
   const otherType = type === 'expense' ? 'income' : 'expense';
-  const totalOther = S.transactions.filter(t => t.type===otherType && (!_af.dateFrom || t.date >= _af.dateFrom) && (!_af.dateTo || t.date <= _af.dateTo)).reduce((s,t)=>s+t.amount,0);
+  const totalOther = S.transactions.filter(t => t.type===otherType && walletCurrencyCode(t.account) === curCode && (!_af.dateFrom || t.date >= _af.dateFrom) && (!_af.dateTo || t.date <= _af.dateTo)).reduce((s,t)=>s+t.amount,0);
   const selPct = totalSel>0 ? Math.round(totalSel/(totalSel+totalOther)*100) : 0;
   const dcPct = document.getElementById('donutPct');
   if (dcPct) dcPct.textContent = selPct + '%';
@@ -2957,9 +3229,10 @@ function getPreviousPeriod(from, to) {
   return { from: prevFrom.toISOString().split('T')[0], to: prevTo.toISOString().split('T')[0] };
 }
 
-function periodSum(type, from, to) {
+function periodSum(type, from, to, currencyCode) {
   return S.transactions.filter(t => {
     if (t.type !== type) return false;
+    if (currencyCode && walletCurrencyCode(t.account) !== currencyCode) return false;
     if (from && t.date < from) return false;
     if (to   && t.date > to)   return false;
     return true;
@@ -2971,6 +3244,8 @@ function renderCompare() {
   if (!grid) return;
   const _af = typeof ANALYTICS_FILTER !== 'undefined' ? ANALYTICS_FILTER : {};
   const prev = getPreviousPeriod(_af.dateFrom, _af.dateTo);
+  const curCode = analyticsEffectiveCur('compare');
+  const sym = currencyInfo(curCode).symbol;
 
   if (!prev) {
     grid.outerHTML = '<div class="compare-empty cc-tile" id="compareGrid">Pilih periode tertentu (mis. bulan ini / 7 hari) untuk melihat perbandingan dengan periode sebelumnya.</div>';
@@ -2985,10 +3260,10 @@ function renderCompare() {
   }
   const el = document.getElementById('compareGrid');
 
-  const curExp  = periodSum('expense', _af.dateFrom, _af.dateTo);
-  const prevExp = periodSum('expense', prev.from, prev.to);
-  const curInc  = periodSum('income',  _af.dateFrom, _af.dateTo);
-  const prevInc = periodSum('income',  prev.from, prev.to);
+  const curExp  = periodSum('expense', _af.dateFrom, _af.dateTo, curCode);
+  const prevExp = periodSum('expense', prev.from, prev.to, curCode);
+  const curInc  = periodSum('income',  _af.dateFrom, _af.dateTo, curCode);
+  const prevInc = periodSum('income',  prev.from, prev.to, curCode);
 
   function deltaInfo(cur, prev, badWhenUp) {
     let pct, dir;
@@ -3007,12 +3282,12 @@ function renderCompare() {
   el.innerHTML = `
     <div class="compare-card cc-tile">
       <div class="cc-label">Pengeluaran</div>
-      <div class="cc-val">Rp ${curExp.toLocaleString('id-ID')}</div>
+      <div class="cc-val">${sym} ${curExp.toLocaleString(currencyInfo(curCode).locale)}</div>
       <div class="cc-delta ${expD.cls}">${expD.icon}<span>${expD.text}</span></div>
     </div>
     <div class="compare-card cc-tile">
       <div class="cc-label">Pemasukan</div>
-      <div class="cc-val">Rp ${curInc.toLocaleString('id-ID')}</div>
+      <div class="cc-val">${sym} ${curInc.toLocaleString(currencyInfo(curCode).locale)}</div>
       <div class="cc-delta ${incD.cls}">${incD.icon}<span>${incD.text}</span></div>
     </div>`;
 }
@@ -3112,8 +3387,10 @@ function renderAverages() {
   const grid = document.getElementById('avgGrid');
   if (!grid) return;
   const _af = typeof ANALYTICS_FILTER !== 'undefined' ? ANALYTICS_FILTER : {};
+  const curCode = analyticsEffectiveCur('compare');
+  const info = currencyInfo(curCode);
   const inRange = t => (!_af.dateFrom || t.date >= _af.dateFrom) && (!_af.dateTo || t.date <= _af.dateTo);
-  const totalExp = S.transactions.filter(t => t.type === 'expense' && inRange(t)).reduce((s,t)=>s+t.amount,0);
+  const totalExp = S.transactions.filter(t => t.type === 'expense' && walletCurrencyCode(t.account) === curCode && inRange(t)).reduce((s,t)=>s+t.amount,0);
   const days = periodDayCount(_af.dateFrom, _af.dateTo);
   const dailyAvg = totalExp / days;
   const weeklyAvg = dailyAvg * 7;
@@ -3121,11 +3398,11 @@ function renderAverages() {
   grid.innerHTML = `
     <div class="compare-card cc-tile">
       <div class="cc-label">Rata-rata Harian</div>
-      <div class="cc-val">Rp ${Math.round(dailyAvg).toLocaleString('id-ID')}</div>
+      <div class="cc-val">${info.symbol} ${Math.round(dailyAvg).toLocaleString(info.locale)}</div>
     </div>
     <div class="compare-card cc-tile">
       <div class="cc-label">Rata-rata Mingguan</div>
-      <div class="cc-val">Rp ${Math.round(weeklyAvg).toLocaleString('id-ID')}</div>
+      <div class="cc-val">${info.symbol} ${Math.round(weeklyAvg).toLocaleString(info.locale)}</div>
     </div>`;
 }
 
@@ -3144,7 +3421,8 @@ function renderAverages() {
 // Rata-rata net harian (pemasukan - pengeluaran) dari transaksi non-rutin.
 // Default: transaksi bulan berjalan. Kalau bulan baru mulai (<4 hari data),
 // fallback ke 30 hari terakhir biar sampelnya gak kekecilan.
-function forecastDailyTrend() {
+function forecastDailyTrend(cur) {
+  cur = cur || 'IDR';
   const now = new Date(); now.setHours(0,0,0,0);
   const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
   let elapsedDays = Math.round((now - startOfMonth) / SMART_DAY_MS) + 1;
@@ -3158,19 +3436,20 @@ function forecastDailyTrend() {
   const to = smartToDateStr(now);
   const relevant = S.transactions.filter(t =>
     !t.isRecurring && t.date >= from && t.date <= to &&
-    (t.type === 'income' || t.type === 'expense') && walletCurrencyCode(t.account) === 'IDR'
+    (t.type === 'income' || t.type === 'expense') && walletCurrencyCode(t.account) === cur
   );
   const net = relevant.reduce((s, t) => s + (t.type === 'income' ? t.amount : -t.amount), 0);
   return { dailyNet: net / elapsedDays, elapsedDays, source, sampleCount: relevant.length };
 }
 
 // Total efek transaksi rutin aktif yang akan jatuh tempo dari besok sampai
-// akhir bulan (Rp saja). Dihitung per kejadian lewat nextOccurrence() yang
-// sudah ada, jadi selaras dengan apa yang bakal benar-benar tercatat otomatis.
-function forecastRecurringNet(endOfMonth) {
+// akhir bulan, dalam mata uang `cur`. Dihitung per kejadian lewat nextOccurrence()
+// yang sudah ada, jadi selaras dengan apa yang bakal benar-benar tercatat otomatis.
+function forecastRecurringNet(endOfMonth, cur) {
+  cur = cur || 'IDR';
   let net = 0;
   const items = [];
-  RECURRINGS.filter(r => r.active && r.type !== 'transfer' && walletCurrencyCode(r.account) === 'IDR').forEach(r => {
+  RECURRINGS.filter(r => r.active && r.type !== 'transfer' && walletCurrencyCode(r.account) === cur).forEach(r => {
     let occ = nextOccurrence(r.start, r.freq); // selalu > hari ini, jadi gak dobel hitung yang udah diproses hari ini
     let guard = 0;
     while (occ <= endOfMonth && guard < 60) {
@@ -3188,20 +3467,21 @@ function forecastRecurringNet(endOfMonth) {
 }
 
 function computeForecast() {
+  const cur = analyticsEffectiveCur('forecast');
   const now = new Date(); now.setHours(0,0,0,0);
   const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0); endOfMonth.setHours(0,0,0,0);
   const daysRemaining = Math.max(0, Math.round((endOfMonth - now) / SMART_DAY_MS));
 
   const totalsByCurrency = {};
   WALLETS.forEach(w => { totalsByCurrency[w.currency || 'IDR'] = (totalsByCurrency[w.currency || 'IDR'] || 0) + getWalletBalance(w.id); });
-  const currentBalance = totalsByCurrency.IDR || 0;
+  const currentBalance = totalsByCurrency[cur] || 0;
 
-  const trend = forecastDailyTrend();
+  const trend = forecastDailyTrend(cur);
   const trendProjection = trend.dailyNet * daysRemaining;
-  const recur = forecastRecurringNet(endOfMonth);
+  const recur = forecastRecurringNet(endOfMonth, cur);
 
   return {
-    currentBalance, daysRemaining, endOfMonth,
+    currentBalance, daysRemaining, endOfMonth, cur,
     trend, trendProjection, recur,
     projected: currentBalance + trendProjection + recur.net,
   };
@@ -3219,6 +3499,8 @@ function renderForecast() {
   }
 
   const f = computeForecast();
+  const info = currencyInfo(f.cur);
+  const sym = info.symbol, loc = info.locale;
   if (daysEl) daysEl.textContent = f.daysRemaining === 0 ? 'Hari terakhir bulan ini' : f.daysRemaining + ' hari lagi';
 
   const delta = f.projected - f.currentBalance;
@@ -3234,12 +3516,12 @@ function renderForecast() {
     <div class="forecast-top">
       <div>
         <div class="forecast-label">Estimasi Akhir Bulan</div>
-        <div class="forecast-val ${valClass}">Rp ${Math.round(f.projected).toLocaleString('id-ID')}</div>
-        <div class="forecast-cur">dari saldo sekarang Rp ${Math.round(f.currentBalance).toLocaleString('id-ID')}</div>
+        <div class="forecast-val ${valClass}">${sym} ${Math.round(f.projected).toLocaleString(loc)}</div>
+        <div class="forecast-cur">dari saldo sekarang ${sym} ${Math.round(f.currentBalance).toLocaleString(loc)}</div>
       </div>
       <div class="forecast-delta ${deltaUp ? 'good' : 'bad'}">
         ${deltaUp ? ICON.trendUp : ICON.trendDown}
-        ${deltaUp ? '+' : '-'}Rp ${Math.abs(Math.round(delta)).toLocaleString('id-ID')}
+        ${deltaUp ? '+' : '-'}${sym} ${Math.abs(Math.round(delta)).toLocaleString(loc)}
       </div>
     </div>
     <div class="forecast-rows">
@@ -3249,7 +3531,7 @@ function renderForecast() {
           <div class="forecast-row-title">Tren harian</div>
           <div class="forecast-row-sub">rata-rata ${f.trend.source} · ${f.daysRemaining} hari tersisa</div>
         </div>
-        <div class="forecast-row-val" style="color:${f.trendProjection >= 0 ? 'var(--teal)' : 'var(--red)'}">${f.trendProjection >= 0 ? '+' : '-'}Rp ${Math.abs(Math.round(f.trendProjection)).toLocaleString('id-ID')}</div>
+        <div class="forecast-row-val" style="color:${f.trendProjection >= 0 ? 'var(--teal)' : 'var(--red)'}">${f.trendProjection >= 0 ? '+' : '-'}${sym} ${Math.abs(Math.round(f.trendProjection)).toLocaleString(loc)}</div>
       </div>
       <div class="forecast-row">
         <div class="forecast-row-icon" style="background:${f.recur.net >= 0 ? 'rgba(42,232,196,0.15)' : 'rgba(255,107,132,0.15)'};color:${f.recur.net >= 0 ? 'var(--teal)' : 'var(--red)'}">${ICON.refresh}</div>
@@ -3257,7 +3539,7 @@ function renderForecast() {
           <div class="forecast-row-title">Transaksi rutin terjadwal</div>
           <div class="forecast-row-sub">${recurSub}</div>
         </div>
-        <div class="forecast-row-val" style="color:${f.recur.net >= 0 ? 'var(--teal)' : 'var(--red)'}">${f.recur.net >= 0 ? '+' : '-'}Rp ${Math.abs(Math.round(f.recur.net)).toLocaleString('id-ID')}</div>
+        <div class="forecast-row-val" style="color:${f.recur.net >= 0 ? 'var(--teal)' : 'var(--red)'}">${f.recur.net >= 0 ? '+' : '-'}${sym} ${Math.abs(Math.round(f.recur.net)).toLocaleString(loc)}</div>
       </div>
     </div>`;
 
@@ -3370,9 +3652,10 @@ function drawTrend() {
     monthData[key] = { income: 0, expense: 0 };
     cur.setMonth(cur.getMonth() + 1);
   }
+  const trendCur = analyticsEffectiveCur('trend');
   S.transactions.forEach(t => {
     const key = t.date ? t.date.slice(0,7) : null;
-    if (key && monthData[key]) {
+    if (key && monthData[key] && walletCurrencyCode(t.account) === trendCur) {
       if (t.type === 'income')  monthData[key].income  += t.amount;
       if (t.type === 'expense') monthData[key].expense += t.amount;
     }
@@ -4645,33 +4928,121 @@ function renderGoals() {
     const pct   = g.target > 0 ? Math.min(100, Math.round(g.saved / g.target * 100)) : 0;
     const color = goalColor(g);
     return `
-      <div class="goal-card glass">
-        <div class="goal-header">
-          <div class="goal-icon" style="background:${color}22">${ICON[g.icon]||ICON.target}</div>
-          <div class="goal-meta">
-            <div class="goal-name">${escapeHtml(g.name)}</div>
-            <div class="goal-days">${daysLeft(g.deadline)}</div>
-          </div>
-          <div class="goal-amount">
-            <div class="goal-saved">Rp ${fmtK(g.saved)}</div>
-            <div class="goal-target">dari Rp ${fmtK(g.target)}</div>
-          </div>
+      <div class="goal-item-wrap">
+        <div class="goal-actions">
+          <button class="gact-btn gact-del" onclick="deleteGoal(${g.id})">${ICON.trash}<span>Hapus</span></button>
         </div>
-        <div class="goal-bar-bg">
-          <div class="goal-bar-fill" style="width:${pct}%;background:linear-gradient(90deg,${color},${color}99)"></div>
-        </div>
-        <div class="goal-footer">
-          <div class="goal-pct" style="color:${color}">${pct}%</div>
-          <div style="display:flex;gap:8px;align-items:center">
-            <div class="goal-add-btn" onclick="openTopupModal(${g.id})">＋ Tambah Dana</div>
-            <div class="goal-add-btn" onclick="deleteGoal(${g.id})" style="color:var(--red);border-color:rgba(255,107,132,0.3);background:rgba(255,107,132,0.08)">${ICON.trash}</div>
+        <div class="goal-item-slide" data-goal-id="${g.id}">
+          <div class="goal-card glass">
+            <div class="goal-header">
+              <div class="goal-icon" style="background:${color}22">${ICON[g.icon]||ICON.target}</div>
+              <div class="goal-meta">
+                <div class="goal-name">${escapeHtml(g.name)}</div>
+                <div class="goal-days">${daysLeft(g.deadline)}</div>
+              </div>
+              <div class="goal-amount">
+                <div class="goal-saved">Rp ${fmtK(g.saved)}</div>
+                <div class="goal-target">dari Rp ${fmtK(g.target)}</div>
+              </div>
+            </div>
+            <div class="debt-pct-row">
+              <div class="debt-pct" style="color:${color}">${pct}%</div>
+            </div>
+            <div class="goal-bar-bg">
+              <div class="goal-bar-fill" style="width:${pct}%;background:linear-gradient(90deg,${color},${color}99)"></div>
+            </div>
+            <div class="goal-footer" style="justify-content:flex-end">
+              <div class="goal-add-btn" onclick="event.stopPropagation();openTopupModal(${g.id})">＋ Tambah Dana</div>
+            </div>
           </div>
         </div>
       </div>`;
   }).join('');
+  initGoalSwipe();
 
   renderGoalsPreview();
 }
+
+/* Swipe-to-reveal for saving goal cards — same interaction as wallet cards
+   (initWalletSwipe), category rows (initKcSwipe) and utang/piutang cards
+   (initDebtSwipe): drag a card left to uncover its Hapus button underneath
+   instead of showing it permanently on every card. Only one card stays
+   open at a time. */
+function initGoalSwipe() {
+  document.querySelectorAll('.goal-item-slide').forEach(slide => {
+    const wrap    = slide.closest('.goal-item-wrap');
+    const actions = wrap ? wrap.querySelector('.goal-actions') : null;
+    if (!wrap || !actions) return;
+    const maxOffset = () => actions.offsetWidth;
+    let startX = 0, startY = 0, baseX = 0, dragging = false, decided = false, horiz = false;
+
+    slide.addEventListener('touchstart', e => {
+      closeOtherGoalSwipes(slide);
+      startX = e.touches[0].clientX;
+      startY = e.touches[0].clientY;
+      baseX  = getGoalSlideX(slide);
+      dragging = true; decided = false; horiz = false;
+      slide.classList.add('dragging');
+      actions.classList.add('dragging');
+    }, {passive:true});
+
+    slide.addEventListener('touchmove', e => {
+      if (!dragging) return;
+      const dx = e.touches[0].clientX - startX;
+      const dy = e.touches[0].clientY - startY;
+      if (!decided) {
+        if (Math.abs(dx) < 6 && Math.abs(dy) < 6) return;
+        decided = true;
+        horiz = Math.abs(dx) > Math.abs(dy);
+        if (!horiz) { dragging = false; slide.classList.remove('dragging'); actions.classList.remove('dragging'); return; }
+      }
+      const next = Math.max(-maxOffset(), Math.min(0, baseX + dx));
+      slide.style.transform = `translateX(${next}px)`;
+      setGoalActionsProgress(actions, Math.min(1, Math.abs(next) / maxOffset()));
+    }, {passive:true});
+
+    function endDrag() {
+      if (!dragging) return;
+      dragging = false;
+      slide.classList.remove('dragging');
+      actions.classList.remove('dragging');
+      if (!decided || !horiz) return;
+      const x = getGoalSlideX(slide);
+      const open = x < -maxOffset() * 0.35;
+      slide.style.transform = `translateX(${open ? -maxOffset() : 0}px)`;
+      setGoalActionsProgress(actions, open ? 1 : 0);
+      _goalSwipeOpen = open ? slide : null;
+    }
+    slide.addEventListener('touchend', endDrag);
+    slide.addEventListener('touchcancel', endDrag);
+  });
+}
+let _goalSwipeOpen = null;
+function getGoalSlideX(el) {
+  const m = /translateX\((-?[\d.]+)px\)/.exec(el.style.transform || '');
+  return m ? parseFloat(m[1]) : 0;
+}
+function setGoalActionsProgress(actions, progress) {
+  actions.style.opacity   = progress;
+  const scale = 0.86 + 0.14 * progress;
+  const tx    = (1 - progress) * 10;
+  actions.style.transform = `scale(${scale}) translateX(${tx}px)`;
+}
+function closeOtherGoalSwipes(except) {
+  document.querySelectorAll('.goal-item-slide').forEach(s => {
+    if (s === except) return;
+    if (getGoalSlideX(s) === 0) return;
+    s.style.transform = 'translateX(0px)';
+    const actions = s.closest('.goal-item-wrap')?.querySelector('.goal-actions');
+    if (actions) setGoalActionsProgress(actions, 0);
+  });
+  if (_goalSwipeOpen && _goalSwipeOpen !== except) _goalSwipeOpen = null;
+}
+document.addEventListener('touchstart', e => {
+  if (!_goalSwipeOpen) return;
+  if (e.target.closest('.goal-item-wrap')) return;
+  closeOtherGoalSwipes(null);
+}, {passive:true});
 
 function renderGoalsPreview() {
   const el = document.getElementById('goalsPreview');
@@ -4816,18 +5187,46 @@ function runDebtSummaryTicker(key, el, entries) {
   }
 }
 
+// Pastikan d.periodPaid ada & sepanjang periodCount-nya — dibuat lazy pas
+// pertama kali dibutuhin (utang lama dari sebelum fitur ini juga otomatis
+// kebentuk array nol-nya di sini), atau di-resize kalau periodCount-nya
+// diedit belakangan (nambah cicilan -> index baru mulai dari 0, ngurangin
+// cicilan -> kelebihan di ujung dibuang, nominalnya ilang dari total lewat
+// syncDebtPaidFromPeriods di bawah).
+function ensureDebtPeriodPaid(d) {
+  const count = Math.max(0, parseInt(d.periodCount) || 0);
+  if (!Array.isArray(d.periodPaid)) d.periodPaid = [];
+  while (d.periodPaid.length < count) d.periodPaid.push(0);
+  if (d.periodPaid.length > count) d.periodPaid = d.periodPaid.slice(0, count);
+  return d.periodPaid;
+}
+
+// d.paid (dipakai sama semua tampilan lain — kartu, dashboard, net worth,
+// notifikasi jatuh tempo) selalu disamakan sama jumlah periodPaid buat
+// utang/piutang berperiode, supaya nggak perlu ubah logic di tempat lain
+// sama sekali; cukup titik masuk pembayaran (submitDebtBreakdownPay) yang
+// nulis ke periodPaid, lalu panggil ini buat nyinkronin totalnya.
+function syncDebtPaidFromPeriods(d) {
+  d.paid = Math.min(d.amount, ensureDebtPeriodPaid(d).reduce((s, v) => s + v, 0));
+  if (d.paid >= d.amount) d.status = 'lunas';
+  else if (d.status === 'lunas') d.status = 'aktif';
+}
+
 // Pecah total "amount" sebuah utang/piutang berperiode jadi rincian per
 // cicilan (dipakai sama kartu breakdown melayang saat kartunya diklik).
 // Tanggal tiap cicilan mengikuti pola yang diisi user di Jatuh Tempo
 // (tanggal-di-bulan buat 'monthly', bulan+tanggal-di-tahun buat 'yearly'),
 // dimulai dari bulan/tahun tanggal itu sendiri. Nominal dibagi rata, sisa
 // pembulatan dibebankan ke cicilan terakhir supaya totalnya pas sama amount.
+// Tiap baris juga bawa berapa yang udah kebayar & persentasenya sendiri
+// (dari d.periodPaid), dibatasi maksimal 100% per cicilan.
 function computeDebtInstallments(d) {
   const period = d.period || 'none';
   const count  = Math.max(0, parseInt(d.periodCount) || 0);
   if (period === 'none' || !d.dueDate || !count) return [];
   const base = new Date(d.dueDate + 'T00:00:00');
   const per  = Math.round(d.amount / count);
+  const periodPaid = ensureDebtPeriodPaid(d);
   const rows = [];
   for (let i = 0; i < count; i++) {
     let due;
@@ -4839,52 +5238,165 @@ function computeDebtInstallments(d) {
     const dim = new Date(due.getFullYear(), due.getMonth() + 1, 0).getDate();
     due.setDate(Math.min(base.getDate(), dim));
     const amount = (i === count - 1) ? (d.amount - per * (count - 1)) : per;
-    rows.push({ index: i + 1, due, amount });
+    const paid = Math.min(amount, periodPaid[i] || 0);
+    const pct  = amount > 0 ? Math.min(100, Math.round(paid / amount * 100)) : 0;
+    rows.push({ index: i + 1, due, amount, paid, pct, remaining: Math.max(0, amount - paid) });
   }
   return rows;
 }
 
 // Sebuah kartu utang/piutang bisa diklik cuma kalau punya jadwal cicilan
-// yang jelas: periodenya bukan "Tanpa Periode", nominalnya > 0, dan total
-// bulan/tahun-nya sudah diisi. Kalau salah satu nggak terpenuhi, kartu itu
-// polos aja (nggak ada apa-apa buat dipecah).
+// yang jelas dan lebih dari 1 cicilan (periodenya bukan "Tanpa Periode",
+// nominalnya > 0, total bulan/tahun-nya > 1, dan jatuh temponya sudah
+// diisi — tanpa jatuh tempo gak ada pola tanggal buat dipecah per cicilan).
+// Kalau salah satu nggak terpenuhi, kartu itu polos aja (nggak ada apa-apa
+// buat dipecah, dan tombol Bayar-nya jatuh ke modal input nominal biasa).
 function isDebtClickable(d) {
-  return (d.period && d.period !== 'none') && d.amount > 0 && (parseInt(d.periodCount) || 0) > 0;
+  return (d.period && d.period !== 'none') && d.amount > 0 && (parseInt(d.periodCount) || 0) > 1 && !!d.dueDate;
 }
 
+// Persentase progress buat bar utama di kartu daftar. Utang/piutang tanpa
+// periode (atau cuma 1 cicilan) tetap pakai rasio paid/amount polos kayak
+// biasa. Yang berperiode >1 cicilan pakai RATA-RATA persentase tiap cicilan
+// (masing-masing dibatasi maksimal 100%) — jadi kalau user bayar cicilan-
+// cicilan tertentu duluan lewat centang di kartu rincian, bar-nya
+// merepresentasikan sebaran pembayaran per cicilan, bukan cuma total/total.
+function debtProgressPct(d) {
+  if (isDebtClickable(d)) {
+    const rows = computeDebtInstallments(d);
+    if (rows.length) return Math.round(rows.reduce((s, r) => s + r.pct, 0) / rows.length);
+  }
+  return d.amount > 0 ? Math.min(100, Math.round(d.paid / d.amount * 100)) : 0;
+}
+
+// Cicilan mana yang lagi dicentang user di kartu rincian (index 0-based ke
+// array rows), buat nentuin cicilan mana yang diprioritaskan pas Catat
+// pembayaran ditekan. Direset tiap kartu rincian dibuka/ditutup/submit —
+// kalau kosong pas Catat ditekan, fallback ke cicilan paling awal yang
+// belum lunas (perilaku lama), jadi checknya opsional bukan wajib.
+let _dbfChecked = new Set();
+let _dbfDebtId  = null;
+
 // Kartu rincian cicilan melayang di tengah layar (bukan modal) — dibuka
-// saat kartu utang/piutang diklik. Menampilkan jumlah keseluruhan (total)
-// dipecah per cicilan berjejer ke bawah; kalau daftarnya panjang, area
-// baris otomatis scrollable tanpa scrollbar terlihat (lihat .dbf-rows).
+// saat kartu utang/piutang diklik ATAU tombol Bayar/Terima-nya ditekan
+// (kalau utangnya berperiode >1 cicilan — lihat openDebtPayModal). Selain
+// menampilkan jumlah keseluruhan dipecah per cicilan (dengan progress %
+// masing-masing & checkbox buat milih cicilan mana yang diprioritaskan),
+// juga ada input+tombol Catat pembayaran di bagian bawah kalau belum lunas.
+// Kalau daftar cicilannya panjang, area baris otomatis scrollable tanpa
+// scrollbar terlihat (lihat .dbf-rows), sementara header/total/bagian bayar
+// tetap diam di tempat.
 function openDebtBreakdown(id) {
   const d = DEBTS.find(x => x.id === id);
   if (!d || !isDebtClickable(d)) return;
   const rows = computeDebtInstallments(d);
   if (!rows.length) return;
+  if (_dbfDebtId !== id) _dbfChecked.clear();
+  _dbfDebtId = id;
+  const isPiutang = d.kind === 'piutang';
+  const lunas = d.status === 'lunas';
   const cur   = currencyInfo(d.currency || 'IDR');
   const unit  = DEBT_PERIOD_UNIT[d.period] || '';
   const card  = document.getElementById('debtBreakdownCard');
   card.innerHTML = `
     <div class="dbf-header">
       <div class="dbf-title">${escapeHtml(d.person)}</div>
-      <div class="dbf-sub">${DEBT_PERIOD_TEXT[d.period]} · ${rows.length}x ${unit}</div>
+      <div class="dbf-sub">${DEBT_PERIOD_TEXT[d.period]} · ${rows.length}x ${unit} · rata-rata progress ${debtProgressPct(d)}%</div>
     </div>
     <div class="dbf-rows">
-      ${rows.map(r => `
-        <div class="dbf-row">
+      ${rows.map(r => {
+        const i = r.index - 1;
+        const rowDone = r.remaining <= 0;
+        return `
+        <div class="dbf-row${rowDone ? ' dbf-row-done' : ''}">
+          <label class="dbf-row-check">
+            <input type="checkbox" ${_dbfChecked.has(i) ? 'checked' : ''} ${rowDone ? 'disabled' : ''} onchange="toggleDebtInstallmentCheck(${i}, this.checked)">
+          </label>
           <div class="dbf-row-idx">#${r.index}</div>
-          <div class="dbf-row-date">${fmtDateShort(r.due.toISOString().split('T')[0])}</div>
-          <div class="dbf-row-amt">${cur.symbol} ${Math.round(r.amount).toLocaleString(cur.locale)}</div>
-        </div>`).join('')}
+          <div class="dbf-row-body">
+            <div class="dbf-row-date">${fmtDateShort(r.due.toISOString().split('T')[0])}</div>
+            <div class="dbf-row-bar-bg"><div class="dbf-row-bar-fill" style="width:${r.pct}%;background:${debtPctColor(r.pct)}"></div></div>
+          </div>
+          <div>
+            <div class="dbf-row-amt">${cur.symbol} ${Math.round(r.amount).toLocaleString(cur.locale)}</div>
+            <div class="dbf-row-pct" style="color:${debtPctColor(r.pct)}">${r.pct}%</div>
+          </div>
+        </div>`;
+      }).join('')}
     </div>
     <div class="dbf-total">
       <span>Jumlah Keseluruhan</span>
       <span>${cur.symbol} ${d.amount.toLocaleString(cur.locale)}</span>
-    </div>`;
+    </div>
+    ${!lunas ? `
+    <div class="dbf-pay">
+      <div class="dbf-pay-label">
+        <span>Jumlah ${isPiutang ? 'Diterima' : 'Dibayar'}</span>
+        <span class="dbf-pay-hint" id="dbfPayHint">${_dbfChecked.size ? _dbfChecked.size + ' cicilan dicentang' : 'default: cicilan paling awal'}</span>
+      </div>
+      <input type="number" id="dbfPayAmount" inputmode="numeric" placeholder="0">
+      <button class="dbf-pay-btn" onclick="submitDebtBreakdownPay(${d.id})">Catat</button>
+    </div>` : ''}`;
   document.getElementById('debtBreakdownOverlay').classList.add('open');
 }
-function closeDebtBreakdown() { document.getElementById('debtBreakdownOverlay').classList.remove('open'); }
+
+// Toggle centang salah satu baris cicilan — cuma perlu update state di
+// Set-nya + teks hint-nya, gak perlu render ulang seluruh kartu (biar
+// nominal yang lagi diketik di field Jumlah gak ke-reset).
+function toggleDebtInstallmentCheck(i, checked) {
+  if (checked) _dbfChecked.add(i); else _dbfChecked.delete(i);
+  const hint = document.getElementById('dbfPayHint');
+  if (hint) hint.textContent = _dbfChecked.size ? _dbfChecked.size + ' cicilan dicentang' : 'default: cicilan paling awal';
+}
+
+function closeDebtBreakdown() {
+  document.getElementById('debtBreakdownOverlay').classList.remove('open');
+  _dbfChecked.clear();
+  _dbfDebtId = null;
+}
 function closeDebtBreakdownOutside(e) { if (e.target === document.getElementById('debtBreakdownOverlay')) closeDebtBreakdown(); }
+
+// Catat pembayaran dari kartu rincian cicilan. Cicilan yang dicentang user
+// diprioritaskan diisi duluan sesuai urutan dicentang; kalau nggak ada
+// satupun yang dicentang, fallback ke cicilan paling awal yang belum lunas
+// (perilaku lama — otomatis ke yang paling awal) supaya tetap jalan tanpa
+// perlu centang apa-apa. Sisa dana yang gak abis kepakai (semua cicilan
+// yang dituju udah penuh) numpuk di cicilan terakhir yang dituju.
+function submitDebtBreakdownPay(id) {
+  const d = DEBTS.find(x => x.id === id);
+  if (!d) return;
+  const input  = document.getElementById('dbfPayAmount');
+  const amount = parseInt(input ? input.value : '') || 0;
+  if (!amount) { showToast('Jumlah harus lebih dari 0', 'warning'); return; }
+
+  const rows = computeDebtInstallments(d);
+  const periodPaid = ensureDebtPeriodPaid(d);
+  let order = [..._dbfChecked].filter(i => rows[i] && rows[i].remaining > 0);
+  if (!order.length) order = rows.map((r, i) => i).filter(i => rows[i].remaining > 0);
+
+  let remaining = amount;
+  for (const i of order) {
+    if (remaining <= 0) break;
+    const take = Math.min(remaining, rows[i].remaining);
+    periodPaid[i] = (periodPaid[i] || 0) + take;
+    remaining -= take;
+  }
+  // Semua cicilan yang dituju udah penuh tapi dananya masih sisa — numpuk
+  // aja di cicilan terakhir yang dituju biar gak ilang gitu aja.
+  if (remaining > 0 && order.length) {
+    const last = order[order.length - 1];
+    periodPaid[last] = (periodPaid[last] || 0) + remaining;
+  }
+
+  syncDebtPaidFromPeriods(d);
+  saveToStorage();
+  _dbfChecked.clear();
+  const pct = debtProgressPct(d);
+  const cur = currencyInfo(d.currency || 'IDR');
+  showToast(d.status === 'lunas' ? 'Lunas!' : `${cur.symbol} ${amount.toLocaleString(cur.locale)} dicatat (rata-rata ${pct}%)`, 'success');
+  renderDebts();
+  if (d.status === 'lunas') closeDebtBreakdown(); else openDebtBreakdown(id);
+}
 
 // Interpolasi warna merah → kuning/oranye → hijau berdasarkan progress 0-100,
 // dipakai buat badge persentase kartu utang/piutang (bukan buat warna bar-nya
@@ -4926,7 +5438,7 @@ function renderDebts() {
   });
   list.innerHTML = sorted.map(d => {
     const sisa = Math.max(0, d.amount - d.paid);
-    const pct  = d.amount > 0 ? Math.min(100, Math.round(d.paid / d.amount * 100)) : 0;
+    const pct  = debtProgressPct(d);
     const isPiutang = d.kind === 'piutang';
     const lunas = d.status === 'lunas';
     const color = lunas ? '#7CE38B' : (isPiutang ? 'var(--blue)' : 'var(--red)');
@@ -5114,7 +5626,11 @@ function submitDebt() {
     const d = DEBTS.find(x => x.id === _editingDebtId);
     if (d) {
       d.person = person; d.amount = amount; d.interest = interest; d.note = note; d.dueDate = dueDate; d.period = period; d.periodCount = periodCount; d.kind = kind; d.currency = currency;
-      if (d.paid >= d.amount) d.status = 'lunas'; else d.status = 'aktif';
+      // Kalau masih (atau baru jadi) berjadwal cicilan >1x, sinkronin ulang
+      // periodPaid-nya (nominal cicilan bisa berubah kalau amount/periodCount
+      // diedit) supaya d.paid & status tetap konsisten sama rincian per cicilan.
+      if (isDebtClickable(d)) { syncDebtPaidFromPeriods(d); }
+      else if (d.paid >= d.amount) d.status = 'lunas'; else d.status = 'aktif';
       d._alertedDue = false; d._alertedOverdue = false;
     }
   } else {
@@ -5129,11 +5645,16 @@ function submitDebt() {
   showToast(_editingDebtId ? 'Catatan diperbarui' : 'Catatan ditambahkan', 'success');
 }
 
-/* Bayar/Terima (partial) Modal */
+/* Bayar/Terima (partial) Modal — cuma buat utang/piutang TANPA jadwal
+   cicilan (tanpa periode, atau berperiode tapi cuma 1x). Yang punya jadwal
+   cicilan >1x pembayarannya dialihkan ke kartu rincian (openDebtBreakdown)
+   supaya user bisa milih mau bayar cicilan yang mana. */
 let _activeDebtPayId = null;
 function openDebtPayModal(id) {
+  const dCheck = DEBTS.find(x => x.id === id);
+  if (dCheck && isDebtClickable(dCheck)) { openDebtBreakdown(id); return; }
   _activeDebtPayId = id;
-  const d = DEBTS.find(x => x.id === id);
+  const d = dCheck;
   if (!d) return;
   const cur = currencyInfo(d.currency || 'IDR');
   document.getElementById('debtPayModalTitle').textContent = (d.kind === 'piutang' ? 'Terima Dana — ' : 'Bayar — ') + d.person;
@@ -5389,6 +5910,7 @@ function _initApp() {
   const el = document.getElementById('totalBalance');
   if (el) el.textContent = '0';
 
+  applyAmountsHiddenUI();
   renderDashboard();
   renderWallets();
   renderGoals();
@@ -6852,15 +7374,30 @@ function renderRiwayat() {
   // Sort newest first
   txs.sort((a,b) => b.date.localeCompare(a.date) || b.id - a.id);
 
-  // Summary
-  const sumInc = txs.filter(t=>t.type==='income').reduce((s,t)=>s+t.amount,0);
-  const sumExp = txs.filter(t=>t.type==='expense').reduce((s,t)=>s+t.amount,0);
-  const net    = sumInc - sumExp;
-  document.getElementById('rwSumIncome').textContent  = 'Rp ' + fmtK(sumInc);
-  document.getElementById('rwSumExpense').textContent = 'Rp ' + fmtK(sumExp);
+  // Summary — dipecah per mata uang wallet transaksinya (bukan dijumlah
+  // mentah lintas mata uang), dan kalau lebih dari satu mata uang punya
+  // nominal, ketiganya jalan sebagai papan iklan (sama seperti Total Aset
+  // di Dashboard). Simbol mata uang cuma muncul kalau user sudah punya
+  // akun — lihat hasWalletCurrency()/fmtTickerAmount().
+  const incByCur = {}, expByCur = {};
+  txs.forEach(t => {
+    const code = walletCurrencyCode(t.account);
+    if (t.type === 'income')  incByCur[code] = (incByCur[code] || 0) + t.amount;
+    if (t.type === 'expense') expByCur[code] = (expByCur[code] || 0) + t.amount;
+  });
+  const fallbackCode = WALLETS.length ? (WALLETS[0].currency || 'IDR') : 'IDR';
+  const incEntries = buildCurrencyEntries(incByCur, fallbackCode);
+  const expEntries = buildCurrencyEntries(expByCur, fallbackCode);
+  const netCodes  = new Set([...Object.keys(incByCur), ...Object.keys(expByCur)]);
+  const netByCur  = {};
+  netCodes.forEach(code => { netByCur[code] = (incByCur[code] || 0) - (expByCur[code] || 0); });
+  const netEntries = netCodes.size ? [...netCodes].map(code => ({ code, amount: netByCur[code] })) : [{ code: fallbackCode, amount: 0 }];
+
+  runTextTicker('rwIncome',  document.getElementById('rwSumIncome'),  incEntries, e => fmtTickerAmount(e, { compact: true }));
+  runTextTicker('rwExpense', document.getElementById('rwSumExpense'), expEntries, e => fmtTickerAmount(e, { compact: true }));
   const netEl = document.getElementById('rwSumNet');
-  netEl.textContent = (net >= 0 ? '+' : '') + 'Rp ' + fmtK(Math.abs(net));
-  netEl.style.color = net >= 0 ? 'var(--teal)' : 'var(--red)';
+  runTextTicker('rwNet', netEl, netEntries, e => fmtTickerAmount(e, { sign: true, compact: true }),
+    e => { netEl.style.color = e.amount >= 0 ? 'var(--teal)' : 'var(--red)'; });
 
   const list  = document.getElementById('riwayatList');
   const empty = document.getElementById('riwayatEmpty');

@@ -315,7 +315,13 @@
 
     <!-- Balance Hero -->
     <div class="balance-hero glass-heavy">
-      <div class="balance-label">TOTAL ASET</div>
+      <div class="balance-label-row">
+        <div class="balance-label">TOTAL ASET</div>
+        <div class="amt-eye-btn" id="amtEyeBtn" onclick="toggleAmountsHidden()" title="Sembunyikan nominal">
+          <svg class="ic" id="amtEyeIconOpen" viewBox="0 0 24 24"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg>
+          <svg class="ic" id="amtEyeIconClosed" viewBox="0 0 24 24" style="display:none"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/><line x1="3" y1="3" x2="21" y2="21"/></svg>
+        </div>
+      </div>
       <div class="balance-amount"><span class="cur" id="totalBalanceCur">Rp</span><span id="totalBalance">0</span></div>
       <div class="balance-cur-dots" id="balanceCurDots" style="display:none"></div>
       <div class="balance-change" id="balanceChange"></div>
@@ -330,6 +336,7 @@
         </div>
       </div>
     </div>
+
 
     <!-- Quick Actions -->
     <div class="quick-actions">
@@ -573,14 +580,30 @@
     <div class="forecast-wrap glass" id="forecastWrap">
       <div class="card-head">
         <h3>Proyeksi Saldo</h3>
-        <span id="forecastDaysLeft" style="font-size:11px;color:var(--txt3);font-weight:500"></span>
+        <div style="display:flex;align-items:center;gap:8px">
+          <div class="acf-wrap" id="acfforecastWrap" style="display:none">
+            <div class="acf-trigger" id="acfforecastTrigger" onclick="toggleAnalyticsCurFilter('forecast')"><span id="acfforecastLabel">IDR</span><span class="acf-arrow">▾</span></div>
+            <div class="dp-overlay" id="acfforecastOverlay" data-trigger="acfforecastTrigger" onclick="if(event.target===this) closeDp(document.getElementById('acfforecastPanel'))">
+              <div class="currency-filter-panel" id="acfforecastPanel"></div>
+            </div>
+          </div>
+          <span id="forecastDaysLeft" style="font-size:11px;color:var(--txt3);font-weight:500"></span>
+        </div>
       </div>
       <div id="forecastCard"></div>
     </div>
 
     <!-- Perbandingan periode -->
     <div class="compare-wrap glass">
-      <div class="card-head"><h3>Perbandingan</h3></div>
+      <div class="card-head">
+        <h3>Perbandingan</h3>
+        <div class="acf-wrap" id="acfcompareWrap" style="display:none">
+          <div class="acf-trigger" id="acfcompareTrigger" onclick="toggleAnalyticsCurFilter('compare')"><span id="acfcompareLabel">IDR</span><span class="acf-arrow">▾</span></div>
+          <div class="dp-overlay" id="acfcompareOverlay" data-trigger="acfcompareTrigger" onclick="if(event.target===this) closeDp(document.getElementById('acfcomparePanel'))">
+            <div class="currency-filter-panel" id="acfcomparePanel"></div>
+          </div>
+        </div>
+      </div>
       <div class="compare-grid" id="compareGrid"></div>
       <div class="compare-grid" id="avgGrid" style="margin-top:10px"></div>
     </div>
@@ -588,10 +611,18 @@
     <div class="analytics-hero glass">
       <div class="card-head">
         <h3>Kategori</h3>
-        <div class="river-tabs" id="donutTabs">
-          <div class="river-tab-indicator" id="donutTabIndicator"></div>
-          <div class="river-tab icon-tab expense active" id="donutTabExpense" onclick="setDonutType('expense', this)" title="Pengeluaran"><svg class="ic" viewBox="0 0 24 24"><path d="M3 7l6 6 4-4 8 9"/><path d="M15 18h6v-6"/></svg></div>
-          <div class="river-tab icon-tab income" id="donutTabIncome" onclick="setDonutType('income', this)" title="Pemasukan"><svg class="ic" viewBox="0 0 24 24"><path d="M3 17l6-6 4 4 8-9"/><path d="M15 6h6v6"/></svg></div>
+        <div style="display:flex;align-items:center;gap:8px">
+          <div class="acf-wrap" id="acfdonutWrap" style="display:none">
+            <div class="acf-trigger" id="acfdonutTrigger" onclick="toggleAnalyticsCurFilter('donut')"><span id="acfdonutLabel">IDR</span><span class="acf-arrow">▾</span></div>
+            <div class="dp-overlay" id="acfdonutOverlay" data-trigger="acfdonutTrigger" onclick="if(event.target===this) closeDp(document.getElementById('acfdonutPanel'))">
+              <div class="currency-filter-panel" id="acfdonutPanel"></div>
+            </div>
+          </div>
+          <div class="river-tabs" id="donutTabs">
+            <div class="river-tab-indicator" id="donutTabIndicator"></div>
+            <div class="river-tab icon-tab expense active" id="donutTabExpense" onclick="setDonutType('expense', this)" title="Pengeluaran"><svg class="ic" viewBox="0 0 24 24"><path d="M3 7l6 6 4-4 8 9"/><path d="M15 18h6v-6"/></svg></div>
+            <div class="river-tab icon-tab income" id="donutTabIncome" onclick="setDonutType('income', this)" title="Pemasukan"><svg class="ic" viewBox="0 0 24 24"><path d="M3 17l6-6 4 4 8-9"/><path d="M15 6h6v6"/></svg></div>
+          </div>
         </div>
       </div>
       <div class="donut-wrap">
@@ -622,7 +653,15 @@
     <div class="trend-chart-wrap glass">
       <div class="card-head">
         <h3>Tren</h3>
-        <span style="font-size:11px;color:var(--txt3);font-weight:500">6 bulan terakhir</span>
+        <div style="display:flex;align-items:center;gap:8px">
+          <div class="acf-wrap" id="acftrendWrap" style="display:none">
+            <div class="acf-trigger" id="acftrendTrigger" onclick="toggleAnalyticsCurFilter('trend')"><span id="acftrendLabel">IDR</span><span class="acf-arrow">▾</span></div>
+            <div class="dp-overlay" id="acftrendOverlay" data-trigger="acftrendTrigger" onclick="if(event.target===this) closeDp(document.getElementById('acftrendPanel'))">
+              <div class="currency-filter-panel" id="acftrendPanel"></div>
+            </div>
+          </div>
+          <span style="font-size:11px;color:var(--txt3);font-weight:500">6 bulan terakhir</span>
+        </div>
       </div>
       <canvas id="trendCanvas"></canvas>
       <div id="trendLegend" style="display:flex;gap:16px;padding:8px 0 4px;justify-content:flex-end">
