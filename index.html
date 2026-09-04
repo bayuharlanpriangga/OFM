@@ -355,10 +355,11 @@
     <div class="river-wrap glass">
       <div class="river-header">
         <h3>Cashflow River</h3>
-        <div class="river-tabs">
-          <div class="river-tab active">M</div>
-          <div class="river-tab" onclick="switchRiver(this)">3M</div>
-          <div class="river-tab" onclick="switchRiver(this)">Y</div>
+        <div class="river-tabs" id="riverTabs">
+          <div class="river-tab-indicator" id="riverTabIndicator"></div>
+          <div class="river-tab active" id="riverTabM" onclick="switchRiver(this)">M</div>
+          <div class="river-tab" id="riverTab3M" onclick="switchRiver(this)">3M</div>
+          <div class="river-tab" id="riverTabY" onclick="switchRiver(this)">Y</div>
         </div>
       </div>
       <canvas id="riverCanvas"></canvas>
@@ -568,19 +569,31 @@
         </div>
       </div>
     </div>
-    <div class="section-head"><h2>Proyeksi Saldo Akhir Bulan</h2><span id="forecastDaysLeft" style="font-size:11px;color:var(--txt3);font-weight:500"></span></div>
-    <div class="glass forecast-card" id="forecastCard"></div>
-
-    <div class="section-head"><h2>Dibanding Periode Lalu</h2></div>
-    <div class="compare-grid" id="compareGrid"></div>
-
-    <div class="compare-grid" id="avgGrid" style="margin:0 20px 18px"></div>
-
-    <div class="type-toggle" id="donutTypeToggle" style="max-width:240px;margin-left:20px;margin-right:20px;margin-bottom:18px">
-      <button class="type-btn active expense" id="donutBtnExpense" onclick="setDonutType('expense')">Pengeluaran</button>
-      <button class="type-btn income" id="donutBtnIncome" onclick="setDonutType('income')">Pemasukan</button>
+    <!-- Proyeksi Saldo -->
+    <div class="forecast-wrap glass" id="forecastWrap">
+      <div class="card-head">
+        <h3>Proyeksi Saldo</h3>
+        <span id="forecastDaysLeft" style="font-size:11px;color:var(--txt3);font-weight:500"></span>
+      </div>
+      <div id="forecastCard"></div>
     </div>
+
+    <!-- Perbandingan periode -->
+    <div class="compare-wrap glass">
+      <div class="card-head"><h3>Perbandingan</h3></div>
+      <div class="compare-grid" id="compareGrid"></div>
+      <div class="compare-grid" id="avgGrid" style="margin-top:10px"></div>
+    </div>
+
     <div class="analytics-hero glass">
+      <div class="card-head">
+        <h3>Kategori</h3>
+        <div class="river-tabs" id="donutTabs">
+          <div class="river-tab-indicator" id="donutTabIndicator"></div>
+          <div class="river-tab icon-tab expense active" id="donutTabExpense" onclick="setDonutType('expense', this)" title="Pengeluaran"><svg class="ic" viewBox="0 0 24 24"><path d="M3 7l6 6 4-4 8 9"/><path d="M15 18h6v-6"/></svg></div>
+          <div class="river-tab icon-tab income" id="donutTabIncome" onclick="setDonutType('income', this)" title="Pemasukan"><svg class="ic" viewBox="0 0 24 24"><path d="M3 17l6-6 4 4 8-9"/><path d="M15 6h6v6"/></svg></div>
+        </div>
+      </div>
       <div class="donut-wrap">
         <canvas id="donutCanvas"></canvas>
         <div class="donut-center">
@@ -591,23 +604,28 @@
       <div class="donut-legend" id="donutLegend"></div>
     </div>
 
-    <div class="section-head"><h2>Insight Otomatis</h2></div>
-    <div class="insight-list" id="insightList"></div>
+    <div class="insight-wrap glass">
+      <div class="card-head"><h3>Insight</h3></div>
+      <div class="insight-list" id="insightList"></div>
+    </div>
 
-    <div class="section-head"><h2>Anggaran vs Realisasi</h2></div>
-    <div class="glass-sm" style="margin:0 20px 0;padding:16px">
+    <div class="budget-overlay-wrap glass">
+      <div class="card-head"><h3>Anggaran</h3></div>
       <div class="donut-legend" id="budgetOverlayList" style="padding:0"></div>
     </div>
 
-    <div class="section-head"><h2>Per Akun</h2></div>
-    <div class="glass-sm" style="margin:0 20px 0;padding:16px">
+    <div class="account-breakdown-wrap glass">
+      <div class="card-head"><h3>Per Akun</h3></div>
       <div class="donut-legend" id="accountBreakdownList" style="padding:0"></div>
     </div>
 
-    <div class="section-head"><h2>Tren 6 Bulan</h2><span style="font-size:11px;color:var(--txt3);font-weight:500">selalu 6 bulan</span></div>
     <div class="trend-chart-wrap glass">
+      <div class="card-head">
+        <h3>Tren</h3>
+        <span style="font-size:11px;color:var(--txt3);font-weight:500">6 bulan terakhir</span>
+      </div>
       <canvas id="trendCanvas"></canvas>
-      <div id="trendLegend" style="display:flex;gap:16px;padding:8px 18px 4px;justify-content:flex-end">
+      <div id="trendLegend" style="display:flex;gap:16px;padding:8px 0 4px;justify-content:flex-end">
         <div style="display:flex;align-items:center;gap:5px;font-size:11px;color:var(--txt3)">
           <div style="width:12px;height:12px;border-radius:3px;background:rgba(42,232,196,0.5)"></div>Pemasukan
         </div>

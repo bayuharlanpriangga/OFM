@@ -933,6 +933,11 @@ window.addEventListener('resize', () => {
     moveTypeIndicator('smartModeTabs', 'smartModeIndicator', (S._smartMode === 'sms') ? 'smartModeSmsTab' : 'smartModeTypeTab', false);
     moveTypeIndicator('debtKindToggle', 'debtKindIndicator', 'debtKind' + (S._debtKind||'utang').charAt(0).toUpperCase() + (S._debtKind||'utang').slice(1), false);
     if (S.currentPage === 'kelolakategori') moveTypeIndicator('kcTypeToggle', 'kcTypeIndicator', 'kcType' + KC_TYPE.charAt(0).toUpperCase() + KC_TYPE.slice(1), false);
+    if (S.currentPage === 'dashboard') {
+      const activeRiverTab = document.querySelector('#riverTabs .river-tab.active');
+      if (activeRiverTab) moveTypeIndicator('riverTabs', 'riverTabIndicator', activeRiverTab.id, false);
+    }
+    if (S.currentPage === 'analytics') moveTypeIndicator('donutTabs', 'donutTabIndicator', _donutType === 'income' ? 'donutTabIncome' : 'donutTabExpense', false);
   }, 150);
 });
 
@@ -1720,6 +1725,8 @@ function renderDashboard() {
   renderTxList();
   renderBudget();
   drawRiver();
+  const activeRiverTab = document.querySelector('#riverTabs .river-tab.active');
+  if (activeRiverTab) moveTypeIndicator('riverTabs', 'riverTabIndicator', activeRiverTab.id, false);
   drawScore();
 }
 
@@ -2842,6 +2849,7 @@ function drawScore() {
 let _donutType = 'expense';
 
 function renderAnalytics() {
+  moveTypeIndicator('donutTabs', 'donutTabIndicator', _donutType === 'income' ? 'donutTabIncome' : 'donutTabExpense', false);
   renderForecast();
   drawDonut();
   renderCompare();
@@ -2853,10 +2861,12 @@ function renderAnalytics() {
 }
 
 // Toggle the donut between expense breakdown and income-source breakdown
-function setDonutType(type) {
+function setDonutType(type, el) {
   _donutType = type;
-  document.getElementById('donutBtnExpense').classList.toggle('active', type === 'expense');
-  document.getElementById('donutBtnIncome').classList.toggle('active', type === 'income');
+  document.querySelectorAll('#donutTabs .river-tab').forEach(t=>t.classList.remove('active'));
+  const trigger = el || document.getElementById(type === 'income' ? 'donutTabIncome' : 'donutTabExpense');
+  if (trigger) trigger.classList.add('active');
+  moveTypeIndicator('donutTabs', 'donutTabIndicator', trigger ? trigger.id : (type === 'income' ? 'donutTabIncome' : 'donutTabExpense'));
   drawDonut();
 }
 
@@ -2963,7 +2973,7 @@ function renderCompare() {
   const prev = getPreviousPeriod(_af.dateFrom, _af.dateTo);
 
   if (!prev) {
-    grid.outerHTML = '<div class="compare-empty glass-sm" id="compareGrid">Pilih periode tertentu (mis. bulan ini / 7 hari) untuk melihat perbandingan dengan periode sebelumnya.</div>';
+    grid.outerHTML = '<div class="compare-empty cc-tile" id="compareGrid">Pilih periode tertentu (mis. bulan ini / 7 hari) untuk melihat perbandingan dengan periode sebelumnya.</div>';
     return;
   }
   // If compareGrid was previously replaced with the empty-state div, restore it as a proper grid
@@ -2995,12 +3005,12 @@ function renderCompare() {
   const incD = deltaInfo(curInc, prevInc, false);  // income going up = good
 
   el.innerHTML = `
-    <div class="compare-card glass-sm">
+    <div class="compare-card cc-tile">
       <div class="cc-label">Pengeluaran</div>
       <div class="cc-val">Rp ${curExp.toLocaleString('id-ID')}</div>
       <div class="cc-delta ${expD.cls}">${expD.icon}<span>${expD.text}</span></div>
     </div>
-    <div class="compare-card glass-sm">
+    <div class="compare-card cc-tile">
       <div class="cc-label">Pemasukan</div>
       <div class="cc-val">Rp ${curInc.toLocaleString('id-ID')}</div>
       <div class="cc-delta ${incD.cls}">${incD.icon}<span>${incD.text}</span></div>
@@ -3016,7 +3026,7 @@ function renderInsights() {
   const expenses = S.transactions.filter(t => t.type === 'expense' && inRange(t));
 
   if (!expenses.length) {
-    list.innerHTML = '<div class="insight-card glass-sm"><div class="insight-icon" style="background:rgba(255,255,255,0.08);color:var(--txt3)">'+ICON.sparkles+'</div><div class="insight-body"><div class="insight-title">Belum ada insight</div><div class="insight-desc">Catat beberapa transaksi pengeluaran dulu supaya kami bisa kasih insight otomatis di sini.</div></div></div>';
+    list.innerHTML = '<div class="insight-card cc-tile"><div class="insight-icon" style="background:rgba(255,255,255,0.08);color:var(--txt3)">'+ICON.sparkles+'</div><div class="insight-body"><div class="insight-title">Belum ada insight</div><div class="insight-desc">Catat beberapa transaksi pengeluaran dulu supaya kami bisa kasih insight otomatis di sini.</div></div></div>';
     return;
   }
 
@@ -3034,7 +3044,7 @@ function renderInsights() {
   if (topCat) {
     const pct = totalExp > 0 ? Math.round(topCat.total / totalExp * 100) : 0;
     cards.push(`
-      <div class="insight-card glass-sm">
+      <div class="insight-card cc-tile">
         <div class="insight-icon" style="background:${topCat.color}22;color:${topCat.color}">${ICON.flame}</div>
         <div class="insight-body">
           <div class="insight-title">Kategori paling boros: ${escapeHtml(topCat.label)}</div>
@@ -3047,7 +3057,7 @@ function renderInsights() {
   const biggestTx = [...expenses].sort((a,b)=>b.amount-a.amount)[0];
   if (biggestTx) {
     cards.push(`
-      <div class="insight-card glass-sm">
+      <div class="insight-card cc-tile">
         <div class="insight-icon" style="background:rgba(255,107,132,0.15);color:var(--red)">${ICON.alertOctagon}</div>
         <div class="insight-body">
           <div class="insight-title">Transaksi terbesar: ${escapeHtml(biggestTx.note || biggestTx.cat)}</div>
@@ -3072,7 +3082,7 @@ function renderInsights() {
     });
     if (spike && (spike.prevTotal > 0 || spike.diff > 0)) {
       cards.push(`
-        <div class="insight-card glass-sm">
+        <div class="insight-card cc-tile">
           <div class="insight-icon" style="background:${spike.color}22;color:${spike.color}">${ICON.trendUp}</div>
           <div class="insight-body">
             <div class="insight-title">${escapeHtml(spike.label)} melonjak</div>
@@ -3109,11 +3119,11 @@ function renderAverages() {
   const weeklyAvg = dailyAvg * 7;
 
   grid.innerHTML = `
-    <div class="compare-card glass-sm">
+    <div class="compare-card cc-tile">
       <div class="cc-label">Rata-rata Harian</div>
       <div class="cc-val">Rp ${Math.round(dailyAvg).toLocaleString('id-ID')}</div>
     </div>
-    <div class="compare-card glass-sm">
+    <div class="compare-card cc-tile">
       <div class="cc-label">Rata-rata Mingguan</div>
       <div class="cc-val">Rp ${Math.round(weeklyAvg).toLocaleString('id-ID')}</div>
     </div>`;
@@ -3223,7 +3233,7 @@ function renderForecast() {
   let html = `
     <div class="forecast-top">
       <div>
-        <div class="forecast-label">Proyeksi Saldo Akhir Bulan</div>
+        <div class="forecast-label">Estimasi Akhir Bulan</div>
         <div class="forecast-val ${valClass}">Rp ${Math.round(f.projected).toLocaleString('id-ID')}</div>
         <div class="forecast-cur">dari saldo sekarang Rp ${Math.round(f.currentBalance).toLocaleString('id-ID')}</div>
       </div>
@@ -3417,8 +3427,10 @@ function drawTrend() {
 }
 
 function switchRiver(el) {
-  document.querySelectorAll('.river-tab').forEach(t=>t.classList.remove('active'));
-  el.classList.add('active'); drawRiver();
+  document.querySelectorAll('#riverTabs .river-tab').forEach(t=>t.classList.remove('active'));
+  el.classList.add('active');
+  moveTypeIndicator('riverTabs', 'riverTabIndicator', el.id);
+  drawRiver();
 }
 
 /* ══════════════════════════════════════════

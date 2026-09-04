@@ -986,16 +986,38 @@ body {
   display: flex; gap: 2px;
   background: rgba(0,0,0,0.2);
   padding: 3px; border-radius: 10px;
+  position: relative;
 }
+/* Sliding glass highlight — same shared-element glide pattern as
+   .type-indicator (see moveTypeIndicator() in JS), reused here so the
+   Cashflow River (and donut) tab pill animates between positions instead
+   of just popping its background in/out per tab. */
+.river-tab-indicator {
+  position: absolute;
+  top: 0; left: 0;
+  border-radius: 8px;
+  background: rgba(255,255,255,0.9);
+  box-shadow: inset 0 1.5px 0 rgba(255,255,255,0.6), 0 2px 8px rgba(30,41,59,0.1);
+  transition: transform 0.35s cubic-bezier(0.22,1,0.36,1), width 0.35s cubic-bezier(0.22,1,0.36,1), height 0.35s cubic-bezier(0.22,1,0.36,1);
+  pointer-events: none;
+  opacity: 0;
+  z-index: 0;
+}
+.river-tab-indicator.ready { opacity: 1; }
 .river-tab {
   font-size: 11px; font-weight: 500; padding: 4px 10px;
-  border-radius: 8px; cursor: pointer; color: var(--txt3); transition: all 0.15s;
+  border-radius: 8px; cursor: pointer; color: var(--txt3); transition: color 0.15s;
+  position: relative; z-index: 1;
 }
 .river-tab.active {
-  background: rgba(255,255,255,0.9);
   color: var(--txt);
-  box-shadow: inset 0 1px 0 rgba(255,255,255,0.6), 0 1px 4px rgba(30,41,59,0.1);
 }
+/* Icon-only variant — same pill/track, but a small centered icon instead
+   of text (used for the donut's Pengeluaran/Pemasukan filter). */
+.river-tab.icon-tab { display: flex; align-items: center; justify-content: center; padding: 5px 9px; }
+.river-tab.icon-tab .ic { width: 14px; height: 14px; }
+.river-tab.icon-tab.expense.active { color: var(--red); }
+.river-tab.icon-tab.income.active  { color: var(--teal); }
 #riverCanvas { width: 100%; height: 100px; display: block; position: relative; z-index: 1; }
 .river-legend { display: flex; gap: 16px; margin-top: 10px; position: relative; z-index: 1; }
 .legend-dot { display: flex; align-items: center; gap: 5px; font-size: 11px; color: var(--txt2); }
@@ -1168,7 +1190,7 @@ body {
 /* ═══════════════════════════════════════
    ANALYTICS
 ═══════════════════════════════════════ */
-.analytics-hero { margin: 0 20px; padding: 20px; text-align: center; }
+.analytics-hero { margin: 16px 20px 0; padding: 20px; text-align: center; }
 .donut-wrap { position: relative; width: 160px; height: 160px; margin: 0 auto 16px; }
 #donutCanvas { width: 160px; height: 160px; }
 .donut-center { position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%); text-align: center; }
@@ -1183,11 +1205,18 @@ body {
 .dl-fill  { height: 100%; border-radius: 99px; }
 .dl-pct   { font-family: var(--mono); font-size: 12px; }
 
-.trend-chart-wrap { margin: 0 20px; padding: 18px; }
+.trend-chart-wrap { margin: 16px 20px 0; padding: 18px; }
 #trendCanvas { width: 100%; height: 120px; }
 
+/* Insight / Anggaran / Per Akun — cards that used to be introduced by a
+   free-floating .section-head; now each one carries its own .card-head
+   title, same pattern as the Home cards (Cashflow River, Skor Keuangan…). */
+.insight-wrap, .budget-overlay-wrap, .account-breakdown-wrap { margin: 16px 20px 0; padding: 18px; }
+.insight-wrap .insight-list { margin: 0; }
+
 /* Period comparison cards */
-.compare-grid { display: flex; gap: 10px; margin: 0 20px 18px; }
+.compare-wrap { margin: 16px 20px 0; padding: 18px; }
+.compare-grid { display: flex; gap: 10px; margin: 0; }
 .compare-card { flex: 1; padding: 14px 14px 13px; }
 .compare-card .cc-label { font-size: 10.5px; color: var(--txt3); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 7px; }
 .compare-card .cc-val { font-family: var(--mono); font-size: 16px; font-weight: 600; color: var(--txt); line-height: 1.2; }
@@ -1197,10 +1226,21 @@ body {
 .compare-card .cc-delta.bad  { color: var(--red); }
 .compare-card .cc-delta.flat { color: var(--txt3); }
 .compare-card .cc-sub { font-size: 10.5px; color: var(--txt3); margin-top: 3px; }
-.compare-empty { margin: 0 20px 18px; padding: 14px 16px; font-size: 12px; color: var(--txt3); text-align: center; }
+.compare-empty { margin: 0; padding: 14px 16px; font-size: 12px; color: var(--txt3); text-align: center; }
+
+/* Flat nested-tile chrome — used instead of .glass-sm for small cards that
+   now sit *inside* another glass card (Perbandingan, Insight), so they
+   read as tiles/rows rather than a card stacked on a card. Same recipe as
+   the balance-hero's .b-pill on the Home page. */
+.cc-tile {
+  background: rgba(18,21,31,0.05);
+  border: 1px solid rgba(18,21,31,0.08);
+  border-radius: 14px;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.2);
+}
 
 /* Forecasting sederhana — proyeksi saldo akhir bulan */
-.forecast-card { margin: 0 20px 0; padding: 18px; }
+.forecast-wrap { margin: 8px 20px 0; padding: 18px; }
 .forecast-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
 .forecast-label { font-size: 10.5px; color: var(--txt3); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 7px; }
 .forecast-val { font-family: var(--disp); font-size: 26px; font-weight: 700; letter-spacing: -0.5px; line-height: 1.15; }
