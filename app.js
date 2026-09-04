@@ -269,8 +269,16 @@ const BUDGET = {
   cats: []
 };
 
-// Curated icon set for custom budget categories — kept visually consistent with the app's icon language
-const BUDGET_CAT_ICONS = ['utensils','car','cart','gamepad','health','book','bill','home','smartphone','gift','plane','coins','heart','briefcase','creditCard','package'];
+// Curated icon set for custom budget/transaction categories — kept visually
+// consistent with the app's icon language. Diperluas biar variasinya selebar
+// pemilih ikon Saving Goals (GOAL_ICON_OPTIONS), jadi user hampir selalu
+// nemu ikon yang pas tanpa balik ke ikon generik.
+const BUDGET_CAT_ICONS = [
+  'utensils','car','cart','gamepad','health','book','bill','home','smartphone','gift',
+  'plane','coins','heart','briefcase','creditCard','package','laptop','camera','wallet','cash',
+  'piggyBank','shirt','dumbbell','baby','pawprint','music','wrench','umbrella','trophy','mountain',
+  'building','globe','bike','fuel','ring','tree','anchor','sparkles','target','bank','gem','graduationCap',
+];
 // Nama yang ditampilkan di dropdown pemilih ikon anggaran (picker-trigger,
 // bukan grid ikon berceceran lagi) — satu nama singkat per ikon.
 const BUDGET_CAT_ICON_LABELS = {
@@ -278,6 +286,13 @@ const BUDGET_CAT_ICON_LABELS = {
   health: 'Kesehatan', book: 'Pendidikan', bill: 'Tagihan', home: 'Rumah',
   smartphone: 'Gadget', gift: 'Hadiah', plane: 'Liburan', coins: 'Tabungan',
   heart: 'Favorit', briefcase: 'Kerja', creditCard: 'Kartu Kredit', package: 'Lainnya',
+  laptop: 'Laptop', camera: 'Kamera', wallet: 'Dompet', cash: 'Uang Tunai',
+  piggyBank: 'Nabung', shirt: 'Pakaian', dumbbell: 'Olahraga', baby: 'Anak',
+  pawprint: 'Hewan Peliharaan', music: 'Musik', wrench: 'Perbaikan', umbrella: 'Asuransi',
+  trophy: 'Hobi', mountain: 'Wisata', building: 'Properti', globe: 'Internasional',
+  bike: 'Sepeda', fuel: 'BBM', ring: 'Pernikahan', tree: 'Kebun',
+  anchor: 'Kapal', sparkles: 'Kecantikan', target: 'Target', bank: 'Bank',
+  gem: 'Perhiasan', graduationCap: 'Sekolah',
 };
 const BUDGET_CAT_COLORS = ['#FF8C00','#5EB3FF','#C4A8FF','#FF6B84','#2AE8C4','#FFD166','#7CE38B','#FF9EC4'];
 let _pendingBudgetCatIcon = null;
@@ -2503,16 +2518,32 @@ document.addEventListener('touchstart', e => {
   closeOtherKcSwipes(null);
 }, {passive:true});
 
-function renderCategoryColorGrid() {
-  const grid = document.getElementById('categoryColorGrid');
-  if (!grid) return;
-  grid.innerHTML = BUDGET_CAT_COLORS.map(color => `
-    <div class="color-pick-item ${_pendingCatColor===color?'selected':''}" style="background:${color}" onclick="selectCategoryColor('${color}')"></div>
-  `).join('');
+// Warna kategori sekarang dipilih lewat dropdown melayang (anchored, sama
+// mekanismenya dengan openPicker/#pickerOverlay) yang dibuka dari trigger
+// bulat #categoryColorTrigger, bukan grid warna yang selalu kebuka inline.
+function updateCategoryColorTrigger() {
+  const trigger = document.getElementById('categoryColorTrigger');
+  const hidden  = document.getElementById('categoryColor');
+  if (trigger) trigger.style.background = _pendingCatColor || 'transparent';
+  if (hidden)  hidden.value = _pendingCatColor || '';
 }
-function selectCategoryColor(color) {
+
+function openCategoryColorPicker(trigger) {
+  const grid = document.getElementById('colorPickerGrid');
+  grid.innerHTML = BUDGET_CAT_COLORS.map(color => `
+    <div class="color-pick-item ${_pendingCatColor===color?'selected':''}" style="background:${color}" onclick="selectCategoryColorFromPicker('${color}')"></div>
+  `).join('');
+  const overlay = document.getElementById('colorPickerOverlay');
+  overlay.classList.add('open');
+  if (trigger) anchorDropdown(overlay.querySelector('.picker-modal'), trigger);
+}
+function closeColorPicker() {
+  document.getElementById('colorPickerOverlay').classList.remove('open');
+}
+function selectCategoryColorFromPicker(color) {
   _pendingCatColor = color;
-  renderCategoryColorGrid();
+  updateCategoryColorTrigger();
+  closeColorPicker();
 }
 
 function openAddCategoryModal() {
@@ -2525,7 +2556,7 @@ function openAddCategoryModal() {
   document.getElementById('categoryIcon').value = defaultIcon;
   document.getElementById('categoryIconLabel').innerHTML = ICON[defaultIcon] || '';
   _pendingCatColor = BUDGET_CAT_COLORS[(CATS[KC_TYPE]||[]).length % BUDGET_CAT_COLORS.length];
-  renderCategoryColorGrid();
+  updateCategoryColorTrigger();
   document.getElementById('categoryModalOverlay').classList.add('open');
 }
 
@@ -2542,7 +2573,7 @@ function openEditCategoryModal(type, id) {
   document.getElementById('categoryIcon').value = icon;
   document.getElementById('categoryIconLabel').innerHTML = ICON[icon] || '';
   _pendingCatColor = cat.color;
-  renderCategoryColorGrid();
+  updateCategoryColorTrigger();
   document.getElementById('categoryModalOverlay').classList.add('open');
 }
 
@@ -2968,13 +2999,11 @@ function renderCompare() {
       <div class="cc-label">Pengeluaran</div>
       <div class="cc-val">Rp ${curExp.toLocaleString('id-ID')}</div>
       <div class="cc-delta ${expD.cls}">${expD.icon}<span>${expD.text}</span></div>
-      <div class="cc-sub">Sebelumnya: Rp ${prevExp.toLocaleString('id-ID')}</div>
     </div>
     <div class="compare-card glass-sm">
       <div class="cc-label">Pemasukan</div>
       <div class="cc-val">Rp ${curInc.toLocaleString('id-ID')}</div>
       <div class="cc-delta ${incD.cls}">${incD.icon}<span>${incD.text}</span></div>
-      <div class="cc-sub">Sebelumnya: Rp ${prevInc.toLocaleString('id-ID')}</div>
     </div>`;
 }
 
@@ -3083,12 +3112,10 @@ function renderAverages() {
     <div class="compare-card glass-sm">
       <div class="cc-label">Rata-rata Harian</div>
       <div class="cc-val">Rp ${Math.round(dailyAvg).toLocaleString('id-ID')}</div>
-      <div class="cc-sub">berdasarkan ${days} hari</div>
     </div>
     <div class="compare-card glass-sm">
       <div class="cc-label">Rata-rata Mingguan</div>
       <div class="cc-val">Rp ${Math.round(weeklyAvg).toLocaleString('id-ID')}</div>
-      <div class="cc-sub">estimasi per 7 hari</div>
     </div>`;
 }
 
@@ -4744,12 +4771,10 @@ function renderDebtSummary() {
     <div class="compare-card glass-sm">
       <div class="cc-label">Piutang Aktif</div>
       <div class="cc-val" style="color:var(--blue)" id="debtSumPiutangVal">0</div>
-      <div class="cc-sub">Uang orang lain ke kamu</div>
     </div>
     <div class="compare-card glass-sm">
       <div class="cc-label">Utang Aktif</div>
       <div class="cc-val" style="color:var(--red)" id="debtSumUtangVal">0</div>
-      <div class="cc-sub">Uang kamu ke orang lain</div>
     </div>`;
   runDebtSummaryTicker('debtSumPiutang', document.getElementById('debtSumPiutangVal'), debtCurrencyBreakdown('piutang'));
   runDebtSummaryTicker('debtSumUtang',   document.getElementById('debtSumUtangVal'),   debtCurrencyBreakdown('utang'));

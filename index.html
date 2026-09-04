@@ -352,10 +352,9 @@
     </div>
 
     <!-- Cashflow River -->
-    <div class="section-head"><h2>Cashflow River</h2><span class="see-all">7 hari</span></div>
     <div class="river-wrap glass">
       <div class="river-header">
-        <h3>Aliran Uang</h3>
+        <h3>Cashflow River</h3>
         <div class="river-tabs">
           <div class="river-tab active">M</div>
           <div class="river-tab" onclick="switchRiver(this)">3M</div>
@@ -375,19 +374,23 @@
     </div>
 
     <!-- Score -->
-    <div class="section-head"><h2>Skor Keuangan</h2><span class="see-all">Detail <svg class="ic" viewBox="0 0 24 24"><path d="M4 12h16M13 6l6 6-6 6"/></svg></span></div>
     <div class="score-card glass">
-      <canvas id="scoreCanvas"></canvas>
-      <div class="score-info">
-        <div class="si-label">OFM Score</div>
-        <div class="si-val" id="siVal">—</div>
-        <div class="si-grade" id="siGrade"></div>
-        <div class="si-tip" id="siTip"></div>
+      <div class="card-head">
+        <h3>Skor Keuangan</h3>
+        <span class="see-all">Detail <svg class="ic" viewBox="0 0 24 24"><path d="M4 12h16M13 6l6 6-6 6"/></svg></span>
+      </div>
+      <div class="score-body">
+        <canvas id="scoreCanvas"></canvas>
+        <div class="score-info">
+          <div class="si-label">OFM Score</div>
+          <div class="si-val" id="siVal">—</div>
+          <div class="si-grade" id="siGrade"></div>
+          <div class="si-tip" id="siTip"></div>
+        </div>
       </div>
     </div>
 
     <!-- Stats -->
-    <div class="section-head"><h2>Ringkasan</h2></div>
     <div class="stats-row">
       <div class="stat-card glass-sm" onclick="showPage('budget')">
         <div class="sc-icon"><svg class="ic" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="4"/><circle cx="12" cy="12" r="0.6" fill="currentColor" stroke="none"/></svg></div>
@@ -422,23 +425,28 @@
     </div>
 
     <!-- Recurring Preview -->
-    <div class="section-head"><h2>Tagihan Mendatang</h2><span class="see-all" onclick="showPage('recurring')">Semua <svg class="ic" viewBox="0 0 24 24"><path d="M4 12h16M13 6l6 6-6 6"/></svg></span></div>
     <div class="recur-preview glass">
+      <div class="card-head">
+        <h3>Tagihan Mendatang</h3>
+        <span class="see-all" onclick="showPage('recurring')">Semua <svg class="ic" viewBox="0 0 24 24"><path d="M4 12h16M13 6l6 6-6 6"/></svg></span>
+      </div>
       <div class="recur-preview-row" id="recurPreview"></div>
     </div>
 
     <!-- Goals Preview -->
-    <div class="section-head"><h2>Saving Goals</h2><span class="see-all" onclick="showPage('goals')">Semua <svg class="ic" viewBox="0 0 24 24"><path d="M4 12h16M13 6l6 6-6 6"/></svg></span></div>
     <div class="goals-preview glass">
+      <div class="card-head">
+        <h3>Saving Goals</h3>
+        <span class="see-all" onclick="showPage('goals')">Semua <svg class="ic" viewBox="0 0 24 24"><path d="M4 12h16M13 6l6 6-6 6"/></svg></span>
+      </div>
       <div class="gp-row" id="goalsPreview"></div>
     </div>
 
     <!-- Meter -->
-    <div class="section-head"><h2>Meter Belanja</h2></div>
     <div class="meter-wrap glass">
       <div class="meter-header">
         <div>
-          <div class="meter-title">Budget Bulan Ini</div>
+          <div class="meter-title">Meter Belanja</div>
           <div class="meter-sub" id="meterSub">Rp 0 dari Rp 5.000.000</div>
         </div>
         <div class="meter-pct" id="meterPct">0%</div>
@@ -670,16 +678,21 @@
           <label>Nama Kategori</label>
           <input type="text" id="categoryNameInput" maxlength="24">
         </div>
-        <div class="field" style="margin-top:12px">
-          <label>Ikon</label>
-          <div class="picker-trigger" onclick="openIconPickerModal('categoryIcon')">
-            <div class="pt-text"><span id="categoryIconLabel" class="picker-icon-only">Pilih ikon</span></div>
-            <span class="picker-arrow">▾</span>
+        <div class="field-row" style="margin-top:12px">
+          <div class="field" style="flex:1">
+            <label>Ikon</label>
+            <div class="picker-trigger" onclick="openIconPickerModal('categoryIcon')">
+              <div class="pt-text"><span id="categoryIconLabel" class="picker-icon-only">Pilih ikon</span></div>
+              <span class="picker-arrow">▾</span>
+            </div>
+            <input type="hidden" id="categoryIcon">
           </div>
-          <input type="hidden" id="categoryIcon">
+          <div class="field" style="flex:0 0 auto">
+            <label>Warna</label>
+            <div class="color-trigger" id="categoryColorTrigger" onclick="openCategoryColorPicker(this)"></div>
+            <input type="hidden" id="categoryColor">
+          </div>
         </div>
-        <div style="font-size:11px;color:var(--txt3);text-transform:uppercase;letter-spacing:0.5px;margin:14px 0 4px">Pilih Warna</div>
-        <div class="color-pick-grid" id="categoryColorGrid"></div>
       </div>
       <button class="modal-submit" id="categoryModalSubmitBtn" onclick="submitCategoryModal()">Simpan Kategori</button>
     </div>
@@ -1183,7 +1196,7 @@
         <button class="modal-close" onclick="closeDebtModal()"><svg class="ic" viewBox="0 0 24 24"><path d="M5 5l14 14M19 5L5 19"/></svg></button>
       </div>
       <div class="modal-form" style="padding-bottom:0">
-        <div class="type-toggle" id="debtKindToggle" style="margin-bottom:10px">
+        <div class="type-toggle" id="debtKindToggle" style="margin:0 0 10px">
           <div class="type-indicator" id="debtKindIndicator"></div>
           <button class="type-btn active expense" id="debtKindUtang" onclick="setDebtKind('utang')"><svg class="ic" viewBox="0 0 24 24"><path d="M3 7l6 6 4-4 8 9"/><path d="M15 18h6v-6"/></svg> Utang Saya</button>
           <button class="type-btn income" id="debtKindPiutang" onclick="setDebtKind('piutang')"><svg class="ic" viewBox="0 0 24 24"><path d="M3 17l6-6 4 4 8-9"/><path d="M15 6h6v6"/></svg> Piutang Saya</button>
@@ -1266,6 +1279,15 @@
         <button class="modal-close" onclick="closeIconPickerModal()"><svg class="ic" viewBox="0 0 24 24"><path d="M5 5l14 14M19 5L5 19"/></svg></button>
       </div>
       <div class="icon-pick-grid icon-picker-grid" id="iconPickerGrid"></div>
+    </div>
+  </div>
+
+  <!-- ══════ COLOR PICKER (anchored dropdown, khusus field Warna kategori) —
+       pakai mekanisme anchor/dropdown yang sama dengan #pickerOverlay
+       (anchorDropdown() di app.js), isinya grid swatch warna bulat. ══════ -->
+  <div class="picker-overlay" id="colorPickerOverlay" onclick="if(event.target===this)closeColorPicker()">
+    <div class="picker-modal">
+      <div class="color-pick-grid" id="colorPickerGrid"></div>
     </div>
   </div>
 

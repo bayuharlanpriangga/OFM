@@ -848,6 +848,18 @@ body {
 .quicknote-bubble .ic { width: 15px; height: 15px; color: var(--teal); flex-shrink: 0; }
 
 /* ═══════════════════════════════════════
+   CARD HEAD — small title (+ optional right-aligned
+   link) living as the first row INSIDE a card, replacing
+   the old separate .section-head bar that used to sit
+   between cards.
+═══════════════════════════════════════ */
+.card-head {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 12px; position: relative; z-index: 1;
+}
+.card-head h3 { font-family: var(--disp); font-size: 14px; font-weight: 600; color: var(--txt); }
+
+/* ═══════════════════════════════════════
    SECTION HEAD
 ═══════════════════════════════════════ */
 .section-head {
@@ -965,7 +977,7 @@ body {
   from { opacity: 0; transform: translateY(10px) scale(0.985); filter: blur(6px); }
   to   { opacity: 1; transform: translateY(0) scale(1); filter: blur(0); }
 }
-.river-wrap { margin: 0 20px; padding: 18px 18px 14px; }
+.river-wrap { margin: 16px 20px 0; padding: 18px 18px 14px; }
 .river-header {
   display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; position: relative; z-index: 1;
 }
@@ -993,10 +1005,11 @@ body {
    SCORE CARD
 ═══════════════════════════════════════ */
 .score-card {
-  margin: 0 20px;
+  margin: 16px 20px 0;
   padding: 18px 20px;
-  display: flex; align-items: center; gap: 16px;
+  display: flex; flex-direction: column;
 }
+.score-body { display: flex; align-items: center; gap: 16px; }
 .score-info .si-label { font-size: 11px; color: var(--txt3); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px; }
 .score-info .si-val   { font-family: var(--disp); font-size: 30px; font-weight: 700; color: var(--purple); line-height: 1; }
 .score-info .si-grade { font-size: 12px; color: var(--txt2); margin-top: 4px; }
@@ -1009,6 +1022,7 @@ body {
 .stats-row {
   display: flex; gap: 10px; padding: 0 20px;
   overflow-x: auto; scrollbar-width: none; padding-bottom: 4px;
+  margin-top: 16px;
 }
 .stats-row::-webkit-scrollbar { display: none; }
 .stat-card {
@@ -1028,7 +1042,7 @@ body {
 /* ═══════════════════════════════════════
    METER
 ═══════════════════════════════════════ */
-.meter-wrap { margin: 0 20px; padding: 16px 18px; }
+.meter-wrap { margin: 16px 20px 0; padding: 16px 18px; }
 .meter-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 14px; position: relative; z-index: 1; }
 .meter-title { font-size: 13px; font-weight: 600; }
 .meter-sub   { font-size: 11px; color: var(--txt3); margin-top: 2px; }
@@ -2030,7 +2044,7 @@ body {
 .add-recur-btn:active { background: rgba(94,179,255,0.12); }
 
 /* Upcoming recurring on dashboard */
-.recur-preview { margin: 0 20px; padding: 14px 16px; }
+.recur-preview { margin: 16px 20px 0; padding: 14px 16px; }
 .recur-preview-row { display: flex; flex-direction: column; gap: 8px; }
 .recur-prev-item {
   display: flex; align-items: center; gap: 10px;
@@ -2103,7 +2117,7 @@ body {
 .bell-badge.show { opacity: 1; }
 
 /* Goals summary card on dashboard */
-.goals-preview { margin: 0 20px; padding: 16px 18px; }
+.goals-preview { margin: 16px 20px 0; padding: 16px 18px; }
 .gp-row { display: flex; gap: 10px; overflow-x: auto; scrollbar-width: none; }
 .gp-row::-webkit-scrollbar { display: none; }
 .gp-chip {
@@ -2144,6 +2158,24 @@ body {
 }
 .picker-trigger:active { background: rgba(18,21,31,0.06); border-color: rgba(13,148,136,0.4); }
 .picker-arrow { font-size: 10px; color: var(--txt3); flex-shrink: 0; }
+
+/* Row that holds two fields side by side (e.g. Ikon + Warna in Tambah
+   Kategori) — the fixed-width field (like the round color trigger) keeps
+   its own size while the other one stretches. */
+.field-row { display: flex; align-items: flex-end; gap: 10px; }
+.field-row .field { min-width: 0; }
+
+/* Round color-swatch trigger — same glass/pressed language as
+   .picker-trigger, just shaped like the color dot it represents instead
+   of a text pill. Background color is set inline via JS. */
+.color-trigger {
+  width: 42px; height: 42px; border-radius: 50%;
+  cursor: pointer;
+  border: 1px solid rgba(18,21,31,0.10);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.4), 0 1px 3px rgba(30,41,59,0.12);
+  transition: transform 0.15s, border-color 0.15s;
+}
+.color-trigger:active { transform: scale(0.92); }
 
 /* Teks label picker-trigger (mis. "Rp Rupiah Indonesia (IDR)") kadang lebih
    panjang dari lebar field-nya. Daripada field-nya melebar ke bawah (2
@@ -2795,4 +2827,9 @@ body {
   transition: transform 0.15s, border-color 0.15s;
 }
 .color-pick-item.selected { border-color: #fff; transform: scale(1.12); }
+
+/* #colorPickerGrid sits directly inside .picker-modal (the anchored
+   dropdown panel) rather than inline in the form, so it needs its own
+   padding — same panel .picker-opts would otherwise provide. */
+#colorPickerGrid { padding: 14px; max-width: 220px; position: relative; z-index: 1; }
 
