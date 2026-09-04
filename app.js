@@ -176,8 +176,8 @@
   function draw() {
     t += 1;
     ctx.clearRect(0, 0, W, H);
-    // Deep navy base
-    ctx.fillStyle = '#060A18';
+    // Soft off-white base
+    ctx.fillStyle = '#F3F5FA';
     ctx.fillRect(0, 0, W, H);
 
     orbs.forEach(o => {
@@ -186,8 +186,8 @@
       const r = o.r * Math.min(W, H);
       const [r0,g0,b0] = o.c;
       const grad = ctx.createRadialGradient(x, y, 0, x, y, r);
-      grad.addColorStop(0, `rgba(${r0},${g0},${b0},0.28)`);
-      grad.addColorStop(0.5,`rgba(${r0},${g0},${b0},0.10)`);
+      grad.addColorStop(0, `rgba(${r0},${g0},${b0},0.20)`);
+      grad.addColorStop(0.5,`rgba(${r0},${g0},${b0},0.08)`);
       grad.addColorStop(1,  `rgba(${r0},${g0},${b0},0)`);
       ctx.beginPath();
       ctx.arc(x, y, r, 0, Math.PI * 2);
@@ -251,6 +251,14 @@ const BUDGET = {
 
 // Curated icon set for custom budget categories — kept visually consistent with the app's icon language
 const BUDGET_CAT_ICONS = ['utensils','car','cart','gamepad','health','book','bill','home','smartphone','gift','plane','coins','heart','briefcase','creditCard','package'];
+// Nama yang ditampilkan di dropdown pemilih ikon anggaran (picker-trigger,
+// bukan grid ikon berceceran lagi) — satu nama singkat per ikon.
+const BUDGET_CAT_ICON_LABELS = {
+  utensils: 'Makanan', car: 'Transportasi', cart: 'Belanja', gamepad: 'Hiburan',
+  health: 'Kesehatan', book: 'Pendidikan', bill: 'Tagihan', home: 'Rumah',
+  smartphone: 'Gadget', gift: 'Hadiah', plane: 'Liburan', coins: 'Tabungan',
+  heart: 'Favorit', briefcase: 'Kerja', creditCard: 'Kartu Kredit', package: 'Lainnya',
+};
 const BUDGET_CAT_COLORS = ['#FF8C00','#5EB3FF','#C4A8FF','#FF6B84','#2AE8C4','#FFD166','#7CE38B','#FF9EC4'];
 let _pendingBudgetCatIcon = null;
 
@@ -666,7 +674,7 @@ function setSmartMode(mode, animate = true) {
    a speed-dial with a wave/label-reveal effect.
 ══════════════════════════════════════════ */
 // Every page reachable from the rail (bubble id "nav-<key>" must exist).
-const NAV_PAGES = ['dashboard', 'budget', 'riwayat', 'analytics', 'goals', 'recurring', 'kelolakategori', 'akun', 'settings'];
+const NAV_PAGES = ['dashboard', 'budget', 'riwayat', 'analytics', 'goals', 'recurring', 'kelolakategori', 'akun', 'utang', 'settings'];
 
 // Tracks which bubble is currently marked active, so it survives resizes/re-renders.
 let _activeNavKey = 'dashboard';
@@ -865,6 +873,7 @@ window.addEventListener('resize', () => {
     moveTypeIndicator('addtxTypeToggle', 'typeIndicator', 'type' + S.currentType.charAt(0).toUpperCase() + S.currentType.slice(1), false);
     moveTypeIndicator('recurTypeToggle', 'recurTypeIndicator', 'recurType' + (_recurType||'expense').charAt(0).toUpperCase() + (_recurType||'expense').slice(1), false);
     moveTypeIndicator('smartModeTabs', 'smartModeIndicator', (S._smartMode === 'sms') ? 'smartModeSmsTab' : 'smartModeTypeTab', false);
+    moveTypeIndicator('debtKindToggle', 'debtKindIndicator', 'debtKind' + (S._debtKind||'utang').charAt(0).toUpperCase() + (S._debtKind||'utang').slice(1), false);
   }, 150);
 });
 
@@ -906,6 +915,7 @@ function showPage(id) {
   if (id === 'riwayat')         { setTimeout(renderRiwayat, 60); }
   if (id === 'settings')        updateSettingsPage();
   if (id === 'kelolakategori')  renderKategoriList();
+  if (id === 'utang')           renderDebts();
 }
 
 function updateSettingsPage() {
@@ -1236,38 +1246,48 @@ function selectBudgetCat(id) {
    attach a lot of receipts since everything rides in the same synced
    record. Fine for normal use.
 ══════════════════════════════════════════ */
-function handleReceiptSelect(event) {
-  const file = event.target.files && event.target.files[0];
-  if (!file) return;
+// Shrinks a drawable source (an <img> or a camera <video> frame) down to a
+// compact JPEG data URL — same recipe used everywhere a receipt photo gets
+// attached, regardless of whether it came from the camera or the gallery.
+function _compressReceiptSource(source, srcW, srcH) {
+  const maxW = 640;
+  const scale = Math.min(1, maxW / srcW);
+  const w = Math.round(srcW * scale), h = Math.round(srcH * scale);
+  const canvas = document.createElement('canvas');
+  canvas.width = w; canvas.height = h;
+  canvas.getContext('2d').drawImage(source, 0, 0, w, h);
+  return canvas.toDataURL('image/jpeg', 0.55);
+}
+
+function _compressReceiptFile(file, cb) {
   if (!file.type.startsWith('image/')) { showToast('File harus berupa gambar', 'warning'); return; }
   const reader = new FileReader();
   reader.onload = e => {
     const img = new Image();
-    img.onload = () => {
-      const maxW = 640;
-      const scale = Math.min(1, maxW / img.width);
-      const w = Math.round(img.width * scale), h = Math.round(img.height * scale);
-      const canvas = document.createElement('canvas');
-      canvas.width = w; canvas.height = h;
-      canvas.getContext('2d').drawImage(img, 0, 0, w, h);
-      const dataUrl = canvas.toDataURL('image/jpeg', 0.55);
-      S.pendingReceipt = dataUrl;
-      const preview = document.getElementById('txReceiptPreview');
-      preview.src = dataUrl;
-      document.getElementById('txReceiptPreviewWrap').style.display = 'block';
-      document.getElementById('txReceiptEmpty').style.display = 'none';
-      runReceiptOCR(dataUrl);
-    };
+    img.onload = () => cb(_compressReceiptSource(img, img.width, img.height));
     img.src = e.target.result;
   };
   reader.readAsDataURL(file);
-  event.target.value = '';
+}
+
+// Drops a receipt photo into the transaction form and kicks off OCR.
+// `inline` = true means "attach to the form already open" (retake flow);
+// otherwise it opens a brand-new transaction first, since the header
+// camera button is meant to jump straight from snap -> new transaction.
+function attachReceiptPhoto(dataUrl, inline) {
+  if (!inline) openModal();
+  S.pendingReceipt = dataUrl;
+  const preview = document.getElementById('txReceiptPreview');
+  if (preview) preview.src = dataUrl;
+  const fieldWrap = document.getElementById('txReceiptFieldWrap');
+  if (fieldWrap) fieldWrap.style.display = 'block';
+  runReceiptOCR(dataUrl);
 }
 
 function removeReceipt() {
   S.pendingReceipt = null;
-  document.getElementById('txReceiptPreviewWrap').style.display = 'none';
-  document.getElementById('txReceiptEmpty').style.display = 'flex';
+  const fieldWrap = document.getElementById('txReceiptFieldWrap');
+  if (fieldWrap) fieldWrap.style.display = 'none';
   const resultEl = document.getElementById('receiptOcrResult');
   if (resultEl) { resultEl.classList.remove('show'); resultEl.innerHTML = ''; }
   const overlay = document.getElementById('receiptOcrOverlay');
@@ -1280,6 +1300,103 @@ function openReceiptLightbox(src) {
 }
 function closeReceiptLightbox() {
   document.getElementById('receiptLightbox').classList.remove('open');
+}
+
+/* ══════════════════════════════════════════
+   RECEIPT CAMERA — live in-app camera for snapping a struk straight
+   into a transaction. Header "+"" was replaced with this camera button;
+   the gallery is offered as a fallback inside the camera view, not as
+   an upload field inside the transaction form anymore.
+══════════════════════════════════════════ */
+let _camStream = null;
+let _camFacing = 'environment';
+let _camInline = false; // true = attach to an already-open transaction (retake), false = start a new one
+
+async function openCameraCapture(inline) {
+  _camInline = !!inline;
+  const overlay = document.getElementById('cameraOverlay');
+  const errorEl = document.getElementById('cameraError');
+  if (!overlay) return;
+  overlay.classList.add('open');
+  if (errorEl) errorEl.style.display = 'none';
+
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    showCameraError('Kamera nggak didukung di browser ini — pilih dari galeri aja.');
+    return;
+  }
+  await _startCameraStream();
+}
+
+async function _startCameraStream() {
+  _stopCameraStream();
+  const video = document.getElementById('cameraVideo');
+  const errorEl = document.getElementById('cameraError');
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: { ideal: _camFacing } },
+      audio: false
+    });
+    _camStream = stream;
+    if (video) { video.srcObject = stream; await video.play().catch(() => {}); }
+    if (errorEl) errorEl.style.display = 'none';
+  } catch (err) {
+    console.error('Gagal buka kamera:', err);
+    if (err && err.name === 'NotAllowedError') {
+      showCameraError('Izin kamera ditolak — aktifkan lewat pengaturan browser, atau pilih dari galeri.');
+    } else {
+      showCameraError('Nggak bisa akses kamera. Coba pilih dari galeri.');
+    }
+  }
+}
+
+function showCameraError(msg) {
+  const errorEl = document.getElementById('cameraError');
+  const textEl = document.getElementById('cameraErrorText');
+  if (textEl) textEl.textContent = msg;
+  if (errorEl) errorEl.style.display = 'flex';
+}
+
+function _stopCameraStream() {
+  if (_camStream) {
+    _camStream.getTracks().forEach(t => t.stop());
+    _camStream = null;
+  }
+  const video = document.getElementById('cameraVideo');
+  if (video) video.srcObject = null;
+}
+
+function closeCameraCapture() {
+  _stopCameraStream();
+  const overlay = document.getElementById('cameraOverlay');
+  if (overlay) overlay.classList.remove('open');
+}
+
+function flipCameraFacing() {
+  _camFacing = (_camFacing === 'environment') ? 'user' : 'environment';
+  _startCameraStream();
+}
+
+function captureReceiptPhoto() {
+  const video = document.getElementById('cameraVideo');
+  if (!video || !video.videoWidth) return;
+  const dataUrl = _compressReceiptSource(video, video.videoWidth, video.videoHeight);
+  closeCameraCapture();
+  attachReceiptPhoto(dataUrl, _camInline);
+}
+
+function triggerCameraGallery() {
+  const input = document.getElementById('cameraGalleryInput');
+  if (input) input.click();
+}
+
+function handleCameraGallerySelect(event) {
+  const file = event.target.files && event.target.files[0];
+  event.target.value = '';
+  if (!file) return;
+  _compressReceiptFile(file, dataUrl => {
+    closeCameraCapture();
+    attachReceiptPhoto(dataUrl, _camInline);
+  });
 }
 
 /* ══════════════════════════════════════════
@@ -1478,8 +1595,27 @@ function renderDashboard() {
   let expenseEntries = Object.entries(expenseByCurrency).map(([code, amount]) => ({ code, amount }));
   if (!incomeEntries.length)  incomeEntries  = [{ code: 'IDR', amount: 0 }];
   if (!expenseEntries.length) expenseEntries = [{ code: 'IDR', amount: 0 }];
-  runAmountTicker('income',  document.getElementById('totalIncome'),  incomeEntries);
-  runAmountTicker('expense', document.getElementById('totalExpense'), expenseEntries);
+
+  // Kartu Pemasukan digabung dengan Piutang, kartu Pengeluaran digabung
+  // dengan Utang — bergantian menampilkan label+nominalnya kayak papan
+  // iklan (sama seperti Total Aset kalau akunnya lebih dari satu mata
+  // uang), dan papan ini terus aktif jalan meski nominal di kedua sisi
+  // sama-sama 0 (karena selalu ada minimal 2 entry: pemasukan & piutang).
+  let piutangEntries = debtCurrencyBreakdown('piutang');
+  let utangEntries   = debtCurrencyBreakdown('utang');
+  if (!piutangEntries.length) piutangEntries = [{ code: 'IDR', amount: 0 }];
+  if (!utangEntries.length)   utangEntries   = [{ code: 'IDR', amount: 0 }];
+
+  const incomeCombined = [
+    ...incomeEntries.map(e => ({ ...e, label: 'Pemasukan' })),
+    ...piutangEntries.map(e => ({ ...e, label: 'Piutang' })),
+  ];
+  const expenseCombined = [
+    ...expenseEntries.map(e => ({ ...e, label: 'Pengeluaran' })),
+    ...utangEntries.map(e => ({ ...e, label: 'Utang' })),
+  ];
+  runAmountTicker('income',  document.getElementById('totalIncome'),  incomeCombined,  document.getElementById('incomeLabelTxt'));
+  runAmountTicker('expense', document.getElementById('totalExpense'), expenseCombined, document.getElementById('expenseLabelTxt'));
 
   const spent = BUDGET.cats.filter(c => (c.currency || 'IDR') === 'IDR').reduce((s,c)=>s+c.spent,0);
   const pct   = BUDGET.total > 0 ? Math.min(100,Math.round(spent/BUDGET.total*100)) : 0;
@@ -1497,6 +1633,13 @@ function renderDashboard() {
   }
   document.getElementById('savingsAmt').textContent = 'Rp ' + fmtK(Math.max(0,income*0.28));
   document.getElementById('txCount').textContent    = txs.length + ' tx';
+  // Utang/Piutang net (piutang aktif − utang aktif, ber-Rupiah)
+  const debtNetEl = document.getElementById('debtNetVal');
+  if (debtNetEl) {
+    const nw = computeNetWorth();
+    const net = nw.totalPiutang - nw.totalUtang;
+    debtNetEl.textContent = (net >= 0 ? '+' : '−') + 'Rp ' + fmtK(Math.abs(net));
+  }
   // Compute streak
   const streakEl = document.getElementById('streakVal');
   if (streakEl) {
@@ -1527,17 +1670,28 @@ function renderDashboard() {
 ══════════════════════════════════════════ */
 const _tickerState = {}; // key -> { interval }
 
-function _tickerFade(el, apply) {
-  if (!el) { apply(); return; }
-  el.style.transition = 'opacity .28s ease, transform .28s ease';
-  el.style.opacity = '0';
-  el.style.transform = 'translateY(5px)';
+function _tickerFade(el, apply) { _tickerFadeMulti([el], apply); }
+
+// Sama seperti _tickerFade, tapi memudarkan beberapa elemen sekaligus
+// (mis. label + nominal) sehingga keduanya berganti bersamaan — dipakai
+// saat kartu Pemasukan/Pengeluaran juga merotasi label (Pemasukan ↔
+// Piutang, Pengeluaran ↔ Utang), bukan cuma nominalnya.
+function _tickerFadeMulti(els, apply) {
+  const valid = (els || []).filter(Boolean);
+  if (!valid.length) { apply(); return; }
+  valid.forEach(el => {
+    el.style.transition = 'opacity .28s ease, transform .28s ease';
+    el.style.opacity = '0';
+    el.style.transform = 'translateY(5px)';
+  });
   setTimeout(() => {
     apply();
-    el.style.transform = 'translateY(-5px)';
-    void el.offsetWidth; // force reflow supaya transisi baliknya kepakai
-    el.style.opacity = '1';
-    el.style.transform = 'translateY(0)';
+    valid.forEach(el => { el.style.transform = 'translateY(-5px)'; });
+    void valid[0].offsetWidth; // force reflow supaya transisi baliknya kepakai
+    valid.forEach(el => {
+      el.style.opacity = '1';
+      el.style.transform = 'translateY(0)';
+    });
   }, 280);
 }
 
@@ -1552,7 +1706,7 @@ function runBalanceTicker(entries) {
   const paint = i => {
     const { code, amount } = entries[i];
     const info = currencyInfo(code);
-    if (curEl) curEl.textContent = info.symbol;
+    if (curEl) curEl.textContent = amount === 0 ? '' : info.symbol;
     if (numEl) numEl.textContent = amount.toLocaleString(info.locale);
     if (dotsEl) dotsEl.querySelectorAll('.dot').forEach((d, di) => d.classList.toggle('active', di === i));
   };
@@ -1579,20 +1733,26 @@ function runBalanceTicker(entries) {
   }
 }
 
-function runAmountTicker(key, el, entries) {
+// entries: [{code, amount, label?}]. Kalau labelEl diisi dan entry punya
+// label (mis. "Pemasukan" vs "Piutang"), teksnya ikut berganti bersamaan
+// dengan nominalnya — dipakai untuk kartu Pemasukan/Pengeluaran dashboard
+// yang menggabungkan pemasukan+piutang dan pengeluaran+utang jadi satu
+// papan iklan yang terus jalan.
+function runAmountTicker(key, el, entries, labelEl) {
   if (_tickerState[key] && _tickerState[key].interval) clearInterval(_tickerState[key].interval);
   if (!el) return;
   const paint = i => {
-    const { code, amount } = entries[i];
+    const { code, amount, label } = entries[i];
     const info = currencyInfo(code);
     el.textContent = info.symbol + ' ' + amount.toLocaleString(info.locale);
+    if (labelEl && label) labelEl.textContent = label;
   };
   paint(0);
   if (entries.length > 1) {
     let idx = 0;
     _tickerState[key] = { interval: setInterval(() => {
       idx = (idx + 1) % entries.length;
-      _tickerFade(el, () => paint(idx));
+      _tickerFadeMulti([el, labelEl], () => paint(idx));
     }, 2800) };
   } else {
     _tickerState[key] = { interval: null };
@@ -2087,8 +2247,8 @@ function openAddBudgetModal() {
   document.getElementById('budgetCatLimitInput').value = '';
   document.getElementById('newBudgetCatCurrency').value = 'IDR';
   document.getElementById('newBudgetCatCurrencyLbl').textContent = currencyLabelText('IDR');
-  _pendingBudgetCatIcon = null;
-  renderBudgetCatIconGrid();
+  document.getElementById('budgetCatIcon').value = '';
+  document.getElementById('budgetCatIconLbl').textContent = 'Pilih ikon';
   document.getElementById('budgetSettingsModalOverlay').classList.add('open');
 }
 // Kept as an alias so any older onclick reference still opens the (now add-only) modal.
@@ -2106,28 +2266,21 @@ function openEditBudgetModal(id) {
   const cur = cat.currency || 'IDR';
   document.getElementById('newBudgetCatCurrency').value = cur;
   document.getElementById('newBudgetCatCurrencyLbl').textContent = currencyLabelText(cur);
-  _pendingBudgetCatIcon = cat.icon;
-  renderBudgetCatIconGrid();
+  document.getElementById('budgetCatIcon').value = cat.icon || '';
+  document.getElementById('budgetCatIconLbl').innerHTML = cat.icon
+    ? (ICON[cat.icon] || '') + ' ' + escapeHtml(BUDGET_CAT_ICON_LABELS[cat.icon] || cat.icon)
+    : 'Pilih ikon';
   document.getElementById('budgetSettingsModalOverlay').classList.add('open');
 }
 
 function closeBudgetSettingsModal() { document.getElementById('budgetSettingsModalOverlay').classList.remove('open'); }
 
-function renderBudgetCatIconGrid() {
-  const grid = document.getElementById('budgetCatIconGrid');
-  grid.innerHTML = BUDGET_CAT_ICONS.map(key => `
-    <div class="icon-pick-item ${_pendingBudgetCatIcon===key?'selected':''}" onclick="selectBudgetCatIcon('${key}')">${ICON[key]||''}</div>
-  `).join('');
-}
-function selectBudgetCatIcon(key) {
-  _pendingBudgetCatIcon = key;
-  renderBudgetCatIconGrid();
-}
-
 function submitBudgetCatModal() {
   const name = document.getElementById('newBudgetCatName').value.trim();
   if (!name) { showToast('Nama kategori wajib diisi', 'warning'); return; }
-  if (!_pendingBudgetCatIcon) { showToast('Pilih ikon untuk kategori ini', 'warning'); return; }
+  const icon = document.getElementById('budgetCatIcon').value;
+  if (!icon) { showToast('Pilih ikon untuk kategori ini', 'warning'); return; }
+  _pendingBudgetCatIcon = icon;
   const limit    = parseInt(document.getElementById('budgetCatLimitInput').value) || 0;
   const currency = document.getElementById('newBudgetCatCurrency').value || 'IDR';
 
@@ -3232,7 +3385,7 @@ function exportData() { openExportModal(); }
 // Backup lengkap semua data (bukan cuma transaksi) — buat disimpan sendiri
 // atau, ke depannya, di-restore lagi lewat fitur import.
 function exportJSON() {
-  const hasData = S.transactions.length || WALLETS.length || GOALS.length || RECURRINGS.length || BUDGET.cats.length;
+  const hasData = S.transactions.length || WALLETS.length || GOALS.length || RECURRINGS.length || BUDGET.cats.length || DEBTS.length;
   if (!hasData) { showToast('Belum ada data untuk diekspor', 'warning'); return; }
   const backup = {
     app: 'OFM', version: 1,
@@ -3243,6 +3396,7 @@ function exportJSON() {
     goals: GOALS,
     recurrings: RECURRINGS,
     dismissedSubs: DISMISSED_SUBS,
+    debts: DEBTS,
   };
   const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });
   const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
@@ -3303,6 +3457,7 @@ function applyImportedBackup(data) {
     GOALS          = Array.isArray(data.goals) ? data.goals : [];
     RECURRINGS     = Array.isArray(data.recurrings) ? data.recurrings : [];
     DISMISSED_SUBS = Array.isArray(data.dismissedSubs) ? data.dismissedSubs : [];
+    DEBTS          = Array.isArray(data.debts) ? data.debts : [];
 
     // Daftarkan ulang kategori anggaran custom (icon lookup + expense picker),
     // sama seperti alur load dari Firestore, biar tetap konsisten setelah restore.
@@ -3336,6 +3491,7 @@ function refreshAllUI() {
   if (typeof renderRecurPreview === 'function') renderRecurPreview();
   if (typeof renderSubDetections === 'function') renderSubDetections();
   if (typeof renderKategoriList === 'function') renderKategoriList();
+  if (typeof renderDebts === 'function')      renderDebts();
   if (typeof renderRiwayat === 'function')    renderRiwayat();
   if (typeof updateAccountDropdown === 'function') updateAccountDropdown();
   if (typeof updateBellBadge === 'function')  updateBellBadge();
@@ -3853,6 +4009,22 @@ function checkBudgetAlerts() {
     }
   });
 
+  // Utang/piutang jatuh tempo (3 hari ke depan) + sudah lewat jatuh tempo
+  DEBTS.filter(d => d.status !== 'lunas' && d.dueDate).forEach(d => {
+    const resolved = resolveDebtDueDate(d);
+    if (!resolved) return;
+    const diff = Math.ceil((resolved - new Date()) / SMART_DAY_MS);
+    const sisa = Math.max(0, d.amount - d.paid);
+    const label = d.kind === 'piutang' ? 'Piutang' : 'Utang';
+    if (diff < 0 && !d._alertedOverdue) {
+      d._alertedOverdue = true;
+      addNotif(`${label} ke ${d.person} lewat jatuh tempo`, `Sisa Rp ${sisa.toLocaleString('id-ID')}`, 'danger');
+    } else if (diff >= 0 && diff <= 3 && !d._alertedDue) {
+      d._alertedDue = true;
+      addNotif(`${label} ke ${d.person} jatuh tempo`, `${diff === 0 ? 'Hari ini' : diff + ' hari lagi'} — Rp ${sisa.toLocaleString('id-ID')}`, 'warn');
+    }
+  });
+
   // Upcoming recurring alert (3 days ahead)
   RECURRINGS.filter(r => r.active).forEach(r => {
     const next = nextOccurrence(r.start, r.freq);
@@ -3883,6 +4055,7 @@ async function _saveNow() {
       wallets:      WALLETS,
       recurrings:   RECURRINGS,
       dismissedSubs: DISMISSED_SUBS,
+      debts:        DEBTS,
       username:     window._customUsername || null,
       updatedAt:    Date.now(),
     });
@@ -3916,6 +4089,7 @@ window._loadUserData = async function(uid) {
       if (data.wallets)      WALLETS        = data.wallets;
       if (data.recurrings)   RECURRINGS     = data.recurrings;
       if (Array.isArray(data.dismissedSubs)) DISMISSED_SUBS = data.dismissedSubs;
+      if (data.debts)         DEBTS          = data.debts;
       window._customUsername = data.username || (window._currentUser && window._currentUser.displayName) || null;
       // Re-register custom budget categories (icon lookup + expense picker) so they still work after reload
       const knownExpIds = new Set(CATS.expense.map(c => c.id));
@@ -4282,6 +4456,92 @@ function renderLockModal() {
 ══════════════════════════════════════════ */
 let GOALS = [];
 
+// Utang-piutang: { id, kind:'utang'|'piutang', person, amount, paid, note,
+// period:'none'|'monthly'|'yearly', periodCount (jumlah total cicilan bulan/
+// tahun, null kalau period 'none'),
+// dueDate — selalu "YYYY-MM-DD" biasa (atau null) apapun periodenya. Untuk
+// period 'monthly'/'yearly', tanggal ini cuma dipakai sebagai POLA yang
+// menetap (tanggal-di-bulan / bulan+tanggal-di-tahun) — lihat
+// resolveDebtDueDate() buat cara nurunin kejadian berikutnya.
+// currency, status:'aktif'|'lunas', createdAt }
+let DEBTS = [];
+
+// Cari tanggal "day" (1-31) terdekat ke depan, mulai dari bulan berjalan —
+// dipakai buat cicilan bulanan supaya selalu nunjuk ke jatuh tempo berikutnya,
+// bukan yang sudah lewat. Diclamp ke jumlah hari bulan itu (mis. tanggal 31
+// di Februari jadi tanggal terakhir Februari).
+function nextMonthlyDueDate(day) {
+  const today = new Date(); today.setHours(0,0,0,0);
+  let year = today.getFullYear(), month = today.getMonth();
+  const clampedDay = (y,m) => Math.min(day, new Date(y, m+1, 0).getDate());
+  let candidate = new Date(year, month, clampedDay(year, month));
+  if (candidate < today) {
+    month += 1;
+    if (month > 11) { month = 0; year++; }
+    candidate = new Date(year, month, clampedDay(year, month));
+  }
+  return candidate;
+}
+
+// Sama seperti nextMonthlyDueDate, tapi buat cicilan tahunan: cari tanggal
+// "bulan/tanggal" terdekat ke depan mulai dari tahun berjalan (dipakai
+// supaya jatuh tempo tahunan juga selalu nunjuk ke tahun berikutnya kalau
+// tanggal tahun ini sudah lewat). Diclamp kalau tanggalnya 29 Feb dst.
+function nextYearlyDueDate(month, day) {
+  const today = new Date(); today.setHours(0,0,0,0);
+  let year = today.getFullYear();
+  const clampedDay = (y,m) => Math.min(day, new Date(y, m+1, 0).getDate());
+  let candidate = new Date(year, month, clampedDay(year, month));
+  if (candidate < today) {
+    year += 1;
+    candidate = new Date(year, month, clampedDay(year, month));
+  }
+  return candidate;
+}
+
+const DEBT_MONTH_SHORT = ['Jan','Feb','Mar','Apr','Mei','Jun','Jul','Agu','Sep','Okt','Nov','Des'];
+
+// Ubah dueDate (selalu tanggal biasa "YYYY-MM-DD" apapun periodenya) jadi
+// objek Date nyata buat keperluan sorting & perhitungan notifikasi/hari-lagi.
+// Untuk periode berulang (bulanan/tahunan), tanggal yang tersimpan cuma
+// dipakai sebagai "pola" (tanggal-di-bulan / bulan-tanggal-di-tahun) —
+// hasil akhirnya selalu diarahkan ke kejadian berikutnya yang belum lewat.
+function resolveDebtDueDate(d) {
+  if (!d || !d.dueDate) return null;
+  const period = d.period || 'none';
+  const base = new Date(d.dueDate + 'T00:00:00');
+  if (period === 'monthly') return nextMonthlyDueDate(base.getDate());
+  if (period === 'yearly')  return nextYearlyDueDate(base.getMonth(), base.getDate());
+  return base;
+}
+
+// Label jatuh tempo yang ditampilkan di kartu utang/piutang, disesuaikan
+// dengan mode periodenya (tanggal penuh / pola tiap bulan / pola tiap tahun).
+function debtDueLabel(d) {
+  if (!d.dueDate) return 'Tanpa jatuh tempo';
+  const period = d.period || 'none';
+  const base = new Date(d.dueDate + 'T00:00:00');
+  if (period === 'monthly') {
+    return daysLeft(resolveDebtDueDate(d)) + ` · tgl ${base.getDate()} tiap bulan`;
+  }
+  if (period === 'yearly') {
+    return daysLeft(resolveDebtDueDate(d)) + ` · ${base.getDate()} ${DEBT_MONTH_SHORT[base.getMonth()]} tiap tahun`;
+  }
+  return daysLeft(d.dueDate);
+}
+
+// Label singkat buat isi field trigger "Jatuh Tempo" di modal, sesuai value
+// yang sudah tersimpan (dipanggil saat membuka modal utk edit). due selalu
+// berupa tanggal biasa "YYYY-MM-DD", polanya (tiap bulan/tiap tahun) cuma
+// diturunkan dari tanggal itu buat ditampilkan sebagai teks.
+function debtDueLabelFromValue(due, period) {
+  if (!due) return 'Tanpa jatuh tempo';
+  const dt = new Date(due + 'T00:00:00');
+  if (period === 'monthly') return 'Tgl ' + dt.getDate() + ' tiap bulan';
+  if (period === 'yearly')  return dt.getDate() + ' ' + DEBT_MONTH_SHORT[dt.getMonth()] + ' tiap tahun';
+  return fmtDateShort(due);
+}
+
 let _activeTopupGoalId = null;
 
 function goalColor(g) {
@@ -4421,6 +4681,517 @@ function submitTopup() {
   const pct = Math.round(g.saved / g.target * 100);
   showToast(pct >= 100 ? 'Goal tercapai!' : `+Rp ${amount.toLocaleString('id-ID')} ditambahkan (${pct}%)`, 'success');
   renderGoals();
+}
+
+/* ══════════════════════════════════════════
+   UTANG-PIUTANG
+══════════════════════════════════════════ */
+// Grup total utang/piutang aktif per mata uang, urut sesuai urutan catatan
+// dibuat (DEBTS sudah kronologis) — dipakai baik oleh papan iklan
+// debtSummaryGrid maupun ticker Pemasukan/Pengeluaran di dashboard.
+function debtCurrencyBreakdown(kind) {
+  const totals = {}; const order = [];
+  DEBTS.forEach(d => {
+    if (d.kind !== kind || d.status === 'lunas') return;
+    const code = d.currency || 'IDR';
+    if (!(code in totals)) { totals[code] = 0; order.push(code); }
+    totals[code] += Math.max(0, d.amount - d.paid);
+  });
+  return order.map(code => ({ code, amount: totals[code] }));
+}
+
+function renderDebtSummary() {
+  const grid = document.getElementById('debtSummaryGrid');
+  if (!grid) return;
+  grid.innerHTML = `
+    <div class="compare-card glass-sm">
+      <div class="cc-label">Piutang Aktif</div>
+      <div class="cc-val" style="color:var(--blue)" id="debtSumPiutangVal">0</div>
+      <div class="cc-sub">Uang orang lain ke kamu</div>
+    </div>
+    <div class="compare-card glass-sm">
+      <div class="cc-label">Utang Aktif</div>
+      <div class="cc-val" style="color:var(--red)" id="debtSumUtangVal">0</div>
+      <div class="cc-sub">Uang kamu ke orang lain</div>
+    </div>`;
+  runDebtSummaryTicker('debtSumPiutang', document.getElementById('debtSumPiutangVal'), debtCurrencyBreakdown('piutang'));
+  runDebtSummaryTicker('debtSumUtang',   document.getElementById('debtSumUtangVal'),   debtCurrencyBreakdown('utang'));
+}
+
+// Sama seperti runAmountTicker (papan iklan multi mata uang), tapi kalau
+// tidak ada catatan aktif sama sekali di kedua sisi tersebut, cukup
+// tampilkan angka "0" polos tanpa simbol mata uang apapun.
+function runDebtSummaryTicker(key, el, entries) {
+  if (_tickerState[key] && _tickerState[key].interval) clearInterval(_tickerState[key].interval);
+  if (!el) return;
+  if (!entries.length) { el.textContent = '0'; _tickerState[key] = { interval: null }; return; }
+  const paint = i => {
+    const { code, amount } = entries[i];
+    const info = currencyInfo(code);
+    el.textContent = info.symbol + ' ' + amount.toLocaleString(info.locale);
+  };
+  paint(0);
+  if (entries.length > 1) {
+    let idx = 0;
+    _tickerState[key] = { interval: setInterval(() => {
+      idx = (idx + 1) % entries.length;
+      _tickerFadeMulti([el], () => paint(idx));
+    }, 2800) };
+  } else {
+    _tickerState[key] = { interval: null };
+  }
+}
+
+// Pecah total "amount" sebuah utang/piutang berperiode jadi rincian per
+// cicilan (dipakai sama kartu breakdown melayang saat kartunya diklik).
+// Tanggal tiap cicilan mengikuti pola yang diisi user di Jatuh Tempo
+// (tanggal-di-bulan buat 'monthly', bulan+tanggal-di-tahun buat 'yearly'),
+// dimulai dari bulan/tahun tanggal itu sendiri. Nominal dibagi rata, sisa
+// pembulatan dibebankan ke cicilan terakhir supaya totalnya pas sama amount.
+function computeDebtInstallments(d) {
+  const period = d.period || 'none';
+  const count  = Math.max(0, parseInt(d.periodCount) || 0);
+  if (period === 'none' || !d.dueDate || !count) return [];
+  const base = new Date(d.dueDate + 'T00:00:00');
+  const per  = Math.round(d.amount / count);
+  const rows = [];
+  for (let i = 0; i < count; i++) {
+    let due;
+    if (period === 'monthly') {
+      due = new Date(base.getFullYear(), base.getMonth() + i, 1);
+    } else {
+      due = new Date(base.getFullYear() + i, base.getMonth(), 1);
+    }
+    const dim = new Date(due.getFullYear(), due.getMonth() + 1, 0).getDate();
+    due.setDate(Math.min(base.getDate(), dim));
+    const amount = (i === count - 1) ? (d.amount - per * (count - 1)) : per;
+    rows.push({ index: i + 1, due, amount });
+  }
+  return rows;
+}
+
+// Sebuah kartu utang/piutang bisa diklik cuma kalau punya jadwal cicilan
+// yang jelas: periodenya bukan "Tanpa Periode", nominalnya > 0, dan total
+// bulan/tahun-nya sudah diisi. Kalau salah satu nggak terpenuhi, kartu itu
+// polos aja (nggak ada apa-apa buat dipecah).
+function isDebtClickable(d) {
+  return (d.period && d.period !== 'none') && d.amount > 0 && (parseInt(d.periodCount) || 0) > 0;
+}
+
+// Kartu rincian cicilan melayang di tengah layar (bukan modal) — dibuka
+// saat kartu utang/piutang diklik. Menampilkan jumlah keseluruhan (total)
+// dipecah per cicilan berjejer ke bawah; kalau daftarnya panjang, area
+// baris otomatis scrollable tanpa scrollbar terlihat (lihat .dbf-rows).
+function openDebtBreakdown(id) {
+  const d = DEBTS.find(x => x.id === id);
+  if (!d || !isDebtClickable(d)) return;
+  const rows = computeDebtInstallments(d);
+  if (!rows.length) return;
+  const cur   = currencyInfo(d.currency || 'IDR');
+  const unit  = DEBT_PERIOD_UNIT[d.period] || '';
+  const card  = document.getElementById('debtBreakdownCard');
+  card.innerHTML = `
+    <div class="dbf-header">
+      <div class="dbf-title">${escapeHtml(d.person)}</div>
+      <div class="dbf-sub">${DEBT_PERIOD_TEXT[d.period]} · ${rows.length}x ${unit}</div>
+    </div>
+    <div class="dbf-rows">
+      ${rows.map(r => `
+        <div class="dbf-row">
+          <div class="dbf-row-idx">#${r.index}</div>
+          <div class="dbf-row-date">${fmtDateShort(r.due.toISOString().split('T')[0])}</div>
+          <div class="dbf-row-amt">${cur.symbol} ${Math.round(r.amount).toLocaleString(cur.locale)}</div>
+        </div>`).join('')}
+    </div>
+    <div class="dbf-total">
+      <span>Jumlah Keseluruhan</span>
+      <span>${cur.symbol} ${d.amount.toLocaleString(cur.locale)}</span>
+    </div>`;
+  document.getElementById('debtBreakdownOverlay').classList.add('open');
+}
+function closeDebtBreakdown() { document.getElementById('debtBreakdownOverlay').classList.remove('open'); }
+function closeDebtBreakdownOutside(e) { if (e.target === document.getElementById('debtBreakdownOverlay')) closeDebtBreakdown(); }
+
+function renderDebts() {
+  renderDebtSummary();
+  const list = document.getElementById('debtList');
+  if (!list) return;
+  if (!DEBTS.length) {
+    list.innerHTML = `<div class="empty"><div class="empty-icon">${ICON.swap}</div><h3>Belum ada catatan</h3><p>Catat utang atau piutangmu di sini</p></div>`;
+    return;
+  }
+  const sorted = [...DEBTS].sort((a,b) => {
+    if ((a.status === 'lunas') !== (b.status === 'lunas')) return a.status === 'lunas' ? 1 : -1;
+    const da = resolveDebtDueDate(a), db = resolveDebtDueDate(b);
+    if (!da && !db) return 0;
+    if (!da) return 1;
+    if (!db) return -1;
+    return da - db;
+  });
+  list.innerHTML = sorted.map(d => {
+    const sisa = Math.max(0, d.amount - d.paid);
+    const pct  = d.amount > 0 ? Math.min(100, Math.round(d.paid / d.amount * 100)) : 0;
+    const isPiutang = d.kind === 'piutang';
+    const lunas = d.status === 'lunas';
+    const color = lunas ? '#7CE38B' : (isPiutang ? 'var(--blue)' : 'var(--red)');
+    const cur = currencyInfo(d.currency || 'IDR');
+    const dueLabel   = lunas ? 'Lunas' : debtDueLabel(d);
+    const clickable  = isDebtClickable(d);
+    return `
+      <div class="debt-item-wrap">
+        <div class="debt-actions">
+          <button class="dact-btn dact-edit" onclick="openDebtModal(${d.id})">${ICON.edit}<span>Edit</span></button>
+          <button class="dact-btn dact-del"  onclick="deleteDebt(${d.id})">${ICON.trash}<span>Hapus</span></button>
+        </div>
+        <div class="debt-item-slide" data-debt-id="${d.id}">
+          <div class="goal-card glass${clickable ? ' debt-clickable' : ''}"${clickable ? ` onclick="openDebtBreakdown(${d.id})"` : ''}>
+            <div class="goal-header">
+              <div class="goal-icon" style="background:${color}22">${isPiutang ? ICON.coins : ICON.creditCard}</div>
+              <div class="goal-meta">
+                <div class="goal-name">${escapeHtml(d.person)}${d.note ? ' · ' + escapeHtml(d.note) : ''}</div>
+                <div class="goal-days">${dueLabel} · ${isPiutang ? 'Piutang' : 'Utang'}</div>
+              </div>
+              <div class="goal-amount">
+                <div class="goal-saved">${cur.symbol} ${sisa.toLocaleString(cur.locale)}</div>
+                <div class="goal-target">dari ${cur.symbol} ${d.amount.toLocaleString(cur.locale)}</div>
+              </div>
+            </div>
+            <div class="goal-bar-bg">
+              <div class="goal-bar-fill" style="width:${pct}%;background:linear-gradient(90deg,${color},${color}99)"></div>
+            </div>
+            <div class="goal-footer">
+              <div class="goal-pct" style="color:${color}">${pct}%</div>
+              ${!lunas ? `<div class="goal-add-btn" onclick="event.stopPropagation();openDebtPayModal(${d.id})">＋ ${isPiutang ? 'Terima' : 'Bayar'}</div>` : ''}
+            </div>
+          </div>
+        </div>
+      </div>`;
+  }).join('');
+  initDebtSwipe();
+}
+
+/* Swipe-to-reveal for utang/piutang cards — same interaction as wallet
+   cards (initWalletSwipe) and budget category cards (initBcatSwipe): drag
+   a card left to uncover its Edit/Hapus buttons underneath instead of
+   showing them permanently on every card. Only one card stays open at a
+   time. */
+function initDebtSwipe() {
+  document.querySelectorAll('.debt-item-slide').forEach(slide => {
+    const wrap    = slide.closest('.debt-item-wrap');
+    const actions = wrap ? wrap.querySelector('.debt-actions') : null;
+    if (!wrap || !actions) return;
+    const maxOffset = () => actions.offsetWidth;
+    let startX = 0, startY = 0, baseX = 0, dragging = false, decided = false, horiz = false;
+
+    slide.addEventListener('touchstart', e => {
+      closeOtherDebtSwipes(slide);
+      startX = e.touches[0].clientX;
+      startY = e.touches[0].clientY;
+      baseX  = getDebtSlideX(slide);
+      dragging = true; decided = false; horiz = false;
+      slide.classList.add('dragging');
+      actions.classList.add('dragging');
+    }, {passive:true});
+
+    slide.addEventListener('touchmove', e => {
+      if (!dragging) return;
+      const dx = e.touches[0].clientX - startX;
+      const dy = e.touches[0].clientY - startY;
+      if (!decided) {
+        if (Math.abs(dx) < 6 && Math.abs(dy) < 6) return;
+        decided = true;
+        horiz = Math.abs(dx) > Math.abs(dy);
+        if (!horiz) { dragging = false; slide.classList.remove('dragging'); actions.classList.remove('dragging'); return; }
+      }
+      const next = Math.max(-maxOffset(), Math.min(0, baseX + dx));
+      slide.style.transform = `translateX(${next}px)`;
+      setDebtActionsProgress(actions, Math.min(1, Math.abs(next) / maxOffset()));
+    }, {passive:true});
+
+    function endDrag() {
+      if (!dragging) return;
+      dragging = false;
+      slide.classList.remove('dragging');
+      actions.classList.remove('dragging');
+      if (!decided || !horiz) return;
+      const x = getDebtSlideX(slide);
+      const open = x < -maxOffset() * 0.35;
+      slide.style.transform = `translateX(${open ? -maxOffset() : 0}px)`;
+      setDebtActionsProgress(actions, open ? 1 : 0);
+      _debtSwipeOpen = open ? slide : null;
+    }
+    slide.addEventListener('touchend', endDrag);
+    slide.addEventListener('touchcancel', endDrag);
+  });
+}
+let _debtSwipeOpen = null;
+function getDebtSlideX(el) {
+  const m = /translateX\((-?[\d.]+)px\)/.exec(el.style.transform || '');
+  return m ? parseFloat(m[1]) : 0;
+}
+function setDebtActionsProgress(actions, progress) {
+  actions.style.opacity   = progress;
+  const scale = 0.86 + 0.14 * progress;
+  const tx    = (1 - progress) * 10;
+  actions.style.transform = `scale(${scale}) translateX(${tx}px)`;
+}
+function closeOtherDebtSwipes(except) {
+  document.querySelectorAll('.debt-item-slide').forEach(s => {
+    if (s === except) return;
+    if (getDebtSlideX(s) === 0) return;
+    s.style.transform = 'translateX(0px)';
+    const actions = s.closest('.debt-item-wrap')?.querySelector('.debt-actions');
+    if (actions) setDebtActionsProgress(actions, 0);
+  });
+  if (_debtSwipeOpen && _debtSwipeOpen !== except) _debtSwipeOpen = null;
+}
+document.addEventListener('touchstart', e => {
+  if (!_debtSwipeOpen) return;
+  if (e.target.closest('.debt-item-wrap')) return;
+  closeOtherDebtSwipes(null);
+}, {passive:true});
+
+function deleteDebt(id) {
+  showConfirm('Hapus catatan ini?', 'Catatan utang/piutang akan dihapus permanen.', () => {
+    DEBTS = DEBTS.filter(d => d.id !== id);
+    saveToStorage();
+    renderDebts();
+    showToast('Catatan dihapus', 'success');
+  });
+}
+
+/* Add/Edit Debt Modal */
+let _editingDebtId = null;
+
+function setDebtKind(kind) {
+  S._debtKind = kind;
+  ['utang','piutang'].forEach(k => {
+    const b = document.getElementById('debtKind' + k.charAt(0).toUpperCase() + k.slice(1));
+    if (b) b.className = 'type-btn' + (k === kind ? ' active ' + (k === 'utang' ? 'expense' : 'income') : '');
+  });
+  moveTypeIndicator('debtKindToggle', 'debtKindIndicator', 'debtKind' + kind.charAt(0).toUpperCase() + kind.slice(1));
+}
+
+function openDebtModal(id) {
+  _editingDebtId = id || null;
+  const d = id ? DEBTS.find(x => x.id === id) : null;
+  document.getElementById('debtModalTitle').textContent = d ? 'Edit Catatan' : 'Tambah Utang/Piutang';
+  document.getElementById('debtPerson').value = d ? d.person : '';
+  document.getElementById('debtAmount').value = d ? d.amount : '';
+  document.getElementById('debtNote').value   = d ? (d.note || '') : '';
+  const period = d ? (d.period || 'none') : 'none';
+  document.getElementById('debtPeriod').value = period;
+  document.getElementById('debtPeriodLbl').textContent = DEBT_PERIOD_TEXT[period] || 'Tanpa Periode';
+  const due = d ? (d.dueDate || '') : '';
+  document.getElementById('debtDueDate').value = due;
+  document.getElementById('debtDueDateLabel').textContent = debtDueLabelFromValue(due, period);
+  syncDebtPeriodCountField(period, d ? d.periodCount : '');
+  const currCode = d ? (d.currency || 'IDR') : 'IDR';
+  const dci = document.getElementById('debtCurrencyInput'); if (dci) dci.value = currCode;
+  const dcl = document.getElementById('debtCurrencyLbl');   if (dcl) dcl.textContent = currencyLabelText(currCode);
+  document.getElementById('debtModalOverlay').classList.add('open');
+  setDebtKind(d ? d.kind : 'utang');
+}
+function closeDebtModal() { document.getElementById('debtModalOverlay').classList.remove('open'); _editingDebtId = null; }
+function closeDebtModalOutside(e) { if (e.target === document.getElementById('debtModalOverlay')) closeDebtModal(); }
+
+function submitDebt() {
+  const person   = document.getElementById('debtPerson').value.trim();
+  const amount   = parseInt(document.getElementById('debtAmount').value) || 0;
+  const note     = document.getElementById('debtNote').value.trim();
+  const dueDate  = document.getElementById('debtDueDate').value || null;
+  const period   = document.getElementById('debtPeriod').value || 'none';
+  const kind     = S._debtKind || 'utang';
+  const currency = document.getElementById('debtCurrencyInput').value || 'IDR';
+  const periodCount = period !== 'none' ? (parseInt(document.getElementById('debtPeriodCount').value) || 0) : null;
+  if (!person) { showToast('Nama orang wajib diisi', 'warning'); return; }
+  if (!amount) { showToast('Nominal harus lebih dari 0', 'warning'); return; }
+  if (period !== 'none' && periodCount < 1) {
+    showToast('Isi total ' + (DEBT_PERIOD_UNIT[period] || 'periode') + '-nya', 'warning');
+    return;
+  }
+  if (_editingDebtId) {
+    const d = DEBTS.find(x => x.id === _editingDebtId);
+    if (d) {
+      d.person = person; d.amount = amount; d.note = note; d.dueDate = dueDate; d.period = period; d.periodCount = periodCount; d.kind = kind; d.currency = currency;
+      if (d.paid >= d.amount) d.status = 'lunas'; else d.status = 'aktif';
+      d._alertedDue = false; d._alertedOverdue = false;
+    }
+  } else {
+    DEBTS = [...DEBTS, {
+      id: Date.now(), kind, person, amount, paid: 0, note, dueDate, period, periodCount,
+      currency, status: 'aktif', createdAt: Date.now(),
+    }];
+  }
+  saveToStorage();
+  closeDebtModal();
+  renderDebts();
+  showToast(_editingDebtId ? 'Catatan diperbarui' : 'Catatan ditambahkan', 'success');
+}
+
+/* Bayar/Terima (partial) Modal */
+let _activeDebtPayId = null;
+function openDebtPayModal(id) {
+  _activeDebtPayId = id;
+  const d = DEBTS.find(x => x.id === id);
+  if (!d) return;
+  const cur = currencyInfo(d.currency || 'IDR');
+  document.getElementById('debtPayModalTitle').textContent = (d.kind === 'piutang' ? 'Terima Dana — ' : 'Bayar — ') + d.person;
+  document.getElementById('debtPaySisa').textContent = 'Sisa: ' + cur.symbol + ' ' + Math.max(0, d.amount - d.paid).toLocaleString(cur.locale);
+  document.getElementById('debtPayAmount').value = '';
+  document.getElementById('debtPayModalOverlay').classList.add('open');
+}
+function closeDebtPayModal() { document.getElementById('debtPayModalOverlay').classList.remove('open'); _activeDebtPayId = null; }
+function closeDebtPayModalOutside(e) { if (e.target === document.getElementById('debtPayModalOverlay')) closeDebtPayModal(); }
+
+function submitDebtPay() {
+  const amount = parseInt(document.getElementById('debtPayAmount').value) || 0;
+  if (!amount) { showToast('Jumlah harus lebih dari 0', 'warning'); return; }
+  const d = DEBTS.find(x => x.id === _activeDebtPayId);
+  if (!d) return;
+  d.paid = Math.min(d.amount, d.paid + amount);
+  if (d.paid >= d.amount) d.status = 'lunas';
+  saveToStorage();
+  closeDebtPayModal();
+  const pct = Math.round(d.paid / d.amount * 100);
+  const cur = currencyInfo(d.currency || 'IDR');
+  showToast(d.status === 'lunas' ? 'Lunas!' : `${cur.symbol} ${amount.toLocaleString(cur.locale)} dicatat (${pct}%)`, 'success');
+  renderDebts();
+}
+
+/* Debt due-date picker — selalu pakai kalender biasa (tanggal + bulan +
+   tahun), sama persis buat ketiga mode Periode ('none'/'monthly'/'yearly').
+   Bedanya cuma di ARTI tanggal yang dipilih: untuk 'monthly' & 'yearly',
+   tanggal itu jadi POLA jatuh tempo yang menetap — mis. pilih 2 September
+   dengan periode Perbulan artinya jatuh tempo tiap tanggal 2 tiap bulan
+   (otomatis lanjut ke 2 Oktober, 2 November, dst — lihat resolveDebtDueDate
+   & nextMonthlyDueDate/nextYearlyDueDate). Nilai yang disimpan tetap
+   "YYYY-MM-DD" biasa untuk semua mode. */
+const DEBT_DUE_DP = { year: new Date().getFullYear(), month: new Date().getMonth() };
+const DEBT_PERIOD_TEXT = { none: 'Tanpa Periode', monthly: 'Perbulan', yearly: 'Pertahun' };
+const DEBT_PERIOD_UNIT = { monthly: 'bulan', yearly: 'tahun' };
+
+function toggleDebtDuePicker() {
+  const panel = document.getElementById('debtDuePicker');
+  if (isDpOpen(panel)) { closeDp(panel); return; }
+  const cur = document.getElementById('debtDueDate').value;
+  const d = cur ? new Date(cur + 'T00:00:00') : new Date();
+  DEBT_DUE_DP.year  = d.getFullYear();
+  DEBT_DUE_DP.month = d.getMonth();
+  renderDebtDueDp();
+  openDp(panel);
+}
+
+// Render body + presets kalender — sama untuk semua mode periode, cuma
+// kalender penuh biasa (lihat komentar di atas soal artinya per-mode).
+function renderDebtDueDp() {
+  const body    = document.getElementById('debtDuePickerBody');
+  const presets = document.getElementById('debtDuePresets');
+  renderDebtDueDpFull(body);
+  presets.innerHTML = `
+    <div class="dp-preset" onclick="debtDueDpPreset(7)">1 Minggu</div>
+    <div class="dp-preset" onclick="debtDueDpPreset(30)">1 Bulan</div>
+    <div class="dp-preset" onclick="clearDebtDueDate()">Tanpa Tempo</div>`;
+}
+
+function debtDueDpNav(dir) {
+  DEBT_DUE_DP.month += dir;
+  if (DEBT_DUE_DP.month > 11) { DEBT_DUE_DP.month = 0; DEBT_DUE_DP.year++; }
+  if (DEBT_DUE_DP.month < 0)  { DEBT_DUE_DP.month = 11; DEBT_DUE_DP.year--; }
+  renderDebtDueDp();
+}
+
+// Kalender penuh — dipakai buat ketiga mode Periode.
+function renderDebtDueDpFull(body) {
+  const months = ['Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember'];
+  const curVal = document.getElementById('debtDueDate').value;
+  body.innerHTML = `
+    <div class="dp-header">
+      <div class="dp-month-nav" onclick="debtDueDpNav(-1)">‹</div>
+      <div class="dp-month-label">${months[DEBT_DUE_DP.month]} ${DEBT_DUE_DP.year}</div>
+      <div class="dp-month-nav" onclick="debtDueDpNav(1)">›</div>
+    </div>
+    <div class="dp-weekdays">
+      <div class="dp-wd">Min</div><div class="dp-wd">Sen</div><div class="dp-wd">Sel</div>
+      <div class="dp-wd">Rab</div><div class="dp-wd">Kam</div><div class="dp-wd">Jum</div><div class="dp-wd">Sab</div>
+    </div>
+    <div class="dp-days" id="debtDueDpDays"></div>`;
+  const firstDay    = new Date(DEBT_DUE_DP.year, DEBT_DUE_DP.month, 1).getDay();
+  const daysInMonth = new Date(DEBT_DUE_DP.year, DEBT_DUE_DP.month + 1, 0).getDate();
+  const todayStr    = new Date().toISOString().split('T')[0];
+  let html = '';
+  for (let i = 0; i < firstDay; i++) html += '<div class="dp-day dp-blank"></div>';
+  for (let d = 1; d <= daysInMonth; d++) {
+    const ds  = DEBT_DUE_DP.year + '-' + String(DEBT_DUE_DP.month+1).padStart(2,'0') + '-' + String(d).padStart(2,'0');
+    let cls = 'dp-day';
+    if (ds === todayStr) cls += ' today';
+    if (ds === curVal)   cls += ' selected';
+    html += '<div class="' + cls + '" onclick="pickDebtDueDate(\'' + ds + '\')">' + d + '</div>';
+  }
+  document.getElementById('debtDueDpDays').innerHTML = html;
+}
+function pickDebtDueDate(ds) {
+  document.getElementById('debtDueDate').value = ds;
+  const period = document.getElementById('debtPeriod').value || 'none';
+  document.getElementById('debtDueDateLabel').textContent = debtDueLabelFromValue(ds, period);
+  closeDp(document.getElementById('debtDuePicker'));
+}
+function debtDueDpPreset(days) {
+  const d = new Date(); d.setDate(d.getDate() + days);
+  pickDebtDueDate(d.toISOString().split('T')[0]);
+}
+
+function clearDebtDueDate() {
+  document.getElementById('debtDueDate').value = '';
+  document.getElementById('debtDueDateLabel').textContent = 'Tanpa jatuh tempo';
+  closeDp(document.getElementById('debtDuePicker'));
+}
+
+// Tampilkan/sembunyikan field "Total Bulan"/"Total Tahun" sesuai Periode
+// yang aktif di modal Tambah/Edit Utang-Piutang.
+function syncDebtPeriodCountField(period, count) {
+  const field = document.getElementById('debtPeriodCountField');
+  const label = document.getElementById('debtPeriodCountLabel');
+  const input = document.getElementById('debtPeriodCount');
+  if (!field || !label || !input) return;
+  if (period === 'monthly') {
+    field.style.display = '';
+    label.textContent = 'Total Bulan';
+    input.placeholder = 'mis. 12';
+  } else if (period === 'yearly') {
+    field.style.display = '';
+    label.textContent = 'Total Tahun';
+    input.placeholder = 'mis. 5';
+  } else {
+    field.style.display = 'none';
+  }
+  input.value = (count !== undefined && count !== null) ? count : '';
+}
+
+// Ganti mode periode di modal Tambah/Edit Utang-Piutang — reset field Jatuh
+// Tempo & Total Bulan/Tahun (kalender tetap sama untuk semua mode, cuma
+// arti tanggalnya beda — lihat komentar di atas renderDebtDueDp), lalu
+// render ulang kalendernya kalau lagi kebuka.
+function onDebtPeriodChange(period) {
+  document.getElementById('debtDueDate').value = '';
+  document.getElementById('debtDueDateLabel').textContent = 'Tanpa jatuh tempo';
+  syncDebtPeriodCountField(period, '');
+  const panel = document.getElementById('debtDuePicker');
+  if (isDpOpen(panel)) renderDebtDueDp();
+}
+
+/* ══════════════════════════════════════════
+   NET WORTH (Kekayaan Bersih)
+   Aset (semua akun, transaksi berjalan) + Piutang aktif − Utang aktif.
+   Dibatasi ke akun/catatan ber-Rupiah, konsisten dengan logic lain
+   (budget total, savings estimate) yang juga tidak mengonversi kurs.
+══════════════════════════════════════════ */
+function computeNetWorth() {
+  const totalAset = WALLETS.filter(w => (w.currency || 'IDR') === 'IDR').reduce((s,w) => s + getWalletBalance(w.id), 0);
+  const active = DEBTS.filter(d => d.status !== 'lunas' && (d.currency || 'IDR') === 'IDR');
+  const totalPiutang = active.filter(d => d.kind === 'piutang').reduce((s,d) => s + Math.max(0, d.amount - d.paid), 0);
+  const totalUtang   = active.filter(d => d.kind === 'utang').reduce((s,d) => s + Math.max(0, d.amount - d.paid), 0);
+  return { totalAset, totalPiutang, totalUtang, netWorth: totalAset + totalPiutang - totalUtang };
 }
 
 /* ══════════════════════════════════════════
@@ -5438,6 +6209,25 @@ const PICKER_REGISTRY = {
     getOpts: () => Object.keys(CURRENCIES).map(code => ({ value: code, text: currencyLabelText(code) })),
     labelId: 'newBudgetCatCurrencyLbl',
   },
+  budgetCatIcon: {
+    title: 'Pilih Ikon',
+    getOpts: () => BUDGET_CAT_ICONS.map(key => ({ value: key, text: BUDGET_CAT_ICON_LABELS[key] || key, icon: key })),
+    labelId: 'budgetCatIconLbl',
+  },
+  debtCurrencyInput: {
+    title: 'Mata Uang',
+    getOpts: () => Object.keys(CURRENCIES).map(code => ({ value: code, text: currencyLabelText(code) })),
+    labelId: 'debtCurrencyLbl',
+  },
+  debtPeriod: {
+    title: 'Periode',
+    getOpts: () => [
+      { value: 'none',    text: 'Tanpa Periode' },
+      { value: 'monthly', text: 'Perbulan' },
+      { value: 'yearly',  text: 'Pertahun' },
+    ],
+    labelId: 'debtPeriodLbl',
+  },
   recurFreq: {
     title: 'Frekuensi',
     getOpts: () => [
@@ -5570,6 +6360,7 @@ function pickOpt(fieldId, o) {
   if (fieldId === 'txAccount' && typeof updateTxAmountCurrency === 'function') updateTxAmountCurrency();
   if (fieldId === 'txAccount' && typeof renderBudgetCatPicker === 'function') renderBudgetCatPicker();
   if (fieldId === 'txCategory') S.selectedCat = o.value;
+  if (fieldId === 'debtPeriod') onDebtPeriodChange(o.value);
   closePicker();
 }
 
@@ -5577,6 +6368,44 @@ function closePicker() {
   document.getElementById('pickerOverlay').classList.remove('open');
   _pickerActiveField = null;
 }
+
+/* ══════════════════════════════════════════
+   PICKER-TRIGGER MARQUEE
+   Field mata uang / periode dsb bisa punya teks lebih panjang dari
+   fieldnya (mis. "Rp Rupiah Indonesia (IDR)"). Daripada dibiarkan wrap ke
+   2 baris (bikin field-nya melebar & ganggu layout), teksnya disembunyikan
+   (overflow:hidden di .pt-text) dan — hanya kalau memang kepanjangan —
+   digeser bolak-balik biar bagian yang ketutup ikut kebaca, lalu balik ke
+   posisi awal, looping terus (lihat .pt-marquee di style.css).
+   Dipasang lewat MutationObserver (bukan dipanggil manual di tiap tempat
+   yang set label-nya) supaya otomatis kepasang di mana pun teks itu
+   berubah — modal dibuka, hasil pickOpt, dsb — tanpa perlu diingat-ingat
+   satu-satu tiap ada pemanggil baru. */
+function _refreshMarquee(wrap) {
+  const span = wrap.firstElementChild;
+  if (!span) return;
+  wrap.classList.remove('pt-marquee');
+  wrap.style.removeProperty('--pt-shift');
+  const overflow = span.scrollWidth - wrap.clientWidth;
+  if (overflow > 4) {
+    wrap.style.setProperty('--pt-shift', (-(overflow + 6)) + 'px');
+    wrap.classList.add('pt-marquee');
+  }
+}
+function _refreshAllMarquees() {
+  document.querySelectorAll('.pt-text').forEach(_refreshMarquee);
+}
+let _marqueeRAF = null;
+function _scheduleMarqueeRefresh() {
+  if (_marqueeRAF) return;
+  _marqueeRAF = requestAnimationFrame(() => { _marqueeRAF = null; _refreshAllMarquees(); });
+}
+document.addEventListener('DOMContentLoaded', _scheduleMarqueeRefresh);
+window.addEventListener('resize', _scheduleMarqueeRefresh);
+if (document.readyState !== 'loading') _scheduleMarqueeRefresh();
+new MutationObserver(_scheduleMarqueeRefresh).observe(document.documentElement, {
+  childList: true, subtree: true, characterData: true,
+});
 
 /* ══════════════════════════════════════════
    CONFIRM MODAL SYSTEM
