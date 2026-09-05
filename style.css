@@ -497,6 +497,26 @@ body {
 }
 .page.active { display: block; }
 
+/* Riwayat page: cuma daftar transaksinya yang scroll, header/ringkasan/filter
+   di atasnya tetap diam di tempat. Scrollbar-nya disembunyikan tapi tetap
+   bisa discroll (sama seperti pola .icon-picker-grid). */
+#page-riwayat.active {
+  display: flex; flex-direction: column;
+  overflow: hidden;
+}
+.riwayat-scroll {
+  flex: 1; min-height: 0;
+  overflow-y: auto; overflow-x: hidden;
+  scrollbar-width: none;
+}
+.riwayat-scroll::-webkit-scrollbar { display: none; }
+#page-riwayat.active > .topbar,
+#page-riwayat.active > .riwayat-summary,
+#page-riwayat.active > .riwayat-filter-bar,
+#page-riwayat.active > .filter-chip-row {
+  flex-shrink: 0;
+}
+
 /* ═══════════════════════════════════════
    SCROLLBAR
 ═══════════════════════════════════════ */
@@ -893,17 +913,23 @@ body {
   width: 26px; height: 26px; border-radius: 50%;
   display: flex; align-items: center; justify-content: center;
   cursor: pointer; color: var(--txt3); flex-shrink: 0;
-  background: rgba(18,21,31,0.05);
-  border: 1px solid rgba(18,21,31,0.08);
+  background: transparent;
+  border: 1px solid transparent;
   transition: all 0.15s;
+}
+/* Bingkai bulatnya nggak nampil default — baru kelihatan pas
+   di-hover/ditekan, biar ikonnya polos aja waktu diam. */
+.amt-eye-btn:hover,
+.amt-eye-btn:active {
+  background: rgba(18,21,31,0.05);
+  border-color: rgba(18,21,31,0.08);
 }
 .amt-eye-btn:active { transform: scale(0.9); }
 .amt-eye-btn .ic { width: 14px; height: 14px; }
-.amt-eye-btn.active {
-  color: var(--teal);
-  background: rgba(13,148,136,0.12);
-  border-color: rgba(13,148,136,0.3);
-}
+/* Saat nominal lagi disembunyikan (mata "menyala"), cuma warna ikonnya
+   yang berubah jadi hitam pekat — nggak ada bingkai bulat permanen,
+   tetap polos sampai di-hover/ditekan sama seperti state default. */
+.amt-eye-btn.active { color: var(--txt); }
 
 /* Titik-titik pengganti nominal Total Aset saat disembunyikan — warna
    gradasinya sama seperti orb #bg-canvas (lihat orbs[] di app.js), jadi
@@ -1204,7 +1230,21 @@ body {
   height: 6px; background: rgba(18,21,31,0.06); border-radius: 99px; overflow: hidden;
   box-shadow: inset 0 1px 2px rgba(30,41,59,0.12); position: relative; z-index: 1;
 }
-.bcat-bar-fill { height: 100%; border-radius: 99px; transition: width 0.8s cubic-bezier(0.4,0,0.2,1); }
+.bcat-bar-fill {
+  height: 100%; border-radius: 99px; transition: width 0.8s cubic-bezier(0.4,0,0.2,1);
+  position: relative; overflow: hidden;
+}
+.bcat-bar-fill::after {
+  content: '';
+  position: absolute; inset: 0;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.7), transparent);
+  background-size: 200% 100%;
+  animation: barShimmer 2.2s ease-in-out infinite;
+}
+@keyframes barShimmer {
+  0%   { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
 .bcat-amounts  { display: flex; justify-content: space-between; margin-top: 6px; font-size: 10px; color: var(--txt3); position: relative; z-index: 1; }
 
 .budget-empty-state {
@@ -1962,7 +2002,7 @@ body {
    wrapper ber-margin 20px kanan-kiri; di sini dia langsung anak .page (yang
    sama sekali gak punya padding horizontal), jadi perlu inset sendiri biar
    sejajar sama daftar kartu utang/piutang di bawahnya (.goals-list). */
-#debtSummaryGrid { padding: 0 20px; margin-top: 4px; }
+#debtSummaryGrid { padding: 0 20px; margin: 4px 0 16px; }
 
 /* Swipe-to-reveal for utang/piutang cards — same interaction as wallet
    cards (.wallet-item-wrap): the card itself slides left on drag,
@@ -2037,7 +2077,20 @@ body {
   box-shadow: inset 0 1px 3px rgba(0,0,0,0.3);
   margin-bottom: 8px; position: relative; z-index: 1;
 }
-.goal-bar-fill { height: 100%; border-radius: 99px; transition: width 1s cubic-bezier(0.4,0,0.2,1); }
+.goal-bar-fill {
+  height: 100%; border-radius: 99px; transition: width 1s cubic-bezier(0.4,0,0.2,1);
+  position: relative; overflow: hidden;
+}
+/* Kelip-kelip gradasi putih yang menyapu di atas warna bar apa pun —
+   dipasangkan sebagai gradient transparan → putih → transparan yang
+   terus bergerak, jadi tetap "berkedip" konsisten di warna manapun. */
+.goal-bar-fill::after {
+  content: '';
+  position: absolute; inset: 0;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.7), transparent);
+  background-size: 200% 100%;
+  animation: barShimmer 2.2s ease-in-out infinite;
+}
 
 .goal-footer { display: flex; justify-content: space-between; align-items: center; position: relative; z-index: 1; }
 
@@ -2242,6 +2295,60 @@ body {
 }
 .recur-pause-btn:active { transform: scale(0.9); }
 
+/* Swipe-to-reveal for recurring transaction cards — same interaction as
+   wallet cards (.wallet-item-wrap), goal cards (.goal-item-wrap) and
+   category rows (.kc-item-wrap): the card itself slides left on drag,
+   uncovering Jeda/Hapus underneath on the right instead of showing them
+   permanently under every card. */
+.recur-item-wrap {
+  position: relative;
+  overflow: hidden;
+  border-radius: var(--r);
+}
+.recur-actions {
+  position: absolute; top: 0; right: 0; bottom: 0;
+  display: flex; flex-direction: column; gap: 6px;
+  width: 78px;
+  padding-left: 8px;
+  z-index: 0;
+  opacity: 0;
+  transform: scale(0.86) translateX(10px);
+  transform-origin: right center;
+  transition: opacity 0.22s ease, transform 0.22s cubic-bezier(0.22,1,0.36,1);
+}
+.recur-actions.dragging { transition: none; }
+.ract-btn {
+  flex: 1;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;
+  border-radius: 16px;
+  font-size: 11px; font-weight: 600;
+  cursor: pointer; border: 1px solid rgba(18,21,31,0.10);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  transition: background 0.15s;
+}
+.ract-btn:active { transform: scale(0.95); }
+.ract-btn .ic { width: 18px; height: 18px; }
+.ract-pause {
+  background: rgba(18,21,31,0.06);
+  color: var(--txt2);
+}
+.ract-pause:active { background: rgba(18,21,31,0.11); }
+.ract-del {
+  background: rgba(255,107,132,0.14);
+  color: var(--red);
+  border-color: rgba(255,107,132,0.3);
+}
+.ract-del:active { background: rgba(255,107,132,0.22); }
+.recur-item-slide {
+  position: relative; z-index: 1;
+  touch-action: pan-y;
+  transition: transform 0.25s cubic-bezier(0.22,1,0.36,1);
+  transform: translateX(0);
+}
+.recur-item-slide.dragging { transition: none; }
+.recur-item-slide .recur-item { margin: 0; }
+
 .add-recur-btn {
   margin: 0 20px;
   padding: 14px;
@@ -2315,6 +2422,21 @@ body {
 .notif-sub  { font-size: 11px; color: var(--txt3); line-height: 1.4; }
 .notif-time { font-size: 10px; color: var(--txt3); flex-shrink: 0; }
 .notif-empty { text-align: center; padding: 24px 0; color: var(--txt3); font-size: 13px; }
+
+/* Swipe-to-delete on a single notification — geser ke kanan buat
+   menghapus notifikasi itu saja, delete-bg-nya nongol di sisi kiri
+   (arah kebalikan dari swipe-delete transaksi di Riwayat). */
+.notif-item-wrap { position: relative; overflow: hidden; border-radius: 14px; }
+.notif-delete-bg {
+  position: absolute; left: 0; top: 0; bottom: 0; width: 80px;
+  background: linear-gradient(270deg, transparent, rgba(255,107,132,0.25));
+  display: flex; align-items: center; justify-content: flex-start;
+  padding-left: 16px; font-size: 18px; color: var(--red);
+  border-radius: 14px;
+  opacity: 0; transition: opacity 0.15s;
+}
+.notif-item-wrap.swiping .notif-delete-bg { opacity: 1; }
+.notif-item { position: relative; z-index: 1; transition: transform 0.2s ease; }
 
 /* Bell badge */
 .bell-wrap { position: relative; }

@@ -1617,8 +1617,14 @@ function submitTransaction() {
   if (S.currentType === 'expense') {
     // Prefer the explicitly-picked budget category; fall back to an id match
     // (covers custom budget categories that also appear as a regular category chip).
+    const accCur = walletCurrencyCode(account);
     const bc = (S.selectedBudgetCat && BUDGET.cats.find(b=>b.id===S.selectedBudgetCat))
-             || BUDGET.cats.find(b=>b.id===catId);
+             || BUDGET.cats.find(b=>b.id===catId)
+             // Fallback: match by name (case-insensitive) + currency. Catches the
+             // case where a budget category shares a label with a regular expense
+             // category (e.g. two "Makan" chips with different ids) and the user
+             // picked the one that isn't directly linked — it should still count.
+             || BUDGET.cats.find(b => (b.currency||'IDR') === accCur && b.label.trim().toLowerCase() === cat.label.trim().toLowerCase());
     if (bc) {
       if (walletCurrencyCode(account) === (bc.currency || 'IDR')) {
         bc.spent += S.amountRaw;
@@ -1848,6 +1854,29 @@ function bindHiddenDotsWave(el) {
   });
 }
 
+// Simbol yang di-cycle di label mata uang Total Aset waktu nominalnya
+// disembunyikan — bukan currency akun yang beneran, cuma dekorasi biar
+// nggak selalu keliatan "Rp" doang, gantian nunjukin semua simbol mata
+// uang yang didukung web ini (lihat CURRENCIES).
+const HIDDEN_CUR_SYMBOLS = Object.values(CURRENCIES).map(c => c.symbol);
+
+function runHiddenCurrencySymbolCycle(curEl) {
+  const key = 'balanceCurSymbol';
+  if (_tickerState[key] && _tickerState[key].interval) clearInterval(_tickerState[key].interval);
+  if (!curEl) { _tickerState[key] = { interval: null }; return; }
+  let idx = 0;
+  curEl.textContent = HIDDEN_CUR_SYMBOLS[idx];
+  _tickerState[key] = { interval: setInterval(() => {
+    idx = (idx + 1) % HIDDEN_CUR_SYMBOLS.length;
+    _tickerFade(curEl, () => { curEl.textContent = HIDDEN_CUR_SYMBOLS[idx]; });
+  }, 1400) };
+}
+function stopHiddenCurrencySymbolCycle() {
+  const key = 'balanceCurSymbol';
+  if (_tickerState[key] && _tickerState[key].interval) clearInterval(_tickerState[key].interval);
+  _tickerState[key] = { interval: null };
+}
+
 function runBalanceTicker(entries) {
   const key = 'balance';
   if (_tickerState[key] && _tickerState[key].interval) clearInterval(_tickerState[key].interval);
@@ -1856,29 +1885,29 @@ function runBalanceTicker(entries) {
   const wrapEl = numEl ? numEl.closest('.balance-amount') : null;
   const dotsEl = document.getElementById('balanceCurDots');
 
+  if (AMOUNTS_HIDDEN) {
+    // Mode sembunyi: titik-titik gradasi buat nominalnya, dan label mata
+    // uangnya gantian nyiklus semua simbol currency yang ada di web ini —
+    // dua-duanya dekorasi doang, gak bocorin info beneran.
+    renderHiddenDots(numEl, 8);
+    runHiddenCurrencySymbolCycle(curEl);
+    if (dotsEl) { dotsEl.style.display = 'none'; dotsEl.innerHTML = ''; }
+    _tickerState[key] = { interval: null };
+    return;
+  }
+  stopHiddenCurrencySymbolCycle();
+  if (numEl) numEl.classList.remove('hd-active', 'waving');
+
   const paint = i => {
     const { code, amount } = entries[i];
     const info = currencyInfo(code);
-    if (AMOUNTS_HIDDEN) {
-      if (curEl) curEl.textContent = info.symbol;
-      renderHiddenDots(numEl, 8);
-    } else {
-      if (numEl) numEl.classList.remove('hd-active', 'waving');
-      if (curEl) curEl.textContent = amount === 0 ? '' : info.symbol;
-      if (numEl) numEl.textContent = amount.toLocaleString(info.locale);
-    }
-    if (dotsEl) dotsEl.querySelectorAll('.dot').forEach((d, di) => d.classList.toggle('active', di === i));
+    if (curEl) curEl.textContent = amount === 0 ? '' : info.symbol;
+    if (numEl) numEl.textContent = amount.toLocaleString(info.locale);
   };
 
-  if (dotsEl) {
-    if (entries.length > 1) {
-      dotsEl.style.display = 'flex';
-      dotsEl.innerHTML = entries.map(() => `<span class="dot"></span>`).join('');
-    } else {
-      dotsEl.style.display = 'none';
-      dotsEl.innerHTML = '';
-    }
-  }
+  // Indikator titik mata uang dihilangkan — tetap cycling antar currency,
+  // cuma tanpa dot indicator di bawahnya.
+  if (dotsEl) { dotsEl.style.display = 'none'; dotsEl.innerHTML = ''; }
 
   paint(0);
   if (entries.length > 1) {
@@ -2074,8 +2103,11 @@ function deleteTx(id) {
   // reverse budget impact (only if it was actually counted toward that budget,
   // i.e. same currency — mirrors the guard in submitTransaction())
   if (tx.type==='expense') {
-    const bc = BUDGET.cats.find(b=>b.id===tx.catId);
-    if (bc && walletCurrencyCode(tx.account) === (bc.currency || 'IDR')) {
+    const txCur = walletCurrencyCode(tx.account);
+    const bc = (tx.budgetCatId && BUDGET.cats.find(b=>b.id===tx.budgetCatId))
+             || BUDGET.cats.find(b=>b.id===tx.catId)
+             || BUDGET.cats.find(b => (b.currency||'IDR') === txCur && b.label.trim().toLowerCase() === (tx.cat||'').trim().toLowerCase());
+    if (bc && txCur === (bc.currency || 'IDR')) {
       bc.spent = Math.max(0, bc.spent - tx.amount);
     }
   }
@@ -2204,10 +2236,10 @@ function renderBudget() {
             <div class="bcat-head">
               <div class="bcat-icon" style="background:${c.color}22">${ICON[c.icon]||''}</div>
               <div class="bcat-name">${escapeHtml(c.label)}</div>
-              <div class="bcat-remain">sisa ${sym} ${fmtK(Math.max(0,c.limit-spent))}</div>
+              <div class="bcat-remain" style="color:${c.color}">${sym} ${fmtK(Math.max(0,c.limit-spent))}</div>
             </div>
             <div class="bcat-bar-bg"><div class="bcat-bar-fill" style="width:${pct}%;background:${color}"></div></div>
-            <div class="bcat-amounts"><span>${sym} ${spent.toLocaleString(currencyInfo(cCode).locale)}</span><span>${sym} ${c.limit.toLocaleString(currencyInfo(cCode).locale)}</span></div>
+            <div class="bcat-amounts"><span style="color:${c.color}">${sym} ${spent.toLocaleString(currencyInfo(cCode).locale)}</span><span style="color:${c.color}">${sym} ${c.limit.toLocaleString(currencyInfo(cCode).locale)}</span></div>
           </div>
         </div>
       </div>`;
@@ -2525,6 +2557,8 @@ function openAddBudgetModal() {
   document.getElementById('newBudgetCatCurrencyLbl').textContent = currencyLabelText('IDR');
   document.getElementById('budgetCatIcon').value = '';
   document.getElementById('budgetCatIconLbl').textContent = 'Pilih ikon';
+  _pendingBudgetCatColor = BUDGET_CAT_COLORS[BUDGET.cats.length % BUDGET_CAT_COLORS.length];
+  updateColorTrigger('budget');
   document.getElementById('budgetSettingsModalOverlay').classList.add('open');
 }
 // Kept as an alias so any older onclick reference still opens the (now add-only) modal.
@@ -2544,6 +2578,8 @@ function openEditBudgetModal(id) {
   document.getElementById('newBudgetCatCurrencyLbl').textContent = currencyLabelText(cur);
   document.getElementById('budgetCatIcon').value = cat.icon || '';
   document.getElementById('budgetCatIconLbl').innerHTML = cat.icon ? (ICON[cat.icon] || '') : 'Pilih ikon';
+  _pendingBudgetCatColor = cat.color;
+  updateColorTrigger('budget');
   document.getElementById('budgetSettingsModalOverlay').classList.add('open');
 }
 
@@ -2558,6 +2594,8 @@ function submitBudgetCatModal() {
   const limit    = parseInt(document.getElementById('budgetCatLimitInput').value) || 0;
   const currency = document.getElementById('newBudgetCatCurrency').value || 'IDR';
 
+  const color = _pendingBudgetCatColor || BUDGET_CAT_COLORS[BUDGET.cats.length % BUDGET_CAT_COLORS.length];
+
   if (_editingBudgetCatId) {
     // Edit mode
     const cat = BUDGET.cats.find(c => c.id === _editingBudgetCatId);
@@ -2565,12 +2603,13 @@ function submitBudgetCatModal() {
     const currencyChanged = (cat.currency || 'IDR') !== currency;
     cat.label    = name;
     cat.icon     = _pendingBudgetCatIcon;
+    cat.color    = color;
     cat.limit    = limit;
     cat.currency = currency;
     CUSTOM_CAT_ICONS[cat.id] = _pendingBudgetCatIcon;
-    // Keep the matching expense category in sync (name/icon shown when logging transactions)
+    // Keep the matching expense category in sync (name/icon/warna shown when logging transactions)
     const expCat = CATS.expense.find(c => c.id === cat.id);
-    if (expCat) expCat.label = name;
+    if (expCat) { expCat.label = name; expCat.color = color; }
     if (currencyChanged && cat.spent > 0) {
       // Progres "terpakai" lama dihitung dalam currency lama — nggak nyambung
       // lagi sama limit di currency baru, jadi direset biar nggak nyesatin.
@@ -2580,15 +2619,26 @@ function submitBudgetCatModal() {
       showToast('Anggaran diperbarui', 'success');
     }
   } else {
-    // Add mode
-    const id = 'cat_' + name.toLowerCase().replace(/[^a-z0-9]+/g,'_').replace(/^_+|_+$/g,'').slice(0,20) + '_' + Date.now().toString(36);
-    const color = BUDGET_CAT_COLORS[BUDGET.cats.length % BUDGET_CAT_COLORS.length];
-    BUDGET.cats.push({ id, label:name, icon:_pendingBudgetCatIcon, color, limit, spent:0, currency });
+    // Add mode.
+    // If an expense category with this exact name already exists (e.g. the
+    // built-in "Makan"), reuse ITS id instead of creating a second chip with
+    // the same label — two identical-looking "Makan" chips with different
+    // ids was exactly why spending picked under one of them never counted
+    // toward the budget filed under the other.
+    const existingExpCat = CATS.expense.find(c => c.label.trim().toLowerCase() === name.trim().toLowerCase());
+    const id = existingExpCat ? existingExpCat.id
+      : ('cat_' + name.toLowerCase().replace(/[^a-z0-9]+/g,'_').replace(/^_+|_+$/g,'').slice(0,20) + '_' + Date.now().toString(36));
+    BUDGET.cats.push({ id, label:name, icon:_pendingBudgetCatIcon, color, limit, spent:0, currency, linkedExisting: !!existingExpCat });
     CUSTOM_CAT_ICONS[id] = _pendingBudgetCatIcon;
-    // Make it selectable when logging expense transactions too, so spending actually tracks against this budget
-    const expCats = CATS.expense;
-    const insertAt = expCats.length && expCats[expCats.length-1].id === 'other' ? expCats.length - 1 : expCats.length;
-    expCats.splice(insertAt, 0, { id, label:name, color });
+    if (existingExpCat) {
+      // Keep the existing chip's color in sync rather than duplicating it.
+      existingExpCat.color = color;
+    } else {
+      // Make it selectable when logging expense transactions too, so spending actually tracks against this budget
+      const expCats = CATS.expense;
+      const insertAt = expCats.length && expCats[expCats.length-1].id === 'other' ? expCats.length - 1 : expCats.length;
+      expCats.splice(insertAt, 0, { id, label:name, color });
+    }
     showToast('Anggaran ditambahkan', 'success');
   }
 
@@ -2600,8 +2650,15 @@ function submitBudgetCatModal() {
 
 function removeBudgetCat(id) {
   showConfirm('Hapus kategori anggaran ini?', 'Limit anggaran untuk kategori ini akan dihapus.', () => {
+    const bc = BUDGET.cats.find(c => c.id === id);
     BUDGET.cats = BUDGET.cats.filter(c => c.id !== id);
-    CATS.expense = CATS.expense.filter(c => c.id !== id);
+    // Only remove the linked expense-category chip too if it was created
+    // specifically for this budget — never remove a category that already
+    // existed beforehand (e.g. the built-in "Makan") just because its
+    // budget limit got deleted.
+    if (!bc || !bc.linkedExisting) {
+      CATS.expense = CATS.expense.filter(c => c.id !== id);
+    }
     delete CUSTOM_CAT_ICONS[id];
     saveToStorage();
     renderBudget();
@@ -2732,33 +2789,60 @@ document.addEventListener('touchstart', e => {
   closeOtherKcSwipes(null);
 }, {passive:true});
 
-// Warna kategori sekarang dipilih lewat dropdown melayang (anchored, sama
-// mekanismenya dengan openPicker/#pickerOverlay) yang dibuka dari trigger
-// bulat #categoryColorTrigger, bukan grid warna yang selalu kebuka inline.
-function updateCategoryColorTrigger() {
-  const trigger = document.getElementById('categoryColorTrigger');
-  const hidden  = document.getElementById('categoryColor');
-  if (trigger) trigger.style.background = _pendingCatColor || 'transparent';
-  if (hidden)  hidden.value = _pendingCatColor || '';
-}
+// Warna kategori/goal/anggaran dipilih lewat dropdown melayang (anchored,
+// sama mekanismenya dengan openPicker/#pickerOverlay) yang dibuka dari
+// trigger bulat khusus warna — satu overlay (#colorPickerOverlay) dipakai
+// bergantian oleh 3 modal berbeda (Kelola Kategori, Saving Goal, Tambah
+// Anggaran), jadi _pendingColorTarget nyimpen modal mana yang lagi aktif
+// biar klik warna nyimpen ke field yang tepat.
+let _pendingGoalColor = null;
+let _pendingBudgetCatColor = null;
+let _pendingColorTarget = 'category'; // 'category' | 'goal' | 'budget'
 
-function openCategoryColorPicker(trigger) {
+const COLOR_TRIGGER_CONFIG = {
+  category: { triggerId: 'categoryColorTrigger',  hiddenId: 'categoryColor',    get: () => _pendingCatColor,      set: v => { _pendingCatColor = v; } },
+  goal:     { triggerId: 'goalColorTrigger',       hiddenId: 'goalColor',       get: () => _pendingGoalColor,     set: v => { _pendingGoalColor = v; } },
+  budget:   { triggerId: 'budgetCatColorTrigger',  hiddenId: 'budgetCatColor', get: () => _pendingBudgetCatColor, set: v => { _pendingBudgetCatColor = v; } },
+};
+
+function updateColorTrigger(target) {
+  const cfg = COLOR_TRIGGER_CONFIG[target];
+  if (!cfg) return;
+  const trigger = document.getElementById(cfg.triggerId);
+  const hidden  = document.getElementById(cfg.hiddenId);
+  const val = cfg.get();
+  if (trigger) trigger.style.background = val || 'transparent';
+  if (hidden)  hidden.value = val || '';
+}
+// Alias biar tetap kompatibel kalau ada pemanggilan nama lama.
+function updateCategoryColorTrigger() { updateColorTrigger('category'); }
+
+function openColorPickerFor(target, trigger) {
+  _pendingColorTarget = target;
+  const cfg = COLOR_TRIGGER_CONFIG[target];
+  const current = cfg ? cfg.get() : null;
   const grid = document.getElementById('colorPickerGrid');
   grid.innerHTML = BUDGET_CAT_COLORS.map(color => `
-    <div class="color-pick-item ${_pendingCatColor===color?'selected':''}" style="background:${color}" onclick="selectCategoryColorFromPicker('${color}')"></div>
+    <div class="color-pick-item ${current===color?'selected':''}" style="background:${color}" onclick="selectColorFromPicker('${color}')"></div>
   `).join('');
   const overlay = document.getElementById('colorPickerOverlay');
   overlay.classList.add('open');
   if (trigger) anchorDropdown(overlay.querySelector('.picker-modal'), trigger);
 }
+function openCategoryColorPicker(trigger) { openColorPickerFor('category', trigger); }
+function openGoalColorPicker(trigger)     { openColorPickerFor('goal', trigger); }
+function openBudgetColorPicker(trigger)   { openColorPickerFor('budget', trigger); }
+
 function closeColorPicker() {
   document.getElementById('colorPickerOverlay').classList.remove('open');
 }
-function selectCategoryColorFromPicker(color) {
-  _pendingCatColor = color;
-  updateCategoryColorTrigger();
+function selectColorFromPicker(color) {
+  const cfg = COLOR_TRIGGER_CONFIG[_pendingColorTarget];
+  if (cfg) { cfg.set(color); updateColorTrigger(_pendingColorTarget); }
   closeColorPicker();
 }
+// Alias biar tetap kompatibel kalau ada pemanggilan nama lama.
+function selectCategoryColorFromPicker(color) { selectColorFromPicker(color); }
 
 function openAddCategoryModal() {
   _editingCatId = null;
@@ -3938,29 +4022,111 @@ function renderRecurList() {
     const color = r.type === 'income' ? 'var(--teal)' : 'var(--red)';
     const accName = walletName(r.account) || 'Akun tak dikenal';
     return `
-      <div class="recur-item glass-sm">
-        <div class="recur-icon" style="background:${r.catColor}22">${ICON[catIcon(r.catId)]||''}</div>
-        <div class="recur-info">
-          <div class="recur-name">${r.name}</div>
-          <div class="recur-meta">
-            <span class="recur-freq">${freqLabel(r.freq)}</span>
-            <span>${daysUntil(next)}</span>
-            <span>· ${escapeHtml(accName)}</span>
-          </div>
+      <div class="recur-item-wrap">
+        <div class="recur-actions">
+          <button class="ract-btn ract-pause" onclick="toggleRecur(${r.id})" title="${r.active?'Pause':'Aktifkan'}">${r.active ? '⏸' : '▶'}<span>${r.active?'Jeda':'Aktifkan'}</span></button>
+          <button class="ract-btn ract-del" onclick="deleteRecur(${r.id})" title="Hapus">${ICON.trash}<span>Hapus</span></button>
         </div>
-        <div class="recur-right">
-          <div class="recur-amt" style="color:${color}">${r.type==='income'?'+':'-'}Rp ${fmtK(r.amount)}</div>
-          <div class="recur-next">${next.toLocaleDateString('id-ID',{day:'numeric',month:'short'})}</div>
-        </div>
-        <div style="display:flex;flex-direction:column;gap:4px;align-items:center">
-          <div class="recur-pause-btn" onclick="toggleRecur(${r.id})" title="${r.active?'Pause':'Aktifkan'}">
-            ${r.active ? '⏸' : '▶'}
+        <div class="recur-item-slide" data-recur-id="${r.id}">
+          <div class="recur-item glass-sm">
+            <div class="recur-icon" style="background:${r.catColor}22">${ICON[catIcon(r.catId)]||''}</div>
+            <div class="recur-info">
+              <div class="recur-name">${r.name}</div>
+              <div class="recur-meta">
+                <span class="recur-freq">${freqLabel(r.freq)}</span>
+                <span>${daysUntil(next)}</span>
+                <span>· ${escapeHtml(accName)}</span>
+              </div>
+            </div>
+            <div class="recur-right">
+              <div class="recur-amt" style="color:${color}">${r.type==='income'?'+':'-'}Rp ${fmtK(r.amount)}</div>
+              <div class="recur-next">${next.toLocaleDateString('id-ID',{day:'numeric',month:'short'})}</div>
+            </div>
           </div>
-          <div class="recur-pause-btn" onclick="deleteRecur(${r.id})" title="Hapus" style="color:var(--red);font-size:13px">${ICON.trash}</div>
         </div>
       </div>`;
   }).join('');
+  initRecurSwipe();
 }
+
+/* Swipe-to-reveal buat card Transaksi Rutin — sama interaksinya kayak card
+   goal (initGoalSwipe), kategori (initKcSwipe), akun (initWalletSwipe) dkk:
+   digeser ke kiri buat nyingkap tombol Jeda/Hapus, bukan nampil permanen. */
+function initRecurSwipe() {
+  document.querySelectorAll('.recur-item-slide').forEach(slide => {
+    const wrap    = slide.closest('.recur-item-wrap');
+    const actions = wrap ? wrap.querySelector('.recur-actions') : null;
+    if (!wrap || !actions) return;
+    const maxOffset = () => actions.offsetWidth;
+    let startX = 0, startY = 0, baseX = 0, dragging = false, decided = false, horiz = false;
+
+    slide.addEventListener('touchstart', e => {
+      closeOtherRecurSwipes(slide);
+      startX = e.touches[0].clientX;
+      startY = e.touches[0].clientY;
+      baseX  = getRecurSlideX(slide);
+      dragging = true; decided = false; horiz = false;
+      slide.classList.add('dragging');
+      actions.classList.add('dragging');
+    }, {passive:true});
+
+    slide.addEventListener('touchmove', e => {
+      if (!dragging) return;
+      const dx = e.touches[0].clientX - startX;
+      const dy = e.touches[0].clientY - startY;
+      if (!decided) {
+        if (Math.abs(dx) < 6 && Math.abs(dy) < 6) return;
+        decided = true;
+        horiz = Math.abs(dx) > Math.abs(dy);
+        if (!horiz) { dragging = false; slide.classList.remove('dragging'); actions.classList.remove('dragging'); return; }
+      }
+      const next = Math.max(-maxOffset(), Math.min(0, baseX + dx));
+      slide.style.transform = `translateX(${next}px)`;
+      setRecurActionsProgress(actions, Math.min(1, Math.abs(next) / maxOffset()));
+    }, {passive:true});
+
+    function endDrag() {
+      if (!dragging) return;
+      dragging = false;
+      slide.classList.remove('dragging');
+      actions.classList.remove('dragging');
+      if (!decided || !horiz) return;
+      const x = getRecurSlideX(slide);
+      const open = x < -maxOffset() * 0.35;
+      slide.style.transform = `translateX(${open ? -maxOffset() : 0}px)`;
+      setRecurActionsProgress(actions, open ? 1 : 0);
+      _recurSwipeOpen = open ? slide : null;
+    }
+    slide.addEventListener('touchend', endDrag);
+    slide.addEventListener('touchcancel', endDrag);
+  });
+}
+let _recurSwipeOpen = null;
+function getRecurSlideX(el) {
+  const m = /translateX\((-?[\d.]+)px\)/.exec(el.style.transform || '');
+  return m ? parseFloat(m[1]) : 0;
+}
+function setRecurActionsProgress(actions, progress) {
+  actions.style.opacity   = progress;
+  const scale = 0.86 + 0.14 * progress;
+  const tx    = (1 - progress) * 10;
+  actions.style.transform = `scale(${scale}) translateX(${tx}px)`;
+}
+function closeOtherRecurSwipes(except) {
+  document.querySelectorAll('.recur-item-slide').forEach(s => {
+    if (s === except) return;
+    if (getRecurSlideX(s) === 0) return;
+    s.style.transform = 'translateX(0px)';
+    const actions = s.closest('.recur-item-wrap')?.querySelector('.recur-actions');
+    if (actions) setRecurActionsProgress(actions, 0);
+  });
+  if (_recurSwipeOpen && _recurSwipeOpen !== except) _recurSwipeOpen = null;
+}
+document.addEventListener('touchstart', e => {
+  if (!_recurSwipeOpen) return;
+  if (e.target.closest('.recur-item-wrap')) return;
+  closeOtherRecurSwipes(null);
+}, {passive:true});
 
 function deleteRecur(id) {
   showConfirm('Hapus transaksi rutin?', 'Transaksi rutin ini akan dihapus permanen.', () => {
@@ -4014,6 +4180,20 @@ function setRecurType(t) {
     if (b) b.className = 'type-btn' + (type === t ? ' active ' + t : '');
   });
   moveTypeIndicator('recurTypeToggle', 'recurTypeIndicator', 'recurType' + t.charAt(0).toUpperCase() + t.slice(1));
+  // Kategori keluar & masuk kepisah masing-masing — pindah tipe berarti
+  // daftar kategorinya ikut ganti, jadi field-nya direset ke kategori
+  // pertama di daftar baru (sama polanya kayak setType() buat tx biasa).
+  const cats = CATS[t] || [];
+  const catHidden = document.getElementById('recurCat');
+  const catLbl     = document.getElementById('recurCatLabel');
+  if (cats.length) {
+    const c = cats[0];
+    if (catHidden) catHidden.value = c.id;
+    if (catLbl) catLbl.innerHTML = (ICON[catIcon(c.id)]||'') + ' ' + escapeHtml(c.label);
+  } else {
+    if (catHidden) catHidden.value = '';
+    if (catLbl) catLbl.textContent = 'Pilih kategori';
+  }
 }
 
 function openRecurModal() {
@@ -4046,10 +4226,10 @@ function submitRecur() {
   if (!name)   { showToast('Nama wajib diisi', 'warning'); return; }
   if (!amount) { showToast('Nominal harus lebih dari 0', 'warning'); return; }
   if (!account) { showToast('Tambahkan akun dulu di halaman Akun', 'warning'); return; }
-  const catColors = { bill:'#5EB3FF', food:'#FF8C00', trans:'#5EB3FF', ent:'#FF6B84', salary:'#2AE8C4', other:'#888' };
+  const cat = (CATS[_recurType] || []).find(c => c.id === catId);
   RECURRINGS = [...RECURRINGS, {
     id: Date.now(), name, type: _recurType, amount, freq,
-    catId, catColor: catColors[catId] || '#888', start, active: true, account,
+    catId, catColor: (cat && cat.color) || '#888', start, active: true, account,
   }];
   saveToStorage();
   closeRecurModal();
@@ -4334,14 +4514,59 @@ function renderNotifPanel() {
   const dotColors  = { warn:'var(--gold)', danger:'var(--red)', teal:'var(--teal)', blue:'var(--blue)' };
   const typeIcons  = { warn:'warning', danger:'alertOctagon', teal:'settings', blue:'refresh' };
   el.innerHTML = NOTIFICATIONS.map(n => `
-    <div class="notif-item"${n.url ? ` onclick="window.open('${n.url}','_blank')" style="cursor:pointer"` : ''}>
-      <div class="notif-dot" style="background:${dotColors[n.type]||'var(--gold)'}">${ICON[typeIcons[n.type]]||''}</div>
-      <div class="notif-body">
-        <div class="notif-title-text">${escapeHtml(n.title)}</div>
-        <div class="notif-sub">${escapeHtml(n.sub)}</div>
+    <div class="notif-item-wrap" id="notifwrap-${n.id}">
+      <div class="notif-delete-bg">${ICON.trash}</div>
+      <div class="notif-item" id="notifitem-${n.id}"${n.url ? ` onclick="window.open('${n.url}','_blank')" style="cursor:pointer"` : ''}>
+        <div class="notif-dot" style="background:${dotColors[n.type]||'var(--gold)'}">${ICON[typeIcons[n.type]]||''}</div>
+        <div class="notif-body">
+          <div class="notif-title-text">${escapeHtml(n.title)}</div>
+          <div class="notif-sub">${escapeHtml(n.sub)}</div>
+        </div>
+        <div class="notif-time">${n.time}</div>
       </div>
-      <div class="notif-time">${n.time}</div>
     </div>`).join('');
+  initNotifSwipe();
+}
+
+// Hapus satu notifikasi (bukan seluruh isi panel) dari daftar NOTIFICATIONS.
+function deleteNotif(id) {
+  const idx = NOTIFICATIONS.findIndex(n => n.id === id);
+  if (idx === -1) return;
+  NOTIFICATIONS.splice(idx, 1);
+  updateBellBadge();
+  renderNotifPanel();
+}
+
+// Swipe-to-delete per item notifikasi — geser ke KANAN buat menghapus
+// notifikasi itu saja, sama seperti swipe-delete transaksi di Riwayat
+// tapi arah & sisi delete-bg-nya dibalik (kanan, bukan kiri).
+function initNotifSwipe() {
+  NOTIFICATIONS.forEach(n => {
+    const wrap = document.getElementById('notifwrap-' + n.id);
+    const item = document.getElementById('notifitem-' + n.id);
+    if (!wrap || !item) return;
+    let startX = 0, dx = 0, swiping = false;
+    item.addEventListener('touchstart', e => { startX = e.touches[0].clientX; dx = 0; swiping = false; }, {passive:true});
+    item.addEventListener('touchmove', e => {
+      dx = e.touches[0].clientX - startX;
+      if (dx > 10) { swiping = true; wrap.classList.add('swiping'); }
+      if (swiping && dx > 0) item.style.transform = `translateX(${Math.min(dx, 80)}px)`;
+    }, {passive:true});
+    item.addEventListener('touchend', () => {
+      if (dx > 60) {
+        item.style.transition = 'transform 0.25s, opacity 0.25s';
+        item.style.transform  = 'translateX(100%)';
+        item.style.opacity    = '0';
+        setTimeout(() => deleteNotif(n.id), 250);
+      } else {
+        item.style.transform = ''; wrap.classList.remove('swiping');
+      }
+      swiping = false;
+    });
+    item.addEventListener('touchcancel', () => {
+      item.style.transform = ''; wrap.classList.remove('swiping'); swiping = false;
+    });
+  });
 }
 
 function checkBudgetAlerts() {
@@ -4941,7 +5166,7 @@ function renderGoals() {
                 <div class="goal-days">${daysLeft(g.deadline)}</div>
               </div>
               <div class="goal-amount">
-                <div class="goal-saved">Rp ${fmtK(g.saved)}</div>
+                <div class="goal-saved" style="color:${color}">Rp ${fmtK(g.saved)}</div>
                 <div class="goal-target">dari Rp ${fmtK(g.target)}</div>
               </div>
             </div>
@@ -4952,7 +5177,7 @@ function renderGoals() {
               <div class="goal-bar-fill" style="width:${pct}%;background:linear-gradient(90deg,${color},${color}99)"></div>
             </div>
             <div class="goal-footer" style="justify-content:flex-end">
-              <div class="goal-add-btn" onclick="event.stopPropagation();openTopupModal(${g.id})">＋ Tambah Dana</div>
+              <div class="goal-add-btn" style="color:${color};background:${color}1f;border-color:${color}55" onclick="event.stopPropagation();openTopupModal(${g.id})">＋ Tambah Dana</div>
             </div>
           </div>
         </div>
@@ -5082,6 +5307,8 @@ function openGoalModal() {
   document.getElementById('goalSaved').value  = '0';
   const gi = document.getElementById('goalIcon'); if(gi) gi.value='laptop';
   const gl = document.getElementById('goalIconLabel'); if(gl) gl.innerHTML = ICON.laptop;
+  _pendingGoalColor = BUDGET_CAT_COLORS[GOALS.length % BUDGET_CAT_COLORS.length];
+  updateColorTrigger('goal');
   // Reset picker display
   const gta = document.getElementById('txAccountLabel'); if(gta && WALLETS.length) gta.textContent = WALLETS[0].name;
 }
@@ -5096,8 +5323,7 @@ function submitGoal() {
   const icon    = document.getElementById('goalIcon').value || 'target';
   if (!name)   { showToast('Nama goal wajib diisi', 'warning'); return; }
   if (!target) { showToast('Target harus lebih dari 0', 'warning'); return; }
-  const colors  = ['#5EB3FF','#2AE8C4','#FFD166','#C4A8FF','#FF8C00'];
-  const color   = colors[GOALS.length % colors.length];
+  const color = _pendingGoalColor || BUDGET_CAT_COLORS[GOALS.length % BUDGET_CAT_COLORS.length];
   GOALS = [...GOALS, { id: Date.now(), name, icon, target, saved, deadline, color }];
   saveToStorage();
   closeGoalModal();
@@ -6856,14 +7082,10 @@ const PICKER_REGISTRY = {
   },
   recurCat: {
     title: 'Kategori',
-    getOpts: () => [
-      { value: 'bill',   text: 'Tagihan',   icon: 'bill' },
-      { value: 'food',   text: 'Makan',     icon: 'utensils' },
-      { value: 'trans',  text: 'Transport', icon: 'car' },
-      { value: 'ent',    text: 'Hiburan',   icon: 'gamepad' },
-      { value: 'salary', text: 'Gaji',      icon: 'briefcase' },
-      { value: 'other',  text: 'Lainnya',   icon: 'package' },
-    ],
+    // Terhubung ke Kelola Kategori — daftarnya ngikut tipe rutin yang lagi
+    // aktif (Keluar → CATS.expense, Masuk → CATS.income), sama kayak
+    // txCategory di atas.
+    getOpts: () => (CATS[_recurType] || []).map(c => ({ value: c.id, text: c.label, icon: catIcon(c.id) })),
     labelId: 'recurCatLabel',
   },
   recurAccount: {
@@ -7507,5 +7729,67 @@ function relocateDropdownsToBody() {
     if (el.parentElement !== document.body) document.body.appendChild(el);
   });
 }
+
+/* ══════════════════════════════════════════
+   CALENDAR SWIPE FIX
+   Every mini-calendar (Riwayat, Budget, Analytics, Catat Transaksi,
+   Recurring, Goal deadline, Utang jatuh tempo — all built on the same
+   .dp-days grid) only ever had a plain onclick on each day cell. Dragging
+   a finger across the grid — e.g. trying to swipe to the next/previous
+   month — still counted as a "click" on whatever day happened to be
+   under the finger when it lifted, instantly picking that date and
+   closing the picker. This tracks real touch movement over any
+   `.dp-days` grid: a clear horizontal drag now navigates the month
+   instead (via whichever ‹ / › button sits in that panel's header), and
+   any other drag just gets swallowed instead of accidentally picking a
+   day. Delegated once at the document level, so it covers every
+   calendar in the app without touching each page's own code.
+══════════════════════════════════════════ */
+let _dpSwipe = null;
+let _dpSuppressNextDayClick = false;
+
+document.addEventListener('touchstart', e => {
+  const days = e.target.closest('.dp-days');
+  if (!days) { _dpSwipe = null; return; }
+  const t = e.touches[0];
+  _dpSwipe = { days, startX: t.clientX, startY: t.clientY, dx: 0, dy: 0, moved: false };
+}, {passive:true});
+
+document.addEventListener('touchmove', e => {
+  if (!_dpSwipe) return;
+  const t = e.touches[0];
+  _dpSwipe.dx = t.clientX - _dpSwipe.startX;
+  _dpSwipe.dy = t.clientY - _dpSwipe.startY;
+  if (Math.abs(_dpSwipe.dx) > 8 || Math.abs(_dpSwipe.dy) > 8) _dpSwipe.moved = true;
+}, {passive:true});
+
+document.addEventListener('touchend', () => {
+  if (!_dpSwipe) return;
+  const { days, moved, dx, dy } = _dpSwipe;
+  _dpSwipe = null;
+  if (!moved) return; // a real tap — let the day's own onclick fire normally
+  _dpSuppressNextDayClick = true;
+  if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 24) {
+    // Clear horizontal swipe — treat it as month navigation instead.
+    const panel = days.closest('.date-picker-panel, .debt-float-card') || days.parentElement;
+    const navBtns = panel ? panel.querySelectorAll('.dp-month-nav') : null;
+    if (navBtns && navBtns.length === 2) {
+      const btn = dx > 0 ? navBtns[0] : navBtns[1]; // swipe right = previous month, swipe left = next
+      const onclickAttr = btn.getAttribute('onclick');
+      if (onclickAttr) { try { new Function(onclickAttr)(); } catch (err) {} }
+    }
+  }
+}, {passive:true});
+
+document.addEventListener('touchcancel', () => { _dpSwipe = null; }, {passive:true});
+
+// Swallow the click that a real drag would otherwise still fire on a
+// `.dp-day` cell (mobile browsers dispatch a click on touchend regardless
+// of movement). Capture phase so this runs before the day's own onclick.
+document.addEventListener('click', e => {
+  if (!_dpSuppressNextDayClick) return;
+  _dpSuppressNextDayClick = false;
+  if (e.target.closest('.dp-day')) { e.stopPropagation(); e.preventDefault(); }
+}, true);
 
 window.addEventListener('DOMContentLoaded',()=>{ relocateDropdownsToBody(); setTimeout(init,80); });

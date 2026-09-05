@@ -1000,6 +1000,14 @@
         </div>
         <div class="field-row" style="margin-top:12px">
           <div class="field">
+            <label>Mata Uang</label>
+            <div class="picker-trigger" onclick="openPicker(this,'newBudgetCatCurrency','Mata Uang')">
+              <div class="pt-text"><span id="newBudgetCatCurrencyLbl">Rp Rupiah Indonesia (IDR)</span></div>
+              <span class="picker-arrow">▾</span>
+            </div>
+            <input type="hidden" id="newBudgetCatCurrency" value="IDR">
+          </div>
+          <div class="field" style="flex:0 0 84px">
             <label>Ikon</label>
             <div class="picker-trigger" onclick="openIconPickerModal('budgetCatIcon')">
               <div class="pt-text"><span id="budgetCatIconLbl" class="picker-icon-only">Pilih ikon</span></div>
@@ -1007,13 +1015,10 @@
             </div>
             <input type="hidden" id="budgetCatIcon">
           </div>
-          <div class="field">
-            <label>Mata Uang</label>
-            <div class="picker-trigger" onclick="openPicker(this,'newBudgetCatCurrency','Mata Uang')">
-              <div class="pt-text"><span id="newBudgetCatCurrencyLbl">Rp Rupiah Indonesia (IDR)</span></div>
-              <span class="picker-arrow">▾</span>
-            </div>
-            <input type="hidden" id="newBudgetCatCurrency" value="IDR">
+          <div class="field" style="flex:0 0 auto">
+            <label>Warna</label>
+            <div class="color-trigger" id="budgetCatColorTrigger" onclick="openBudgetColorPicker(this)"></div>
+            <input type="hidden" id="budgetCatColor">
           </div>
         </div>
         <div style="font-size:11px;color:var(--txt3);line-height:1.5;margin-top:10px">Total anggaran di halaman ini dihitung otomatis dari jumlah limit semua kategori (mata uang Rp).</div>
@@ -1190,13 +1195,18 @@
             </div>
             <input type="hidden" id="goalDeadline">
           </div>
-          <div class="field">
+          <div class="field" style="flex:0 0 84px">
             <label>Ikon</label>
             <div class="picker-trigger" onclick="openIconPickerModal('goalIcon')">
               <div class="pt-text"><span id="goalIconLabel" class="picker-icon-only"><svg class="ic" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="12" rx="1.5"/><path d="M2 20h20"/></svg></span></div>
               <span class="picker-arrow">▾</span>
             </div>
             <input type="hidden" id="goalIcon" value="laptop">
+          </div>
+          <div class="field" style="flex:0 0 auto">
+            <label>Warna</label>
+            <div class="color-trigger" id="goalColorTrigger" onclick="openGoalColorPicker(this)"></div>
+            <input type="hidden" id="goalColor">
           </div>
         </div>
       </div>
@@ -1565,14 +1575,16 @@
       <div class="filter-chip" id="rchip-transfer" onclick="setRiwayatType('transfer')"><svg class="ic" viewBox="0 0 24 24"><path d="M7 8h13M17 4l3 4-3 4"/><path d="M17 16H4M7 20l-3-4 3-4"/></svg> Transfer</div>
     </div>
 
-    <!-- Transaction List -->
-    <div class="tx-list" id="riwayatList"></div>
-    <div class="riwayat-empty" id="riwayatEmpty" style="display:none">
-      <div class="riwayat-empty-icon"><svg class="ic" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.35-4.35"/></svg></div>
-      <h3 style="font-size:15px;color:var(--txt2);margin-bottom:6px">Tidak ada transaksi</h3>
-      <p style="font-size:13px">Coba ubah filter atau rentang tanggal</p>
+    <!-- Transaction List (only this part scrolls; scrollbar hidden) -->
+    <div class="riwayat-scroll">
+      <div class="tx-list" id="riwayatList"></div>
+      <div class="riwayat-empty" id="riwayatEmpty" style="display:none">
+        <div class="riwayat-empty-icon"><svg class="ic" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.35-4.35"/></svg></div>
+        <h3 style="font-size:15px;color:var(--txt2);margin-bottom:6px">Tidak ada transaksi</h3>
+        <p style="font-size:13px">Coba ubah filter atau rentang tanggal</p>
+      </div>
+      <div style="height:16px"></div>
     </div>
-    <div style="height:16px"></div>
   </div>
 
   <div class="toast" id="toast"></div>
