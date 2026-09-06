@@ -14,8 +14,8 @@
   --blue:   #2563EB;
   --purple: #7C3AED;
   --nav-h:  72px;
-  --r:      22px;
-  --r-sm:   14px;
+  --r:      14px;
+  --r-sm:   10px;
   --mono:   'JetBrains Mono', monospace;
   --sans:   'Inter', sans-serif;
   --disp:   'Space Grotesk', sans-serif;
@@ -824,15 +824,10 @@ body {
   width: 56px; height: 56px; border-radius: 50%;
   display: flex; align-items: center; justify-content: center;
   cursor: pointer; color: #fff;
-  background: linear-gradient(145deg, rgba(42,232,196,0.95), rgba(0,180,150,0.9));
+  background: var(--teal);
   backdrop-filter: blur(20px);
-  border: 1px solid rgba(255,255,255,0.5);
-  border-bottom-color: rgba(42,232,196,0.3);
-  box-shadow:
-    inset 0 2px 0 rgba(255,255,255,0.6),
-    inset 0 -1px 0 rgba(0,0,0,0.2),
-    0 0 14px rgba(42,232,196,0.35),
-    0 8px 20px rgba(0,0,0,0.4);
+  border: none;
+  box-shadow: 0 4px 14px rgba(18,21,31,0.22);
   z-index: 150;
   opacity: 0; transform: scale(0.6) translateY(12px); pointer-events: none;
   transition: opacity 0.25s cubic-bezier(0.22,1,0.36,1), transform 0.3s cubic-bezier(0.34,1.56,0.64,1);
@@ -854,7 +849,7 @@ body {
   bottom: max(148px, env(safe-area-inset-bottom, 0px) + 140px);
   max-width: 220px;
   display: flex; align-items: center; gap: 8px;
-  padding: 10px 14px; border-radius: 16px 16px 4px 16px;
+  padding: 10px 14px; border-radius: 12px 12px 4px 12px;
   background: rgba(255,255,255,0.85);
   backdrop-filter: blur(24px) saturate(200%) brightness(1.12);
   -webkit-backdrop-filter: blur(24px) saturate(200%) brightness(1.12);
@@ -898,7 +893,7 @@ body {
    BALANCE HERO
 ═══════════════════════════════════════ */
 .balance-hero {
-  margin: 8px 20px 0;
+  margin: 8px 16px 0;
   padding: 26px 24px 22px;
 }
 .balance-label {
@@ -1019,7 +1014,7 @@ body {
   background: rgba(18,21,31,0.05);
   border: 1px solid rgba(18,21,31,0.08);
   box-shadow: inset 0 1px 0 rgba(255,255,255,0.2);
-  border-radius: 16px; cursor: pointer;
+  border-radius: 12px; cursor: pointer;
   transition: all 0.15s;
 }
 .qa-btn:active { transform: scale(0.94); background: rgba(18,21,31,0.08); }
@@ -1045,7 +1040,7 @@ body {
   transition: transform 0.2s ease;
   position: relative; z-index: 1;
 }
-.tx-item:active { transform: scale(0.98); }
+.tx-item:active { transform: scale(0.99); }
 
 /* Budget overview — 2x2 proper */
 .budget-overview {
@@ -1065,7 +1060,7 @@ body {
   from { opacity: 0; transform: translateY(10px) scale(0.985); filter: blur(6px); }
   to   { opacity: 1; transform: translateY(0) scale(1); filter: blur(0); }
 }
-.river-wrap { margin: 16px 20px 0; padding: 18px 18px 14px; }
+.river-wrap { margin: 16px 16px 0; padding: 18px 18px 14px; }
 .river-header {
   display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; position: relative; z-index: 1;
 }
@@ -1115,7 +1110,7 @@ body {
    SCORE CARD
 ═══════════════════════════════════════ */
 .score-card {
-  margin: 16px 20px 0;
+  margin: 16px 16px 0;
   padding: 18px 20px;
   display: flex; flex-direction: column;
 }
@@ -1130,7 +1125,7 @@ body {
    STATS ROW
 ═══════════════════════════════════════ */
 .stats-row {
-  display: flex; gap: 10px; padding: 0 20px;
+  display: flex; gap: 10px; padding: 0 16px;
   overflow-x: auto; scrollbar-width: none; padding-bottom: 4px;
   margin-top: 16px;
 }
@@ -1140,7 +1135,7 @@ body {
   padding: 14px 16px; cursor: pointer;
   transition: transform 0.15s;
 }
-.stat-card:active { transform: scale(0.96); }
+.stat-card:active { transform: scale(0.98); }
 .stat-card .sc-icon  { font-size: 20px; margin-bottom: 8px; position: relative; z-index: 1; }
 .stat-card .sc-label { font-size: 10px; color: var(--txt3); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px; position: relative; z-index: 1; }
 .stat-card .sc-val   { font-family: var(--mono); font-size: 13px; font-weight: 500; position: relative; z-index: 1; }
@@ -1152,7 +1147,7 @@ body {
 /* ═══════════════════════════════════════
    METER
 ═══════════════════════════════════════ */
-.meter-wrap { margin: 16px 20px 0; padding: 16px 18px; }
+.meter-wrap { margin: 16px 16px 0; padding: 16px 18px; }
 .meter-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 14px; position: relative; z-index: 1; }
 .meter-title { font-size: 13px; font-weight: 600; }
 .meter-sub   { font-size: 11px; color: var(--txt3); margin-top: 2px; }
@@ -1165,7 +1160,7 @@ body {
 /* ═══════════════════════════════════════
    TRANSACTIONS
 ═══════════════════════════════════════ */
-.tx-list { padding: 0 20px; display: flex; flex-direction: column; gap: 8px; }
+.tx-list { padding: 0 16px; display: flex; flex-direction: column; gap: 8px; }
 .date-chip { padding: 4px 20px; font-size: 11px; font-weight: 600; color: var(--txt3); letter-spacing: 0.5px; text-transform: uppercase; }
 .tx-icon { width: 40px; height: 40px; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 18px; flex-shrink: 0; }
 .tx-info { flex: 1; min-width: 0; position: relative; z-index: 1; }
@@ -1182,7 +1177,7 @@ body {
 /* ═══════════════════════════════════════
    BUDGET PAGE
 ═══════════════════════════════════════ */
-.budget-header-bg { padding: 0 20px 20px; }
+.budget-header-bg { padding: 0 16px 20px; }
 .budget-period { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
 .period-label  { font-family: var(--disp); font-size: 20px; font-weight: 700; }
 .period-nav    { display: flex; gap: 4px; }
@@ -1195,7 +1190,7 @@ body {
   transition: all 0.15s;
 }
 
-.budget-cats { padding: 0 20px; display: flex; flex-direction: column; gap: 10px; }
+.budget-cats { padding: 0 16px; display: flex; flex-direction: column; gap: 10px; }
 /* Swipe-to-reveal for budget category cards — same interaction as wallet
    cards (.wallet-item-wrap) and category rows (.kc-item-wrap): the card
    slides left on drag, uncovering Edit/Hapus underneath on the right
@@ -1203,7 +1198,7 @@ body {
 .bcat-item-wrap {
   position: relative;
   overflow: hidden;
-  border-radius: 18px;
+  border-radius: 14px;
 }
 .bcat-actions {
   position: absolute; top: 0; right: 0; bottom: 0;
@@ -1293,13 +1288,13 @@ body {
 /* ═══════════════════════════════════════
    ANALYTICS
 ═══════════════════════════════════════ */
-.analytics-hero { margin: 16px 20px 0; padding: 20px; text-align: center; }
+.analytics-hero { margin: 16px 16px 0; padding: 20px; text-align: center; }
 .donut-wrap { position: relative; width: 160px; height: 160px; margin: 0 auto 16px; }
 #donutCanvas { width: 160px; height: 160px; }
 .donut-center { position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%); text-align: center; }
 .dc-pct   { font-family: var(--disp); font-size: 26px; font-weight: 700; }
 .dc-label { font-size: 10px; color: var(--txt3); margin-top: 2px; }
-.donut-legend { display: flex; flex-direction: column; gap: 8px; text-align: left; padding: 0 20px; }
+.donut-legend { display: flex; flex-direction: column; gap: 8px; text-align: left; padding: 0 16px; }
 .dl-item  { display: flex; align-items: center; gap: 8px; }
 .dl-color { width: 10px; height: 10px; border-radius: 3px; flex-shrink: 0; }
 .dl-name  { font-size: 12px; color: var(--txt2); flex: 1; }
@@ -1308,13 +1303,13 @@ body {
 .dl-fill  { height: 100%; border-radius: 99px; }
 .dl-pct   { font-family: var(--mono); font-size: 12px; }
 
-.trend-chart-wrap { margin: 16px 20px 0; padding: 18px; }
+.trend-chart-wrap { margin: 16px 16px 0; padding: 18px; }
 #trendCanvas { width: 100%; height: 120px; }
 
 /* Insight / Anggaran / Per Akun — cards that used to be introduced by a
    free-floating .section-head; now each one carries its own .card-head
    title, same pattern as the Home cards (Cashflow River, Skor Keuangan…). */
-.insight-wrap, .budget-overlay-wrap, .account-breakdown-wrap { margin: 16px 20px 0; padding: 18px; }
+.insight-wrap, .budget-overlay-wrap, .account-breakdown-wrap { margin: 16px 16px 0; padding: 18px; }
 .insight-wrap .insight-list { margin: 0; }
 /* Anggaran (budget-vs-actual) list always shows every currency in one
    view — it isn't filtered like the other Analytics cards, it just goes
@@ -1330,7 +1325,7 @@ body {
 .budget-overlay-wrap .donut-legend::-webkit-scrollbar { display: none; }
 
 /* Period comparison cards */
-.compare-wrap { margin: 16px 20px 0; padding: 18px; }
+.compare-wrap { margin: 16px 16px 0; padding: 18px; }
 .compare-grid { display: flex; gap: 10px; margin: 0; }
 .compare-card { flex: 1; padding: 14px 14px 13px; }
 .compare-card .cc-label { font-size: 10.5px; color: var(--txt3); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 7px; }
@@ -1355,7 +1350,7 @@ body {
 }
 
 /* Forecasting sederhana — proyeksi saldo akhir bulan */
-.forecast-wrap { margin: 8px 20px 0; padding: 18px; }
+.forecast-wrap { margin: 8px 16px 0; padding: 18px; }
 .forecast-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
 .forecast-label { font-size: 10.5px; color: var(--txt3); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 7px; }
 .forecast-val { font-family: var(--disp); font-size: 26px; font-weight: 700; letter-spacing: -0.5px; line-height: 1.15; }
@@ -1378,7 +1373,7 @@ body {
 .forecast-warn svg { width: 16px; height: 16px; flex-shrink: 0; }
 
 /* Auto insight cards */
-.insight-list { display: flex; flex-direction: column; gap: 10px; margin: 0 20px 0; }
+.insight-list { display: flex; flex-direction: column; gap: 10px; margin: 0 16px 0; }
 .insight-card { display: flex; align-items: flex-start; gap: 12px; padding: 14px; }
 .insight-icon { width: 36px; height: 36px; border-radius: 12px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
 .insight-icon svg { width: 17px; height: 17px; }
@@ -1402,7 +1397,7 @@ body {
 ═══════════════════════════════════════ */
 .wallet-list { padding: 0; display: flex; flex-direction: column; gap: 0; }
 .wallet-card {
-  padding: 20px 22px; border-radius: 22px; cursor: pointer;
+  padding: 20px 22px; border-radius: 16px; cursor: pointer;
   position: relative; overflow: hidden;
   transition: transform 0.15s;
   /* Wallet cards carry their own dark bank-card gradient (set inline via JS)
@@ -1433,7 +1428,7 @@ body {
 .wallet-tag  { font-size: 10px; padding: 2px 8px; border-radius: 99px; background: rgba(255,255,255,0.12); }
 
 .add-wallet-btn {
-  margin: 0 20px;
+  margin: 0 16px;
   padding: 14px;
   border: 1.5px dashed rgba(42,232,196,0.4);
   border-radius: var(--r);
@@ -1468,7 +1463,7 @@ body {
   background: var(--surface-bg);
   backdrop-filter: var(--surface-blur);
   -webkit-backdrop-filter: var(--surface-blur);
-  border-radius: 24px;
+  border-radius: 18px;
   border: 1px solid rgba(18,21,31,0.10);
   box-shadow:
     inset 0 2px 0 rgba(255,255,255,0.55),
@@ -1486,7 +1481,7 @@ body {
 .modal-title  { font-family: var(--disp); font-size: 18px; font-weight: 600; }
 .modal-close  { width: 30px; height: 30px; border-radius: 50%; background: rgba(18,21,31,0.06); border: 1px solid rgba(18,21,31,0.10); color: var(--txt2); cursor: pointer; font-size: 14px; display: flex; align-items: center; justify-content: center; box-shadow: inset 0 1px 0 rgba(255,255,255,0.5); }
 
-.type-toggle { display: flex; margin: 0 20px 14px; background: rgba(0,0,0,0.2); border-radius: var(--r-sm); padding: 4px; gap: 4px; position: relative; z-index: 1; }
+.type-toggle { display: flex; margin: 0 16px 14px; background: rgba(0,0,0,0.2); border-radius: var(--r-sm); padding: 4px; gap: 4px; position: relative; z-index: 1; }
 /* Sliding glass highlight — single shared element that glides between
    type-btns instead of popping in/out per button. See moveTypeIndicator() in JS. */
 .type-indicator {
@@ -1533,7 +1528,7 @@ body {
   flex-wrap: nowrap; /* horizontal scroll, no wrap */
   overflow-x: auto; overflow-y: hidden;
   scrollbar-width: none;
-  padding: 0 20px 8px; position: relative; z-index: 1;
+  padding: 0 16px 8px; position: relative; z-index: 1;
   -webkit-overflow-scrolling: touch;
 }
 .cat-picker::-webkit-scrollbar { display: none; }
@@ -1557,7 +1552,7 @@ body {
   box-shadow: inset 0 1px 0 rgba(190,255,242,0.35), 0 0 10px rgba(42,232,196,0.25);
 }
 
-.modal-form { padding: 0 20px; display: flex; flex-direction: column; gap: 10px; position: relative; z-index: 1; }
+.modal-form { padding: 0 16px; display: flex; flex-direction: column; gap: 10px; position: relative; z-index: 1; }
 .field-row { display: flex; gap: 10px; }
 .field { display: flex; flex-direction: column; gap: 5px; flex: 1; }
 .field label { font-size: 11px; color: var(--txt3); text-transform: uppercase; letter-spacing: 0.5px; }
@@ -1586,7 +1581,7 @@ body {
 /* ═══════════════════════════════════════
    SMART QUICK-ADD (parsing teks bebas)
 ═══════════════════════════════════════ */
-.smart-input-wrap { margin: 4px 20px 20px; padding: 14px 16px; position: relative; z-index: 1; }
+.smart-input-wrap { margin: 4px 16px 20px; padding: 14px 16px; position: relative; z-index: 1; }
 
 /* Tab "Ketik" vs "Notifikasi" di dalam Catat Cepat — sliding glass indicator,
    pola yang sama seperti pil tab Keluar/Masuk/Transfer (lihat .type-indicator). */
@@ -1664,13 +1659,12 @@ body {
 .smart-input-btn {
   flex-shrink: 0; width: 42px; height: 42px; border-radius: var(--r-sm);
   display: flex; align-items: center; justify-content: center; cursor: pointer;
-  background: linear-gradient(145deg, rgba(42,232,196,0.9), rgba(0,180,150,0.85));
-  border: 1px solid rgba(255,255,255,0.4);
+  background: var(--teal);
+  border: none;
   color: #001a14;
-  box-shadow: inset 0 1px 0 rgba(255,255,255,0.5), 0 4px 12px rgba(42,232,196,0.2);
   transition: transform 0.15s;
 }
-.smart-input-btn:active { transform: scale(0.9); }
+.smart-input-btn:active { transform: scale(0.92); }
 .smart-input-btn .ic { width: 18px; height: 18px; }
 
 /* Voice mic button — secondary (neutral glass) style so the teal "apply" arrow
@@ -1689,8 +1683,8 @@ body {
 .smart-input-mic .mic-icon-idle { transform: translate(-50%,-50%) scale(1); }
 .smart-input-mic .mic-icon-stop { opacity: 0; transform: translate(-50%,-50%) scale(0.6); }
 .smart-input-mic.listening {
-  background: linear-gradient(145deg, rgba(255,107,132,0.95), rgba(220,60,90,0.9));
-  border-color: rgba(255,255,255,0.4);
+  background: #DC2626;
+  border-color: transparent;
   color: #fff;
   animation: micPulse 1.4s ease-in-out infinite;
 }
@@ -1698,8 +1692,8 @@ body {
 .smart-input-mic.listening .mic-icon-stop { opacity: 1; transform: translate(-50%,-50%) scale(1); }
 .smart-input-mic.unsupported { display: none; }
 @keyframes micPulse {
-  0%, 100% { box-shadow: inset 0 1px 0 rgba(255,255,255,0.4), 0 0 0 0 rgba(255,107,132,0.45); }
-  50% { box-shadow: inset 0 1px 0 rgba(255,255,255,0.4), 0 0 0 8px rgba(255,107,132,0); }
+  0%, 100% { box-shadow: 0 0 0 0 rgba(220,38,38,0.45); }
+  50% { box-shadow: 0 0 0 8px rgba(220,38,38,0); }
 }
 
 /* "Mendengarkan..." status row — only shown while actively recording */
@@ -1732,40 +1726,35 @@ body {
 .smart-chip.warn { background: rgba(255,209,102,0.12); color: var(--gold); border-color: rgba(255,209,102,0.25); }
 
 .modal-submit {
-  margin: 16px 20px 20px; padding: 15px;
-  background: linear-gradient(145deg, rgba(42,232,196,0.9), rgba(0,180,150,0.85));
-  border: 1px solid rgba(255,255,255,0.4);
-  border-bottom-color: rgba(42,232,196,0.2);
+  margin: 16px 16px 20px; padding: 15px;
+  background: var(--teal);
+  border: none;
   border-radius: var(--r-sm);
   color: #001a14; font-family: var(--disp);
   font-size: 15px; font-weight: 700;
   cursor: pointer;
-  width: calc(100% - 40px);
-  box-shadow:
-    inset 0 2px 0 rgba(255,255,255,0.5),
-    0 0 8px rgba(42,232,196,0.15),
-    0 4px 12px rgba(0,0,0,0.2);
+  width: calc(100% - 32px);
   transition: opacity 0.15s, transform 0.1s;
   position: relative; z-index: 1;
 }
-.modal-submit:active { transform: scale(0.98); opacity: 0.9; }
+.modal-submit:active { transform: scale(0.98); opacity: 0.85; }
 
 .addtx-submit-btn {
   position: fixed;
   left: 50%;
   bottom: 20px;
   transform: translateX(-50%);
-  width: calc(100% - 40px);
+  width: calc(100% - 32px);
   max-width: 390px;
   margin: 0;
   z-index: 80;
 }
-.addtx-submit-btn:active { transform: translateX(-50%) scale(0.98); opacity: 0.9; }
+.addtx-submit-btn:active { transform: translateX(-50%) scale(0.98); opacity: 0.85; }
 
 /* ═══════════════════════════════════════
    SETTINGS
 ═══════════════════════════════════════ */
-.profile-hero { margin: 0 20px; padding: 20px; display: flex; align-items: center; gap: 14px; }
+.profile-hero { margin: 0 16px; padding: 20px; display: flex; align-items: center; gap: 14px; }
 .avatar {
   width: 56px; height: 56px; border-radius: 50%; flex-shrink: 0;
   background: linear-gradient(135deg, var(--teal), var(--blue));
@@ -1802,7 +1791,7 @@ body {
   box-shadow: none; border: 1px solid rgba(255,107,132,0.3);
 }
 
-.settings-group { padding: 0 20px; display: flex; flex-direction: column; gap: 1px; }
+.settings-group { padding: 0 16px; display: flex; flex-direction: column; gap: 1px; }
 .settings-label { font-size: 10px; color: var(--txt3); text-transform: uppercase; letter-spacing: 0.8px; padding: 16px 0 6px; }
 .s-items {
   border-radius: var(--r); overflow: hidden; display: flex; flex-direction: column;
@@ -1868,7 +1857,7 @@ body {
 .empty .empty-icon { font-size: 40px; margin-bottom: 12px; }
 .empty h3 { font-size: 15px; color: var(--txt2); margin-bottom: 6px; }
 .page-title    { font-family: var(--disp); font-size: 24px; font-weight: 700; padding: 4px 20px 2px; }
-.page-subtitle { font-size: 13px; color: var(--txt3); padding: 0 20px 12px; }
+.page-subtitle { font-size: 13px; color: var(--txt3); padding: 0 16px 12px; }
 
 .toast {
   position: fixed; bottom: 100px;
@@ -1896,10 +1885,10 @@ body {
    uncovering Edit/Hapus underneath on the right instead of showing them
    permanently under every card. */
 .wallet-item-wrap {
-  margin: 0 20px 16px;
+  margin: 0 16px 16px;
   position: relative;
   overflow: hidden;
-  border-radius: 22px;
+  border-radius: 16px;
 }
 .wallet-actions {
   position: absolute; top: 0; right: 0; bottom: 0;
@@ -1919,7 +1908,7 @@ body {
 .wact-btn {
   flex: 1;
   display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;
-  border-radius: 16px;
+  border-radius: 12px;
   font-size: 11px; font-weight: 600;
   cursor: pointer; border: 1px solid rgba(18,21,31,0.10);
   backdrop-filter: blur(16px);
@@ -1951,7 +1940,7 @@ body {
 /* ═══════════════════════════════════════
    SAVING GOALS PAGE
 ═══════════════════════════════════════ */
-.goals-list { padding: 0 20px; display: flex; flex-direction: column; gap: 12px; }
+.goals-list { padding: 0 16px; display: flex; flex-direction: column; gap: 12px; }
 
 /* Swipe-to-reveal for saving goal cards — same interaction as wallet
    cards (.wallet-item-wrap) and utang/piutang cards (.debt-item-wrap):
@@ -1977,7 +1966,7 @@ body {
 .gact-btn {
   flex: 1;
   display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;
-  border-radius: 16px;
+  border-radius: 12px;
   font-size: 11px; font-weight: 600;
   cursor: pointer; border: 1px solid rgba(18,21,31,0.10);
   backdrop-filter: blur(16px);
@@ -2006,7 +1995,7 @@ body {
    wrapper ber-margin 20px kanan-kiri; di sini dia langsung anak .page (yang
    sama sekali gak punya padding horizontal), jadi perlu inset sendiri biar
    sejajar sama daftar kartu utang/piutang di bawahnya (.goals-list). */
-#debtSummaryGrid { padding: 0 20px; margin: 4px 0 16px; }
+#debtSummaryGrid { padding: 0 16px; margin: 4px 0 16px; }
 
 /* Swipe-to-reveal for utang/piutang cards — same interaction as wallet
    cards (.wallet-item-wrap): the card itself slides left on drag,
@@ -2032,7 +2021,7 @@ body {
 .dact-btn {
   flex: 1;
   display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;
-  border-radius: 16px;
+  border-radius: 12px;
   font-size: 11px; font-weight: 600;
   cursor: pointer; border: 1px solid rgba(18,21,31,0.10);
   backdrop-filter: blur(16px);
@@ -2116,7 +2105,7 @@ body {
 .goal-add-btn:active { transform: scale(0.95); }
 
 .add-goal-btn {
-  margin: 0 20px;
+  margin: 0 16px;
   padding: 14px;
   border: 1.5px dashed rgba(255,209,102,0.4);
   border-radius: var(--r);
@@ -2132,7 +2121,7 @@ body {
    (periode + total bulan/tahun terisi); cursor & tekan halus jadi
    penanda visual bahwa kartu itu interaktif. */
 .goal-card.debt-clickable { cursor: pointer; transition: transform 0.15s, box-shadow 0.15s; }
-.goal-card.debt-clickable:active { transform: scale(0.98); }
+.goal-card.debt-clickable:active { transform: scale(0.99); }
 
 /* ══════════════════════════════════════════
    UTANG-PIUTANG: BREAKDOWN CICILAN
@@ -2157,7 +2146,7 @@ body {
   background: var(--surface-bg);
   backdrop-filter: var(--surface-blur);
   -webkit-backdrop-filter: var(--surface-blur);
-  border-radius: 22px;
+  border-radius: 16px;
   border: 1px solid rgba(18,21,31,0.10);
   border-bottom-color: rgba(18,21,31,0.04);
   box-shadow: inset 0 1px 0 rgba(255,255,255,0.5), 0 24px 56px rgba(30,41,59,0.22);
@@ -2252,15 +2241,14 @@ body {
 }
 .dbf-pay input:focus { border-color: rgba(13,148,136,0.5); box-shadow: inset 0 1px 0 rgba(255,255,255,0.15), 0 0 0 3px rgba(42,232,196,0.12); }
 .dbf-pay-btn {
-  width: 100%; border: 1px solid rgba(255,255,255,0.4); border-bottom-color: rgba(42,232,196,0.2);
+  width: 100%; border: none;
   border-radius: var(--r-sm); padding: 12px;
   cursor: pointer; font-family: var(--disp); font-size: 14px; font-weight: 700;
   color: #001a14;
-  background: linear-gradient(145deg, rgba(42,232,196,0.9), rgba(0,180,150,0.85));
-  box-shadow: inset 0 2px 0 rgba(255,255,255,0.5), 0 0 8px rgba(42,232,196,0.15), 0 4px 12px rgba(0,0,0,0.2);
+  background: var(--teal);
   transition: transform 0.1s, opacity 0.15s;
 }
-.dbf-pay-btn:active { transform: scale(0.98); opacity: 0.9; }
+.dbf-pay-btn:active { transform: scale(0.98); opacity: 0.85; }
 
 /* Goal Modal */
 .goal-modal-overlay {
@@ -2299,12 +2287,12 @@ body {
 /* ═══════════════════════════════════════
    RECURRING TRANSACTIONS
 ═══════════════════════════════════════ */
-.recur-list { padding: 0 20px; display: flex; flex-direction: column; gap: 8px; }
+.recur-list { padding: 0 16px; display: flex; flex-direction: column; gap: 8px; }
 .recur-item {
   display: flex; align-items: center; gap: 12px;
   padding: 13px 15px; cursor: pointer; transition: transform 0.15s;
 }
-.recur-item:active { transform: scale(0.98); }
+.recur-item:active { transform: scale(0.99); }
 .recur-icon { width: 40px; height: 40px; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 18px; flex-shrink: 0; }
 .recur-info { flex: 1; min-width: 0; position: relative; z-index: 1; }
 .recur-name { font-size: 14px; font-weight: 500; margin-bottom: 2px; }
@@ -2346,7 +2334,7 @@ body {
 .ract-btn {
   flex: 1;
   display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;
-  border-radius: 16px;
+  border-radius: 12px;
   font-size: 11px; font-weight: 600;
   cursor: pointer; border: 1px solid rgba(18,21,31,0.10);
   backdrop-filter: blur(16px);
@@ -2376,7 +2364,7 @@ body {
 .recur-item-slide .recur-item { margin: 0; }
 
 .add-recur-btn {
-  margin: 0 20px;
+  margin: 0 16px;
   padding: 14px;
   border: 1.5px dashed rgba(94,179,255,0.4);
   border-radius: var(--r);
@@ -2389,7 +2377,7 @@ body {
 .add-recur-btn:active { background: rgba(94,179,255,0.12); }
 
 /* Upcoming recurring on dashboard */
-.recur-preview { margin: 16px 20px 0; padding: 14px 16px; }
+.recur-preview { margin: 16px 16px 0; padding: 14px 16px; }
 .recur-preview-row { display: flex; flex-direction: column; gap: 8px; }
 .recur-prev-item {
   display: flex; align-items: center; gap: 10px;
@@ -2477,7 +2465,7 @@ body {
 .bell-badge.show { opacity: 1; }
 
 /* Goals summary card on dashboard */
-.goals-preview { margin: 16px 20px 0; padding: 16px 18px; }
+.goals-preview { margin: 16px 16px 0; padding: 16px 18px; }
 .gp-row { display: flex; gap: 10px; overflow-x: auto; scrollbar-width: none; }
 .gp-row::-webkit-scrollbar { display: none; }
 .gp-chip {
@@ -2593,7 +2581,7 @@ body {
   background: var(--surface-bg);
   backdrop-filter: var(--surface-blur);
   -webkit-backdrop-filter: var(--surface-blur);
-  border-radius: 16px;
+  border-radius: 14px;
   border: 1px solid rgba(18,21,31,0.10);
   border-bottom-color: rgba(18,21,31,0.04);
   box-shadow: inset 0 1px 0 rgba(255,255,255,0.4), 0 14px 32px rgba(30,41,59,0.14);
@@ -2653,7 +2641,7 @@ body {
   background: var(--surface-bg);
   backdrop-filter: var(--surface-blur);
   -webkit-backdrop-filter: var(--surface-blur);
-  border-radius: 24px;
+  border-radius: 18px;
   border: 1px solid rgba(18,21,31,0.10);
   border-bottom-color: rgba(18,21,31,0.04);
   box-shadow: inset 0 2px 0 rgba(255,255,255,0.55), 0 20px 48px rgba(30,41,59,0.16);
@@ -2680,25 +2668,22 @@ body {
   flex: 1; padding: 13px;
   background: rgba(18,21,31,0.06);
   border: 1px solid rgba(18,21,31,0.12);
-  border-radius: 14px;
+  border-radius: 10px;
   color: var(--txt2); font-family: var(--disp); font-size: 14px; font-weight: 600;
   cursor: pointer;
-  box-shadow: inset 0 1px 0 rgba(255,255,255,0.25);
   transition: all 0.15s;
 }
 .confirm-btn-cancel:active { background: rgba(18,21,31,0.1); transform: scale(0.97); }
 .confirm-btn-ok {
   flex: 1; padding: 13px;
-  background: linear-gradient(145deg, rgba(255,107,132,0.9), rgba(200,50,80,0.85));
-  border: 1px solid rgba(255,255,255,0.35);
-  border-bottom-color: rgba(255,107,132,0.2);
-  border-radius: 14px;
+  background: #DC2626;
+  border: none;
+  border-radius: 10px;
   color: #fff; font-family: var(--disp); font-size: 14px; font-weight: 700;
   cursor: pointer;
-  box-shadow: inset 0 2px 0 rgba(255,255,255,0.4), 0 0 16px rgba(255,107,132,0.3);
   transition: all 0.15s;
 }
-.confirm-btn-ok:active { transform: scale(0.97); opacity: 0.9; }
+.confirm-btn-ok:active { transform: scale(0.97); opacity: 0.85; }
 
 /* ═══════════════════════════════════════
    CUSTOM DATE PICKER (Liquid Glass)
@@ -2753,7 +2738,7 @@ body {
   background: var(--surface-bg);
   backdrop-filter: var(--surface-blur);
   -webkit-backdrop-filter: var(--surface-blur);
-  border-radius: 16px;
+  border-radius: 14px;
   border: 1px solid rgba(18,21,31,0.10);
   border-bottom-color: rgba(18,21,31,0.04);
   box-shadow: inset 0 1px 0 rgba(255,255,255,0.4), 0 14px 32px rgba(30,41,59,0.14);
@@ -3010,7 +2995,7 @@ body {
    PAGE: RIWAYAT TRANSAKSI
 ═══════════════════════════════════════ */
 .riwayat-filter-bar {
-  padding: 0 20px 12px;
+  padding: 0 16px 12px;
   display: flex; gap: 8px; align-items: center;
   /* no overflow-x:auto — would clip the absolute date picker panel */
   overflow: visible;
@@ -3102,7 +3087,7 @@ body {
 .acf-arrow { font-size: 8px; color: var(--txt3); }
 
 .filter-chip-row {
-  display: flex; gap: 6px; padding: 0 20px 10px;
+  display: flex; gap: 6px; padding: 0 16px 10px;
 }
 .filter-chip {
   flex: 1 1 0; min-width: 0;
@@ -3129,7 +3114,7 @@ body {
 }
 
 .riwayat-summary {
-  margin: 0 20px 12px;
+  margin: 0 16px 12px;
   padding: 14px 16px;
   display: flex; gap: 0;
 }
@@ -3150,7 +3135,7 @@ body {
 /* ═══════════════════════════════════════
    PAGE: KELOLA KATEGORI
 ═══════════════════════════════════════ */
-.kc-list { padding: 0 20px; display: flex; flex-direction: column; gap: 8px; }
+.kc-list { padding: 0 16px; display: flex; flex-direction: column; gap: 8px; }
 /* Swipe-to-reveal for category rows — same interaction as wallet cards
    (see .wallet-item-wrap): the row slides left on drag, uncovering
    Edit/Hapus underneath on the right instead of showing them
