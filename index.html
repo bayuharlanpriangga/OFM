@@ -303,7 +303,7 @@
   <div class="page active" id="page-dashboard">
     <div class="topbar" id="dashTopbar">
       <div class="topbar-left">
-        <div class="topbar-logo" id="brandTitle">O<span>FM</span></div>
+        <div class="topbar-logo pt-text" id="brandTitle"><span id="brandTitleInner">O<span class="tb-fm">FM</span></span></div>
         <div class="topbar-greeting" id="topbarGreeting">Selamat pagi</div>
       </div>
       <div class="topbar-actions">
@@ -770,7 +770,7 @@
         </div>
         <div class="pi-email" id="profileEmail" style="font-size:12px;color:var(--txt3)"></div>
       </div>
-      <button class="profile-auth-btn" id="profileAuthBtn" onclick="exitGuestToLogin()">Masuk</button>
+      <button class="profile-auth-btn" id="profileAuthBtn" onclick="exitGuestToLogin()" style="display:none">Masuk</button>
     </div>
     <div class="settings-group">
       <div class="settings-label">Aplikasi</div>
@@ -780,6 +780,22 @@
         </div>
         <div class="settings-item" id="installAppItem" onclick="installApp()" style="display:none">
           <div class="si-icon"><svg class="ic" viewBox="0 0 24 24"><path d="M12 3v12M12 15l-4-4M12 15l4-4"/><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg></div><div class="si-text"><div class="si-name">Instal Aplikasi</div><div class="si-desc">Pasang OFM di perangkatmu</div></div><div class="si-arrow">›</div>
+        </div>
+      </div>
+    </div>
+    <div class="settings-group">
+      <div class="settings-label">Mata Uang</div>
+      <div class="s-items">
+        <div class="settings-item" onclick="openExchangeRateModal()">
+          <div class="si-icon"><svg class="ic" viewBox="0 0 24 24"><path d="M7 8h13M17 4l3 4-3 4"/><path d="M17 16H4M7 20l-3-4 3-4"/></svg></div><div class="si-text"><div class="si-name">Kurs Mata Uang</div><div class="si-desc" id="settingsFxDesc">Belum ada kurs diatur</div></div><div class="si-arrow">›</div>
+        </div>
+      </div>
+    </div>
+    <div class="settings-group" id="settingsDeviceGroup">
+      <div class="settings-label">Perangkat</div>
+      <div class="s-items">
+        <div class="settings-item" onclick="openDeviceModal()">
+          <div class="si-icon"><svg class="ic" viewBox="0 0 24 24"><rect x="2" y="4" width="20" height="13" rx="2"/><path d="M8 21h8M12 17v4"/></svg></div><div class="si-text"><div class="si-name">Kelola Perangkat</div><div class="si-desc" id="settingsDeviceDesc">1 perangkat aktif</div></div><div class="si-arrow">›</div>
         </div>
       </div>
     </div>
@@ -854,7 +870,7 @@
         </div>
       </div>
       <div class="field-row">
-        <div class="field">
+        <div class="field" id="txCategoryFieldWrap">
           <label>Kategori</label>
           <div class="picker-trigger" onclick="openPicker(this,'txCategory','Pilih Kategori')">
             <div class="pt-text"><span id="txCategoryLabel">Pilih kategori</span></div>
@@ -863,13 +879,24 @@
           <input type="hidden" id="txCategory">
         </div>
         <div class="field">
-          <label>Akun</label>
+          <label id="txAccountFieldLabelText">Akun</label>
           <div class="picker-trigger" onclick="openPicker(this,'txAccount','Pilih Akun')">
             <div class="pt-text"><span id="txAccountLabel">Pilih akun</span></div>
             <span class="picker-arrow">▾</span>
           </div>
           <input type="hidden" id="txAccount">
         </div>
+      </div>
+      <div class="field" id="txToAccountFieldWrap" style="display:none">
+        <label>Ke Akun</label>
+        <div class="picker-trigger" onclick="openPicker(this,'txToAccount','Pilih Akun Tujuan')">
+          <div class="pt-text"><span id="txToAccountLabel">Pilih akun tujuan</span></div>
+          <span class="picker-arrow">▾</span>
+        </div>
+        <input type="hidden" id="txToAccount">
+      </div>
+      <div class="field" id="transferConvertWrap" style="display:none">
+        <div id="transferConvertBox"></div>
       </div>
       <div class="field" id="txReceiptFieldWrap" style="display:none">
         <label>Foto Struk</label>
@@ -932,6 +959,77 @@
         </div>
       </div>
       <button class="modal-submit" onclick="submitWallet()">Simpan Akun</button>
+    </div>
+  </div>
+
+  <!-- ══════ KURS MATA UANG (EXCHANGE RATE) MODAL ══════ -->
+  <div class="goal-modal-overlay" id="fxModalOverlay" onclick="if(event.target===this)closeExchangeRateModal()">
+    <div class="modal-sheet">
+      <div class="modal-handle"></div>
+      <div class="modal-header">
+        <div class="modal-title">Kurs Mata Uang</div>
+        <button class="modal-close" onclick="closeExchangeRateModal()"><svg class="ic" viewBox="0 0 24 24"><path d="M5 5l14 14M19 5L5 19"/></svg></button>
+      </div>
+      <p style="padding:0 20px 12px;font-size:12px;color:var(--txt3)">Dipakai buat konversi nominal waktu transfer antar akun yang mata uangnya beda.</p>
+      <div class="fx-list" id="fxList" style="padding:0 20px 4px"></div>
+      <div class="modal-form" style="padding-top:8px">
+        <button class="modal-submit" style="background:transparent;color:var(--teal);border:1.5px dashed rgba(42,232,196,0.4);box-shadow:none" onclick="openAddExchangeRateModal()">＋ Tambah Kurs</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════ ADD/EDIT KURS MODAL ══════ -->
+  <div class="goal-modal-overlay" id="addFxModalOverlay" onclick="if(event.target===this)closeAddExchangeRateModal()">
+    <div class="modal-sheet">
+      <div class="modal-handle"></div>
+      <div class="modal-header">
+        <div class="modal-title" id="addFxModalTitle">Tambah Kurs</div>
+        <button class="modal-close" onclick="closeAddExchangeRateModal()"><svg class="ic" viewBox="0 0 24 24"><path d="M5 5l14 14M19 5L5 19"/></svg></button>
+      </div>
+      <div class="modal-form" style="padding-bottom:0">
+        <div class="field-row">
+          <div class="field">
+            <label>Dari</label>
+            <div class="picker-trigger" onclick="openPicker(this,'fxFromInput','Mata Uang Asal')">
+              <div class="pt-text"><span id="fxFromLbl">Rp Rupiah Indonesia (IDR)</span></div>
+              <span class="picker-arrow">▾</span>
+            </div>
+            <input type="hidden" id="fxFromInput" value="IDR">
+          </div>
+          <div class="field">
+            <label>Ke</label>
+            <div class="picker-trigger" onclick="openPicker(this,'fxToInput','Mata Uang Tujuan')">
+              <div class="pt-text"><span id="fxToLbl">$ Dolar Amerika (USD)</span></div>
+              <span class="picker-arrow">▾</span>
+            </div>
+            <input type="hidden" id="fxToInput" value="USD">
+          </div>
+        </div>
+        <div class="field">
+          <label id="fxRateLabel">Kurs (1 IDR = ? USD)</label>
+          <input type="number" id="fxRateInput" inputmode="decimal" step="any" placeholder="0">
+        </div>
+      </div>
+      <button class="modal-submit" onclick="saveExchangeRate()">Simpan Kurs</button>
+    </div>
+  </div>
+
+  <!-- ══════ KELOLA PERANGKAT MODAL ══════ -->
+  <div class="goal-modal-overlay" id="deviceModalOverlay" onclick="if(event.target===this)closeDeviceModal()">
+    <div class="modal-sheet">
+      <div class="modal-handle"></div>
+      <div class="modal-header">
+        <div class="modal-title">Kelola Perangkat</div>
+        <button class="modal-close" onclick="closeDeviceModal()"><svg class="ic" viewBox="0 0 24 24"><path d="M5 5l14 14M19 5L5 19"/></svg></button>
+      </div>
+      <p style="padding:0 20px 12px;font-size:12px;color:var(--txt3)">Perangkat yang pernah login ke akun ini.</p>
+      <div id="deviceLogoutAllWrap" style="padding:0 20px 12px;display:none">
+        <button class="modal-submit" style="background:rgba(255,107,132,0.1);color:var(--red);box-shadow:none" onclick="logoutAllOtherDevices()">Keluar dari Semua Perangkat Lain</button>
+      </div>
+      <div class="device-list" id="deviceList" style="padding:0 20px 4px"></div>
+      <div class="modal-form" style="padding-top:8px">
+        <button class="modal-submit" style="background:transparent;color:var(--red);border:1.5px solid rgba(255,107,132,0.3);box-shadow:none" onclick="doLogout()">Keluar dari Perangkat Ini</button>
+      </div>
     </div>
   </div>
 

@@ -543,15 +543,18 @@ body {
   -webkit-backdrop-filter: blur(9px) saturate(195%);
   border-bottom: 1px solid rgba(18,21,31,0.06);
 }
-.topbar-left { display: flex; flex-direction: column; gap: 1px; }
+.topbar-left { display: flex; flex-direction: column; gap: 1px; flex: 1 1 auto; min-width: 0; }
 .topbar-logo {
   font-family: var(--disp);
   font-size: 22px; font-weight: 700; letter-spacing: -0.5px;
-  color: var(--txt); line-height: 1;
+  color: var(--txt); line-height: 1.3;
 }
-.topbar-logo span { color: var(--teal); }
+/* Cuma warnain "FM" di logo default ("OFM") — bukan span apapun di dalam
+   .topbar-logo, biar nama user (yang juga dibungkus <span> buat animasi
+   marquee di bawah) nggak ikut ke-teal-in. */
+.topbar-logo .tb-fm { color: var(--teal); }
 .topbar-greeting { font-size: 11px; color: var(--txt3); font-weight: 500; }
-.topbar-actions { display: flex; gap: 8px; }
+.topbar-actions { display: flex; gap: 8px; flex-shrink: 0; }
 .tb-title { font-family: var(--disp); font-size: 20px; font-weight: 700; letter-spacing: -0.3px; color: var(--txt); line-height: 1.2; }
 .tb-subtitle { font-size: 11px; color: var(--txt3); font-weight: 500; margin-top: 1px; }
 
@@ -1171,6 +1174,7 @@ body {
 .tx-amt  { font-family: var(--mono); font-size: 13px; font-weight: 500; text-align: right; flex-shrink: 0; position: relative; z-index: 1; }
 .tx-amt.income  { color: var(--teal); }
 .tx-amt.expense { color: var(--red); }
+.tx-amt.transfer { color: #5EB3FF; font-size: 12px; }
 
 /* ═══════════════════════════════════════
    RIVER CHART
@@ -3187,3 +3191,108 @@ body {
    padding — same panel .picker-opts would otherwise provide. */
 #colorPickerGrid { padding: 14px; max-width: 220px; position: relative; z-index: 1; }
 
+
+/* ══════════════════════════════════════════
+   KURS MATA UANG (Exchange Rate) — daftar kurs di modal Setting,
+   dan kotak info konversi di form Transfer.
+══════════════════════════════════════════ */
+.fx-list { display: flex; flex-direction: column; gap: 8px; max-height: 340px; overflow-y: auto; scrollbar-width: none; }
+.fx-list::-webkit-scrollbar { display: none; }
+.fx-row {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 12px 14px; border-radius: 14px;
+  background: rgba(18,21,31,0.04);
+  border: 1px solid rgba(18,21,31,0.06);
+}
+.fx-row-pair { font-size: 13px; font-weight: 600; color: var(--txt); margin-bottom: 2px; }
+.fx-row-rate { font-family: var(--mono); font-size: 11px; color: var(--txt3); }
+.fx-row-actions { display: flex; gap: 6px; flex-shrink: 0; }
+.fx-row-btn {
+  width: 30px; height: 30px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer; color: var(--txt2);
+  background: rgba(18,21,31,0.05);
+  transition: background 0.15s, transform 0.15s;
+}
+.fx-row-btn .ic { width: 15px; height: 15px; }
+.fx-row-btn:active { transform: scale(0.92); }
+.fx-row-btn-del { color: var(--red); }
+
+/* Kotak info konversi di form Catat Transaksi pas tipe Transfer & dua
+   akunnya beda mata uang — hijau kalau kursnya udah diatur (siap
+   dipakai), kuning/warning kalau belum (transfer bakal ditolak). */
+.transfer-fx-ok {
+  padding: 12px 14px; border-radius: 14px;
+  background: rgba(42,232,196,0.08);
+  border: 1px solid rgba(42,232,196,0.25);
+  font-size: 12px; color: var(--txt2);
+}
+.transfer-fx-ok-amt { font-family: var(--mono); font-size: 15px; font-weight: 700; color: var(--teal); margin-top: 4px; }
+.transfer-fx-warn {
+  padding: 12px 14px; border-radius: 14px;
+  background: rgba(255,209,102,0.10);
+  border: 1px solid rgba(255,209,102,0.35);
+}
+.transfer-fx-warn-text { font-size: 12px; color: var(--txt2); line-height: 1.4; display: flex; gap: 6px; align-items: flex-start; }
+.transfer-fx-warn-text .ic { width: 15px; height: 15px; flex-shrink: 0; margin-top: 1px; color: var(--gold); }
+.transfer-fx-warn-btn {
+  margin-top: 8px; display: inline-block;
+  font-size: 12px; font-weight: 600; color: #12151F;
+  background: var(--gold);
+  padding: 7px 14px; border-radius: 99px; cursor: pointer;
+  transition: transform 0.15s;
+}
+.transfer-fx-warn-btn:active { transform: scale(0.95); }
+
+/* ══════════════════════════════════════════
+   KELOLA PERANGKAT (Device Management)
+══════════════════════════════════════════ */
+.device-list { display: flex; flex-direction: column; gap: 8px; max-height: 320px; overflow-y: auto; scrollbar-width: none; }
+.device-list::-webkit-scrollbar { display: none; }
+.device-row {
+  display: flex; align-items: center; gap: 12px;
+  padding: 12px 14px; border-radius: 14px;
+  background: rgba(18,21,31,0.04);
+  border: 1px solid rgba(18,21,31,0.06);
+  position: relative;
+}
+.device-row-icon {
+  width: 36px; height: 36px; border-radius: 50%; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(42,232,196,0.12); color: var(--teal);
+}
+.device-row-icon .ic { width: 17px; height: 17px; }
+.device-row-text { flex: 1; min-width: 0; }
+.device-row-name { font-size: 13px; font-weight: 600; color: var(--txt); display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.device-row-sub  { font-size: 11px; color: var(--txt3); margin-top: 2px; }
+.device-badge {
+  font-size: 9.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.3px;
+  color: var(--teal); background: rgba(42,232,196,0.14);
+  padding: 2px 7px; border-radius: 99px;
+}
+.device-menu-btn {
+  width: 30px; height: 30px; border-radius: 50%; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 18px; line-height: 1; color: var(--txt2); cursor: pointer;
+  background: rgba(18,21,31,0.05);
+  transition: background 0.15s, transform 0.15s;
+}
+.device-menu-btn:active { transform: scale(0.92); }
+.device-menu-popover {
+  position: absolute; top: calc(100% + 6px); right: 0; z-index: 20;
+  background: #fff; border-radius: 12px;
+  box-shadow: 0 8px 24px rgba(18,21,31,0.18);
+  border: 1px solid rgba(18,21,31,0.06);
+  padding: 4px; min-width: 160px;
+  animation: popoverIn 0.15s ease;
+}
+@keyframes popoverIn { from { opacity:0; transform:translateY(-4px) scale(0.96); } to { opacity:1; transform:translateY(0) scale(1); } }
+.device-menu-item {
+  display: flex; align-items: center; gap: 8px;
+  padding: 9px 10px; border-radius: 8px;
+  font-size: 12.5px; font-weight: 500; color: var(--txt2);
+  cursor: pointer; white-space: nowrap;
+}
+.device-menu-item:active { background: rgba(18,21,31,0.05); }
+.device-menu-item .ic { width: 14px; height: 14px; }
+.device-menu-item.danger { color: var(--red); }

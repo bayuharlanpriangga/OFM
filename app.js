@@ -62,6 +62,7 @@
       if (typeof updateBrandTitle === 'function') updateBrandTitle();
     } else {
       window._currentUser = null;
+      if (typeof _stopDeviceWatch === 'function') _stopDeviceWatch();
       if (window._isGuest) return; // tetap di mode tamu, jangan paksa balik ke layar login
       // Belum ada sesi login — otomatis lanjut sebagai tamu, jangan paksa ke layar login.
       // Layar login tetap bisa diakses manual lewat menu "Login" di Setting.
@@ -88,6 +89,7 @@
       package: '<svg class="ic" viewBox="0 0 24 24"><path d="M3 8l9-5 9 5-9 5-9-5z"/><path d="M3 8v8l9 5 9-5V8"/><path d="M12 13v8"/></svg>',
       checkCircle: '<svg class="ic" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M8 12l3 3 5-6"/></svg>',
       smartphone: '<svg class="ic" viewBox="0 0 24 24"><rect x="6" y="2" width="12" height="20" rx="2"/><path d="M11 18h2"/></svg>',
+      monitor: '<svg class="ic" viewBox="0 0 24 24"><rect x="2" y="4" width="20" height="13" rx="2"/><path d="M8 21h8M12 17v4"/></svg>',
       chart: '<svg class="ic" viewBox="0 0 24 24"><path d="M4 20V10M12 20V4M20 20v-7"/><path d="M2 20h20"/></svg>',
       bell: '<svg class="ic" viewBox="0 0 24 24"><path d="M6 9a6 6 0 0 1 12 0c0 5 2 6 2 6H4s2-1 2-6z"/><path d="M10 20a2 2 0 0 0 4 0"/></svg>',
       refresh: '<svg class="ic" viewBox="0 0 24 24"><path d="M20 12a8 8 0 1 1-2.6-5.9"/><path d="M20 4v5h-5"/></svg>',
@@ -332,6 +334,298 @@ function currencyLabelText(code) {
 function walletCurrencyCode(walletId) {
   const w = WALLETS.find(w => w.id === walletId);
   return (w && w.currency) || 'IDR';
+}
+
+/* ══════════════════════════════════════════
+   KURS MATA UANG (Exchange Rates)
+   Dipakai buat transfer antar akun yang beda mata uang. Tiap entry:
+   { id, from, to, rate } artinya "1 <from> = rate <to>". Disimpan searah
+   aja (nggak perlu pasangan A→B dan B→A terpisah) — findExchangeRate()
+   otomatis coba arah kebalikannya (1/rate) kalau yang searah nggak ada.
+══════════════════════════════════════════ */
+let EXCHANGE_RATES = [];
+
+function findExchangeRate(from, to) {
+  if (from === to) return { rate: 1, inverse: false };
+  const direct = EXCHANGE_RATES.find(r => r.from === from && r.to === to);
+  if (direct) return { rate: direct.rate, inverse: false };
+  const reverse = EXCHANGE_RATES.find(r => r.from === to && r.to === from);
+  if (reverse && reverse.rate > 0) return { rate: 1 / reverse.rate, inverse: true };
+  return null;
+}
+function convertAmount(amount, from, to) {
+  const fx = findExchangeRate(from, to);
+  return fx ? amount * fx.rate : null;
+}
+
+let _editingFxId = null;
+
+function openExchangeRateModal() {
+  renderFxList();
+  document.getElementById('fxModalOverlay').classList.add('open');
+}
+function closeExchangeRateModal() {
+  document.getElementById('fxModalOverlay').classList.remove('open');
+}
+
+function renderFxList() {
+  const el = document.getElementById('fxList');
+  if (!el) return;
+  if (!EXCHANGE_RATES.length) {
+    el.innerHTML = `<div class="empty" style="padding:20px 0"><div class="empty-icon">${ICON.trendUp||''}</div><h3>Belum ada kurs</h3><p>Tambahkan kurs biar transfer antar mata uang bisa dihitung otomatis</p></div>`;
+    return;
+  }
+  el.innerHTML = EXCHANGE_RATES.map(r => `
+    <div class="fx-row">
+      <div class="fx-row-text">
+        <div class="fx-row-pair">${r.from} → ${r.to}</div>
+        <div class="fx-row-rate">1 ${r.from} = ${r.rate.toLocaleString('id-ID',{maximumFractionDigits:6})} ${r.to}</div>
+      </div>
+      <div class="fx-row-actions">
+        <div class="fx-row-btn" onclick="openAddExchangeRateModal('${r.from}','${r.to}','${r.id}')">${ICON.edit||''}</div>
+        <div class="fx-row-btn fx-row-btn-del" onclick="deleteExchangeRate('${r.id}')">${ICON.trash||''}</div>
+      </div>
+    </div>`).join('');
+}
+
+// prefillFrom/prefillTo: dipakai buat pre-fill pas dibuka dari peringatan
+// "kurs belum diatur" pada form transfer. editId: dipakai buat mode edit
+// dari daftar kurs di modal utama.
+function openAddExchangeRateModal(prefillFrom, prefillTo, editId) {
+  _editingFxId = editId || null;
+  const existing = editId ? EXCHANGE_RATES.find(r => r.id === editId) : null;
+  const from = existing ? existing.from : (prefillFrom || 'IDR');
+  const to   = existing ? existing.to   : (prefillTo   || (prefillFrom === 'IDR' ? 'USD' : 'IDR'));
+  document.getElementById('addFxModalTitle').textContent = existing ? 'Edit Kurs' : 'Tambah Kurs';
+  document.getElementById('fxFromInput').value = from;
+  document.getElementById('fxFromLbl').textContent = currencyLabelText(from);
+  document.getElementById('fxToInput').value = to;
+  document.getElementById('fxToLbl').textContent = currencyLabelText(to);
+  document.getElementById('fxRateInput').value = existing ? existing.rate : '';
+  updateFxRateLabel();
+  document.getElementById('addFxModalOverlay').classList.add('open');
+}
+function closeAddExchangeRateModal() {
+  document.getElementById('addFxModalOverlay').classList.remove('open');
+  _editingFxId = null;
+}
+function updateFxRateLabel() {
+  const from = document.getElementById('fxFromInput')?.value || 'IDR';
+  const to   = document.getElementById('fxToInput')?.value   || 'USD';
+  const lbl  = document.getElementById('fxRateLabel');
+  if (lbl) lbl.textContent = `Kurs (1 ${from} = ? ${to})`;
+}
+
+function saveExchangeRate() {
+  const from = document.getElementById('fxFromInput').value;
+  const to   = document.getElementById('fxToInput').value;
+  const rate = parseFloat(document.getElementById('fxRateInput').value);
+  if (from === to) { showToast('Mata uang asal dan tujuan harus beda', 'warning'); return; }
+  if (!(rate > 0)) { showToast('Isi kursnya dengan angka lebih dari 0', 'warning'); return; }
+  // Satu pasang mata uang cuma boleh punya satu entry (searah atau
+  // kebalikannya) — kalau sudah ada, update entry itu daripada dobel.
+  const dupIdx = EXCHANGE_RATES.findIndex(r =>
+    r.id !== _editingFxId &&
+    ((r.from === from && r.to === to) || (r.from === to && r.to === from)));
+  if (dupIdx > -1) {
+    const dup = EXCHANGE_RATES[dupIdx];
+    dup.from = from; dup.to = to; dup.rate = rate;
+    _editingFxId = null;
+  } else if (_editingFxId) {
+    const existing = EXCHANGE_RATES.find(r => r.id === _editingFxId);
+    if (existing) { existing.from = from; existing.to = to; existing.rate = rate; }
+  } else {
+    EXCHANGE_RATES.push({ id: 'fx_' + Date.now().toString(36), from, to, rate });
+  }
+  saveToStorage();
+  closeAddExchangeRateModal();
+  renderFxList();
+  updateSettingsPage();
+  if (typeof updateTransferConvertPreview === 'function') updateTransferConvertPreview();
+  showToast('Kurs tersimpan', 'success');
+}
+
+function deleteExchangeRate(id) {
+  showConfirm('Hapus kurs ini?', 'Transfer yang butuh kurs ini nanti perlu diatur ulang.', () => {
+    EXCHANGE_RATES = EXCHANGE_RATES.filter(r => r.id !== id);
+    saveToStorage();
+    renderFxList();
+    updateSettingsPage();
+    showToast('Kurs dihapus', 'success');
+  }, 'trash');
+}
+
+/* ══════════════════════════════════════════
+   KELOLA PERANGKAT (Device Management)
+   Registry ringan berbasis Firestore: tiap perangkat yang pernah login
+   nyimpen id unik-nya sendiri di localStorage, lalu daftarin dirinya ke
+   array `devices` di dokumen user. "Keluar dari semua perangkat" / hapus
+   perangkat tertentu cuma nandain id itu di `forceLogoutIds` — perangkat
+   yang bersangkutan bakal ke-detect lewat listener realtime (onSnapshot)
+   dan otomatis logout sendiri selama tab-nya masih kebuka & online.
+══════════════════════════════════════════ */
+let DEVICES = [];
+let FORCE_LOGOUT_IDS = [];
+let _deviceUnsub = null;
+
+function getDeviceId() {
+  let id = localStorage.getItem('ofm_device_id');
+  if (!id) {
+    id = 'dev_' + (window.crypto && crypto.randomUUID ? crypto.randomUUID() : (Date.now().toString(36) + Math.random().toString(36).slice(2)));
+    localStorage.setItem('ofm_device_id', id);
+  }
+  return id;
+}
+function getDeviceName() {
+  const ua = navigator.userAgent || '';
+  let browser = 'Browser';
+  if (/Edg\//.test(ua)) browser = 'Edge';
+  else if (/OPR\//.test(ua)) browser = 'Opera';
+  else if (/Chrome\//.test(ua) && !/Chromium/.test(ua)) browser = 'Chrome';
+  else if (/Firefox\//.test(ua)) browser = 'Firefox';
+  else if (/Safari\//.test(ua) && !/Chrome/.test(ua)) browser = 'Safari';
+  let os = 'Perangkat';
+  if (/Android/.test(ua)) os = 'Android';
+  else if (/iPhone|iPad|iPod/.test(ua)) os = 'iOS';
+  else if (/Windows/.test(ua)) os = 'Windows';
+  else if (/Mac OS X/.test(ua)) os = 'Mac';
+  else if (/Linux/.test(ua)) os = 'Linux';
+  return `${browser} di ${os}`;
+}
+function isMobileDeviceUA() { return /Android|iPhone|iPad|iPod/.test(navigator.userAgent || ''); }
+
+async function registerCurrentDevice() {
+  if (!window._currentUser || !window._fbDb) return;
+  const id = getDeviceId();
+  const now = Date.now();
+  const existing = DEVICES.find(d => d.id === id);
+  if (existing) { existing.name = getDeviceName(); existing.lastActive = now; }
+  else DEVICES.push({ id, name: getDeviceName(), lastActive: now });
+  await _saveDeviceFields();
+}
+async function _saveDeviceFields() {
+  if (!window._currentUser || !window._fbDb) return;
+  try {
+    const { doc, setDoc } = window._fbFns;
+    await setDoc(doc(window._fbDb, 'users', window._currentUser.uid), { devices: DEVICES, forceLogoutIds: FORCE_LOGOUT_IDS }, { merge: true });
+  } catch (e) { console.warn('Gagal menyimpan data perangkat', e); }
+}
+
+// Dengerin dokumen user secara realtime — kalau id perangkat ini sendiri
+// muncul di forceLogoutIds (dipicu dari perangkat lain), langsung logout
+// tanpa konfirmasi. Juga jaga daftar perangkat tetap sinkron kalau modal
+// Kelola Perangkat lagi kebuka.
+function _watchForForceLogout(uid) {
+  _stopDeviceWatch();
+  if (!window._fbDb) return;
+  const { doc, onSnapshot } = window._fbFns;
+  _deviceUnsub = onSnapshot(doc(window._fbDb, 'users', uid), snap => {
+    if (!snap.exists()) return;
+    const data = snap.data();
+    if (Array.isArray(data.devices))        DEVICES        = data.devices;
+    if (Array.isArray(data.forceLogoutIds)) FORCE_LOGOUT_IDS = data.forceLogoutIds;
+    if (document.getElementById('deviceModalOverlay')?.classList.contains('open')) renderDeviceList();
+    if (FORCE_LOGOUT_IDS.includes(getDeviceId())) {
+      _stopDeviceWatch();
+      window._fbFns.signOut(window._fbAuth);
+    }
+  });
+}
+function _stopDeviceWatch() {
+  if (_deviceUnsub) { _deviceUnsub(); _deviceUnsub = null; }
+}
+
+function relativeTimeAgo(ts) {
+  const diff = Math.max(0, Date.now() - ts);
+  const min = Math.floor(diff / 60000);
+  if (min < 1)  return 'Baru saja';
+  if (min < 60) return `${min} menit lalu`;
+  const hr = Math.floor(min / 60);
+  if (hr < 24)  return `${hr} jam lalu`;
+  const day = Math.floor(hr / 24);
+  return `${day} hari lalu`;
+}
+
+function openDeviceModal() {
+  if (window._isGuest || !window._currentUser) {
+    showToast('Login dulu untuk mengelola perangkat', 'warning');
+    return;
+  }
+  registerCurrentDevice().then(renderDeviceList);
+  renderDeviceList();
+  document.getElementById('deviceModalOverlay').classList.add('open');
+}
+function closeDeviceModal() {
+  document.getElementById('deviceModalOverlay').classList.remove('open');
+  _closeDeviceMenu();
+}
+
+function renderDeviceList() {
+  const el = document.getElementById('deviceList');
+  const logoutAllWrap = document.getElementById('deviceLogoutAllWrap');
+  if (!el) return;
+  const myId  = getDeviceId();
+  const sorted = [...DEVICES].sort((a,b) => b.lastActive - a.lastActive);
+  if (logoutAllWrap) logoutAllWrap.style.display = sorted.length > 1 ? '' : 'none';
+  el.innerHTML = sorted.map(d => {
+    const isCurrent = d.id === myId;
+    return `
+    <div class="device-row">
+      <div class="device-row-icon">${isMobileDeviceUAFor(d) ? ICON.smartphone||'' : ICON.monitor||''}</div>
+      <div class="device-row-text">
+        <div class="device-row-name">${escapeHtml(d.name)}${isCurrent ? '<span class="device-badge">Perangkat ini</span>' : ''}</div>
+        <div class="device-row-sub">Aktif ${relativeTimeAgo(d.lastActive)}</div>
+      </div>
+      ${isCurrent ? '' : `<div class="device-menu-btn" onclick="event.stopPropagation();_toggleDeviceMenu('${d.id}', this)">⋮</div>`}
+    </div>`;
+  }).join('');
+}
+// Nama & OS device lain (bukan device ini sendiri) juga disimpan sebagai
+// string biasa — deteksi mobile/desktop buat ikonnya cukup dari nama itu.
+function isMobileDeviceUAFor(d) { return /Android|iOS/.test(d.name || ''); }
+
+let _openDeviceMenuId = null;
+function _toggleDeviceMenu(id, btnEl) {
+  if (_openDeviceMenuId === id) { _closeDeviceMenu(); return; }
+  _closeDeviceMenu();
+  _openDeviceMenuId = id;
+  const menu = document.createElement('div');
+  menu.className = 'device-menu-popover';
+  menu.id = 'deviceMenuPopover';
+  menu.innerHTML = `<div class="device-menu-item danger" onclick="event.stopPropagation();deleteDevice('${id}')">${ICON.trash||''} Hapus Perangkat</div>`;
+  btnEl.style.position = 'relative';
+  btnEl.appendChild(menu);
+  setTimeout(() => document.addEventListener('click', _closeDeviceMenu, { once: true }), 0);
+}
+function _closeDeviceMenu() {
+  const m = document.getElementById('deviceMenuPopover');
+  if (m) m.remove();
+  _openDeviceMenuId = null;
+}
+
+function deleteDevice(id) {
+  if (id === getDeviceId()) return; // jaga-jaga, harusnya nggak pernah ke-trigger dari perangkat sendiri
+  _closeDeviceMenu();
+  showConfirm('Hapus perangkat ini?', 'Perangkat itu bakal otomatis ter-logout dari akun ini.', async () => {
+    DEVICES = DEVICES.filter(d => d.id !== id);
+    if (!FORCE_LOGOUT_IDS.includes(id)) FORCE_LOGOUT_IDS.push(id);
+    await _saveDeviceFields();
+    renderDeviceList();
+    showToast('Perangkat dihapus', 'success');
+  }, 'trash');
+}
+
+function logoutAllOtherDevices() {
+  const myId = getDeviceId();
+  const others = DEVICES.filter(d => d.id !== myId);
+  if (!others.length) return;
+  showConfirm('Keluar dari semua perangkat lain?', 'Perangkat ini tetap tetap login — cuma perangkat lain yang bakal ter-logout.', async () => {
+    others.forEach(d => { if (!FORCE_LOGOUT_IDS.includes(d.id)) FORCE_LOGOUT_IDS.push(d.id); });
+    DEVICES = DEVICES.filter(d => d.id === myId);
+    await _saveDeviceFields();
+    renderDeviceList();
+    showToast('Perangkat lain berhasil dikeluarkan', 'success');
+  }, 'logout');
 }
 
 /* ══════════════════════════════════════════
@@ -1016,6 +1310,20 @@ function updateSettingsPage() {
   }
   const lockDesc  = document.getElementById('settingsLockDesc');
   const lockBadge = document.getElementById('settingsLockBadge');
+  const fxDesc = document.getElementById('settingsFxDesc');
+  if (fxDesc) {
+    fxDesc.textContent = EXCHANGE_RATES.length
+      ? EXCHANGE_RATES.length + ' kurs diatur'
+      : 'Belum ada kurs diatur';
+  }
+  const deviceGroup = document.getElementById('settingsDeviceGroup');
+  const deviceDesc  = document.getElementById('settingsDeviceDesc');
+  const loggedIn = !window._isGuest && !!window._currentUser;
+  if (deviceGroup) deviceGroup.style.display = loggedIn ? '' : 'none';
+  if (deviceDesc) {
+    const n = DEVICES.length || 1;
+    deviceDesc.textContent = n === 1 ? '1 perangkat aktif' : n + ' perangkat aktif';
+  }
   if (lockDesc && lockBadge) {
     if (lockEnabled()) {
       lockDesc.textContent = lockHasBio() ? 'Aktif — PIN & biometrik' : 'Aktif — PIN 6 digit';
@@ -1276,6 +1584,27 @@ function setType(t) {
     if (catLbl) catLbl.textContent = 'Pilih kategori';
   }
   renderBudgetCatPicker();
+
+  // Transfer punya akun asal DAN akun tujuan, jadi field-nya beda dari
+  // Keluar/Masuk: kategori disembunyikan (selalu "Antar Akun"), label
+  // "Akun" jadi "Dari Akun", dan muncul field "Ke Akun" + kotak info kurs.
+  const isTransfer   = t === 'transfer';
+  const catFieldWrap = document.getElementById('txCategoryFieldWrap');
+  const accLabelText = document.getElementById('txAccountFieldLabelText');
+  const toAccWrap     = document.getElementById('txToAccountFieldWrap');
+  const convWrap       = document.getElementById('transferConvertWrap');
+  if (catFieldWrap) catFieldWrap.style.display = isTransfer ? 'none' : '';
+  if (accLabelText) accLabelText.textContent   = isTransfer ? 'Dari Akun' : 'Akun';
+  if (toAccWrap)     toAccWrap.style.display    = isTransfer ? '' : 'none';
+  if (!isTransfer) {
+    const toAccHidden = document.getElementById('txToAccount');
+    const toAccLbl    = document.getElementById('txToAccountLabel');
+    if (toAccHidden) toAccHidden.value = '';
+    if (toAccLbl)    toAccLbl.textContent = 'Pilih akun tujuan';
+    if (convWrap)    convWrap.style.display = 'none';
+  } else if (typeof updateTransferConvertPreview === 'function') {
+    updateTransferConvertPreview();
+  }
 }
 
 function renderBudgetCatPicker() {
@@ -1596,13 +1925,100 @@ function formatAmount(el) {
   const range = document.createRange(), sel = window.getSelection();
   range.selectNodeContents(el); range.collapse(false);
   sel.removeAllRanges(); sel.addRange(range);
+  if (S.currentType === 'transfer' && typeof updateTransferConvertPreview === 'function') updateTransferConvertPreview();
+}
+
+// Update — atau sembunyikan — kotak info konversi di form Transfer.
+// Sama mata uang: nggak perlu kurs sama sekali, kotaknya disembunyikan.
+// Beda mata uang & kursnya udah ada: tampilkan hasil konversinya (hijau).
+// Beda mata uang & kursnya belum ada: tampilkan peringatan + tombol buat
+// langsung buka form "Tambah Kurs" (kuning).
+function updateTransferConvertPreview() {
+  const wrap = document.getElementById('transferConvertWrap');
+  const box  = document.getElementById('transferConvertBox');
+  if (!wrap || !box) return;
+  if (S.currentType !== 'transfer') { wrap.style.display = 'none'; return; }
+  const fromId = document.getElementById('txAccount')?.value;
+  const toId   = document.getElementById('txToAccount')?.value;
+  // Kalau akun tujuan kebetulan sama dengan akun asal yang baru dipilih, reset —
+  // nggak masuk akal transfer ke akun yang sama.
+  if (fromId && toId && fromId === toId) {
+    const toAccHidden = document.getElementById('txToAccount');
+    const toAccLbl    = document.getElementById('txToAccountLabel');
+    if (toAccHidden) toAccHidden.value = '';
+    if (toAccLbl)    toAccLbl.textContent = 'Pilih akun tujuan';
+    wrap.style.display = 'none';
+    return;
+  }
+  if (!fromId || !toId) { wrap.style.display = 'none'; return; }
+  const fromCur = walletCurrencyCode(fromId);
+  const toCur   = walletCurrencyCode(toId);
+  if (fromCur === toCur) { wrap.style.display = 'none'; return; }
+  wrap.style.display = '';
+  const fx = findExchangeRate(fromCur, toCur);
+  if (!fx) {
+    box.innerHTML = `
+      <div class="transfer-fx-warn">
+        <div class="transfer-fx-warn-text">${ICON.warning||''} <span>Kurs ${fromCur} → ${toCur} belum diatur, transfer belum bisa diproses.</span></div>
+        <div class="transfer-fx-warn-btn" onclick="openAddExchangeRateModal('${fromCur}','${toCur}')">Atur Kurs Sekarang</div>
+      </div>`;
+  } else {
+    const amt = S.amountRaw || 0;
+    const converted = amt * fx.rate;
+    box.innerHTML = `
+      <div class="transfer-fx-ok">
+        <div>1 ${fromCur} = ${fx.rate.toLocaleString('id-ID',{maximumFractionDigits:6})} ${toCur}</div>
+        <div class="transfer-fx-ok-amt">≈ ${currencyInfo(toCur).symbol} ${Math.round(converted).toLocaleString(currencyInfo(toCur).locale)}</div>
+      </div>`;
+  }
 }
 
 function submitTransaction() {
   if (S.amountRaw <= 0) { showToast('Nominal harus lebih dari 0', 'warning'); return; }
-  if (!S.selectedCat) { showToast('Pilih kategori transaksi dulu', 'warning'); return; }
   const note    = document.getElementById('txNote').value || 'Transaksi';
   const date    = document.getElementById('txDate').value;
+
+  if (S.currentType === 'transfer') {
+    const fromAccount = document.getElementById('txAccount').value;
+    const toAccount    = document.getElementById('txToAccount').value;
+    if (!fromAccount) { showToast('Pilih akun asal dulu', 'warning'); return; }
+    if (!toAccount)   { showToast('Pilih akun tujuan dulu', 'warning'); return; }
+    if (fromAccount === toAccount) { showToast('Akun asal dan tujuan nggak boleh sama', 'warning'); return; }
+
+    const fromCur = walletCurrencyCode(fromAccount);
+    const toCur   = walletCurrencyCode(toAccount);
+    let rate = 1, convertedAmount = S.amountRaw;
+    if (fromCur !== toCur) {
+      const fx = findExchangeRate(fromCur, toCur);
+      if (!fx) {
+        // Mata uang beda & kursnya belum diatur — transfer ditolak, arahkan
+        // langsung ke form "Tambah Kurs" biar user bisa lanjut tanpa keluar
+        // dari alur Catat Transaksi.
+        showToast(`Kurs ${fromCur} → ${toCur} belum diatur — atur dulu di bawah`, 'warning');
+        updateTransferConvertPreview();
+        return;
+      }
+      rate = fx.rate;
+      convertedAmount = Math.round(S.amountRaw * rate);
+    }
+
+    const cat = (CATS.transfer && CATS.transfer[0]) || { id:'transfer', label:'Antar Akun', color:'#5EB3FF' };
+    const tx = {
+      id: Date.now(), type: 'transfer', amount: S.amountRaw, convertedAmount,
+      fromAccount, toAccount, fromCurrency: fromCur, toCurrency: toCur, rate,
+      account: fromAccount, // dipakai buat kompatibilitas filter/search/CSV lama yang masih baca t.account
+      note, date, cat: cat.label, catId: cat.id, catColor: cat.color,
+      receipt: S.pendingReceipt || null,
+    };
+    S.transactions.unshift(tx);
+    saveToStorage();
+    closeModal();
+    showToast('Transfer tersimpan', 'success');
+    renderDashboard();
+    return;
+  }
+
+  if (!S.selectedCat) { showToast('Pilih kategori transaksi dulu', 'warning'); return; }
   const account = document.getElementById('txAccount').value;
   const cats    = CATS[S.currentType] || [];
   const catId   = S.selectedCat;
@@ -2062,9 +2478,9 @@ function renderTxList() {
           <div class="tx-icon" style="background:${t.catColor}22">${ICON[catIcon(t.catId)]||''}</div>
           <div class="tx-info">
             <div class="tx-name">${escapeHtml(t.note)}</div>
-            <div class="tx-meta">${escapeHtml(t.cat)} · ${escapeHtml(walletName(t.account))}</div>
+            <div class="tx-meta">${t.type==='transfer' ? `${escapeHtml(t.cat)} · ${escapeHtml(walletName(t.fromAccount||t.account))} → ${escapeHtml(walletName(t.toAccount))}` : `${escapeHtml(t.cat)} · ${escapeHtml(walletName(t.account))}`}</div>
           </div>
-          <div class="tx-amt ${t.type}">${t.type==='income'?'+':'-'}Rp ${t.amount.toLocaleString('id-ID')}</div>
+          <div class="tx-amt ${t.type}">${t.type==='income'?'+':(t.type==='transfer'?'':'-')}Rp ${t.amount.toLocaleString('id-ID')}</div>
         </div>
       </div>
     `).join('')}
@@ -2352,7 +2768,7 @@ function getWalletBalance(walletId) {
     }
     if (t.type === 'transfer') {
       if (t.fromAccount === walletId) bal -= t.amount;
-      if (t.toAccount   === walletId) bal += t.amount;
+      if (t.toAccount   === walletId) bal += (t.convertedAmount !== undefined ? t.convertedAmount : t.amount);
     }
   });
   return bal;
@@ -2951,13 +3367,30 @@ function submitUsername() {
   showToast('Username berhasil disimpan', 'success');
 }
 function updateBrandTitle() {
-  const el = document.getElementById('brandTitle');
-  if (!el) return;
+  const el    = document.getElementById('brandTitle');
+  const inner = document.getElementById('brandTitleInner');
+  if (!el || !inner) return;
   if (window._isGuest || !window._currentUser) {
-    el.innerHTML = 'O<span>FM</span>';
+    inner.innerHTML = 'O<span class="tb-fm">FM</span>';
   } else {
-    el.textContent = window._customUsername || window._currentUser.displayName || window._currentUser.email || 'Pengguna OFM';
+    inner.textContent = getDisplayUsername();
   }
+  // Nggak perlu ngecek overflow manual di sini — #brandTitle sekarang pakai
+  // class .pt-text yang sama kayak field picker, jadi MutationObserver yang
+  // sudah ada (lihat _refreshAllMarquees di bagian bawah file) otomatis
+  // nge-detect teks ini abis diganti dan masangin animasi marquee-nya kalau
+  // memang kepanjangan.
+}
+
+// Nama yang ditampilkan buat user yang lagi login: prioritas username custom
+// yang diset sendiri, lalu displayName dari akun, lalu bagian sebelum "@" di
+// emailnya — JANGAN PERNAH jatuh ke email penuh (nama@domain.com).
+function getDisplayUsername() {
+  const user = window._currentUser;
+  if (window._customUsername) return window._customUsername;
+  if (user && user.displayName) return user.displayName;
+  if (user && user.email) return user.email.split('@')[0];
+  return 'Pengguna OFM';
 }
 
 function openAddWalletModal() {
@@ -4639,6 +5072,9 @@ async function _saveNow() {
       recurrings:   RECURRINGS,
       dismissedSubs: DISMISSED_SUBS,
       debts:        DEBTS,
+      exchangeRates: EXCHANGE_RATES,
+      devices:       DEVICES,
+      forceLogoutIds: FORCE_LOGOUT_IDS,
       username:     window._customUsername || null,
       updatedAt:    Date.now(),
     });
@@ -4673,7 +5109,10 @@ window._loadUserData = async function(uid) {
       if (data.recurrings)   RECURRINGS     = data.recurrings;
       if (Array.isArray(data.dismissedSubs)) DISMISSED_SUBS = data.dismissedSubs;
       if (data.debts)         DEBTS          = data.debts;
-      window._customUsername = data.username || (window._currentUser && window._currentUser.displayName) || null;
+      if (Array.isArray(data.exchangeRates)) EXCHANGE_RATES = data.exchangeRates;
+      if (Array.isArray(data.devices))        DEVICES        = data.devices;
+      if (Array.isArray(data.forceLogoutIds)) FORCE_LOGOUT_IDS = data.forceLogoutIds;
+      window._customUsername = data.username || (window._currentUser && window._currentUser.displayName) || (window._currentUser && window._currentUser.email ? window._currentUser.email.split('@')[0] : null);
       // Re-register custom budget categories (icon lookup + expense picker) so they still work after reload
       const knownExpIds = new Set(CATS.expense.map(c => c.id));
       BUDGET.cats.forEach(c => {
@@ -4685,9 +5124,11 @@ window._loadUserData = async function(uid) {
         }
       });
     } else {
-      window._customUsername = (window._currentUser && window._currentUser.displayName) || null;
+      window._customUsername = (window._currentUser && window._currentUser.displayName) || (window._currentUser && window._currentUser.email ? window._currentUser.email.split('@')[0] : null);
     }
     updateBrandTitle();
+    registerCurrentDevice();
+    _watchForForceLogout(uid);
     // Init app after data loaded
     _initApp();
     hideLoadingScreen();
@@ -6909,7 +7350,9 @@ function continueAsGuest() {
 }
 
 // Keeps the "Mode Tamu" / profile box in Settings in sync with auth state:
-// shows a Masuk (login) button for guests, and username + edit pencil + Keluar (logout) button once logged in.
+// shows a Masuk (login) button for guests, and username + edit pencil once
+// logged in — logout itself now lives in Pengaturan > Kelola Perangkat,
+// not here, so there's no "Keluar" button in this card anymore.
 function updateProfileHeroUI() {
   const nameEl   = document.getElementById('profileName');
   const emailEl  = document.getElementById('profileEmail');
@@ -6920,16 +7363,12 @@ function updateProfileHeroUI() {
 
   if (loggedIn) {
     const user = window._currentUser;
-    const displayName = window._customUsername || user.displayName || (user.email ? user.email.split('@')[0] : 'Pengguna OFM');
+    const displayName = getDisplayUsername();
     if (nameEl)   nameEl.textContent  = displayName;
     if (emailEl)  emailEl.textContent = user.email || '';
     if (avatarEl) { avatarEl.textContent = (displayName || 'U')[0].toUpperCase(); avatarEl.style.display = 'flex'; }
     if (editBtn)  editBtn.style.display = 'flex';
-    if (authBtn) {
-      authBtn.textContent = 'Keluar';
-      authBtn.classList.add('danger');
-      authBtn.setAttribute('onclick', 'doLogout()');
-    }
+    if (authBtn)  authBtn.style.display = 'none';
   } else {
     if (nameEl)   nameEl.textContent  = 'Mode Tamu';
     if (emailEl)  emailEl.textContent = 'Data tidak tersimpan';
@@ -6939,6 +7378,7 @@ function updateProfileHeroUI() {
       authBtn.textContent = 'Masuk';
       authBtn.classList.remove('danger');
       authBtn.setAttribute('onclick', 'exitGuestToLogin()');
+      authBtn.style.display = 'flex';
     }
   }
 }
@@ -7017,6 +7457,14 @@ const PICKER_REGISTRY = {
     getOpts: () => WALLETS.map(w => ({ value: w.id, text: w.name })),
     labelId: 'txAccountLabel',
   },
+  txToAccount: {
+    title: 'Pilih Akun Tujuan',
+    getOpts: () => {
+      const fromId = document.getElementById('txAccount')?.value;
+      return WALLETS.filter(w => w.id !== fromId).map(w => ({ value: w.id, text: w.name }));
+    },
+    labelId: 'txToAccountLabel',
+  },
   txCategory: {
     title: 'Pilih Kategori',
     getOpts: () => (CATS[S.currentType] || []).map(c => ({ value: c.id, text: c.label, icon: catIcon(c.id) })),
@@ -7061,6 +7509,16 @@ const PICKER_REGISTRY = {
     title: 'Mata Uang',
     getOpts: () => Object.keys(CURRENCIES).map(code => ({ value: code, text: currencyLabelText(code) })),
     labelId: 'debtCurrencyLbl',
+  },
+  fxFromInput: {
+    title: 'Mata Uang Asal',
+    getOpts: () => Object.keys(CURRENCIES).map(code => ({ value: code, text: currencyLabelText(code) })),
+    labelId: 'fxFromLbl',
+  },
+  fxToInput: {
+    title: 'Mata Uang Tujuan',
+    getOpts: () => Object.keys(CURRENCIES).map(code => ({ value: code, text: currencyLabelText(code) })),
+    labelId: 'fxToLbl',
   },
   debtPeriod: {
     title: 'Periode',
@@ -7222,8 +7680,10 @@ function pickOpt(fieldId, o) {
   if (lbl)    lbl.innerHTML = (o.icon ? ICON[o.icon]||'' : '') + ' ' + escapeHtml(o.text);
   if (fieldId === 'txAccount' && typeof updateTxAmountCurrency === 'function') updateTxAmountCurrency();
   if (fieldId === 'txAccount' && typeof renderBudgetCatPicker === 'function') renderBudgetCatPicker();
+  if ((fieldId === 'txAccount' || fieldId === 'txToAccount') && typeof updateTransferConvertPreview === 'function') updateTransferConvertPreview();
   if (fieldId === 'txCategory') S.selectedCat = o.value;
   if (fieldId === 'debtPeriod') onDebtPeriodChange(o.value);
+  if (fieldId === 'fxFromInput' || fieldId === 'fxToInput') updateFxRateLabel();
   closePicker();
 }
 
@@ -7645,9 +8105,15 @@ function renderRiwayat() {
           <div class="tx-icon" style="background:${t.catColor}22">${ICON[catIcon(t.catId)]||''}</div>
           <div class="tx-info">
             <div class="tx-name">${escapeHtml(t.note)}</div>
-            <div class="tx-meta">${escapeHtml(t.cat)} · ${escapeHtml(walletName(t.account))}</div>
+            <div class="tx-meta">${t.type==='transfer' ? `${escapeHtml(t.cat)} · ${escapeHtml(walletName(t.fromAccount||t.account))} → ${escapeHtml(walletName(t.toAccount))}` : `${escapeHtml(t.cat)} · ${escapeHtml(walletName(t.account))}`}</div>
           </div>
-          <div class="tx-amt ${t.type}">${t.type==='income'?'+':'-'}${currencyInfo(walletCurrencyCode(t.account)).symbol} ${t.amount.toLocaleString(currencyInfo(walletCurrencyCode(t.account)).locale)}</div>
+          <div class="tx-amt ${t.type}">${
+            t.type==='transfer'
+              ? (t.fromCurrency && t.toCurrency && t.fromCurrency !== t.toCurrency
+                  ? `${currencyInfo(t.fromCurrency).symbol} ${t.amount.toLocaleString(currencyInfo(t.fromCurrency).locale)} → ${currencyInfo(t.toCurrency).symbol} ${(t.convertedAmount||t.amount).toLocaleString(currencyInfo(t.toCurrency).locale)}`
+                  : `${currencyInfo(walletCurrencyCode(t.account)).symbol} ${t.amount.toLocaleString(currencyInfo(walletCurrencyCode(t.account)).locale)}`)
+              : `${t.type==='income'?'+':'-'}${currencyInfo(walletCurrencyCode(t.account)).symbol} ${t.amount.toLocaleString(currencyInfo(walletCurrencyCode(t.account)).locale)}`
+          }</div>
         </div>
       </div>
     `).join('')}
