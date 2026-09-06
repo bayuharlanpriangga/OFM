@@ -595,6 +595,18 @@ function _toggleDeviceMenu(id, btnEl) {
   menu.innerHTML = `<div class="device-menu-item danger" onclick="event.stopPropagation();deleteDevice('${id}')">${ICON.trash||''} Hapus Perangkat</div>`;
   btnEl.style.position = 'relative';
   btnEl.appendChild(menu);
+  // Jangan maksa bukanya ke bawah kalau ruang di bawah trigger nggak cukup
+  // buat nampung popover-nya utuh (mis. device row paling bawah bakal
+  // numpuk sama tombol "Keluar dari Perangkat Ini" di bawahnya) — cek ruang
+  // sisa di dalam .device-list (scroll container-nya) ATAU viewport kalau
+  // trigger-nya di luar list, baru flip ke atas kalau memang nggak cukup.
+  // Row yang di atasnya masih tetap bebas buka ke bawah selama ruangnya ada.
+  const btnRect   = btnEl.getBoundingClientRect();
+  const menuH     = menu.offsetHeight;
+  const scroller  = btnEl.closest('.device-list');
+  const boundBottom = scroller ? scroller.getBoundingClientRect().bottom : window.innerHeight;
+  const spaceBelow  = boundBottom - btnRect.bottom;
+  if (spaceBelow < menuH + 6) menu.classList.add('popover-up');
   setTimeout(() => document.addEventListener('click', _closeDeviceMenu, { once: true }), 0);
 }
 function _closeDeviceMenu() {
@@ -5488,6 +5500,10 @@ let GOALS = [];
 // period 'monthly'/'yearly', tanggal ini cuma dipakai sebagai POLA yang
 // menetap (tanggal-di-bulan / bulan+tanggal-di-tahun) — lihat
 // resolveDebtDueDate() buat cara nurunin kejadian berikutnya.
+// periodDueOverride[] — override jatuh tempo manual per cicilan (index
+// sejajar sama rows dari computeDebtInstallments), null kalau masih ikut
+// pola otomatis. Lihat ensureDebtPeriodDueOverride & tombol pensil di
+// openDebtBreakdown.
 // currency, status:'aktif'|'lunas', createdAt }
 let DEBTS = [];
 
@@ -5868,6 +5884,20 @@ function ensureDebtPeriodPaid(d) {
   return d.periodPaid;
 }
 
+// Sama kayak ensureDebtPeriodPaid, tapi buat nyimpen override jatuh tempo
+// MANUAL per cicilan (index sejajar sama rows dari computeDebtInstallments).
+// null berarti cicilan itu masih ikut pola otomatis (base date + i periode);
+// begitu diisi "YYYY-MM-DD", tanggal itu dipakai apa adanya cuma buat
+// cicilan itu doang — cicilan lain tetap dihitung dari base date asli,
+// jadi ubah manual satu cicilan gak bakal geser pola cicilan sesudahnya.
+function ensureDebtPeriodDueOverride(d) {
+  const count = Math.max(0, parseInt(d.periodCount) || 0);
+  if (!Array.isArray(d.periodDueOverride)) d.periodDueOverride = [];
+  while (d.periodDueOverride.length < count) d.periodDueOverride.push(null);
+  if (d.periodDueOverride.length > count) d.periodDueOverride = d.periodDueOverride.slice(0, count);
+  return d.periodDueOverride;
+}
+
 // d.paid (dipakai sama semua tampilan lain — kartu, dashboard, net worth,
 // notifikasi jatuh tempo) selalu disamakan sama jumlah periodPaid buat
 // utang/piutang berperiode, supaya nggak perlu ubah logic di tempat lain
@@ -5893,21 +5923,31 @@ function computeDebtInstallments(d) {
   if (period === 'none' || !d.dueDate || !count) return [];
   const base = new Date(d.dueDate + 'T00:00:00');
   const per  = Math.round(d.amount / count);
-  const periodPaid = ensureDebtPeriodPaid(d);
+  const periodPaid     = ensureDebtPeriodPaid(d);
+  const periodDueOverride = ensureDebtPeriodDueOverride(d);
   const rows = [];
   for (let i = 0; i < count; i++) {
     let due;
-    if (period === 'monthly') {
+    // Cicilan yang jatuh temponya udah diubah manual (lihat openDbfDateEdit)
+    // pakai tanggal itu apa adanya. Cicilan lain tetap dihitung dari base
+    // date ASLI (bukan dari tanggal manual tetangganya), jadi pola tanggal
+    // yang ditetapkan user di awal tetap konsisten buat cicilan yang belum
+    // diubah — satu cicilan diedit gak bakal nge-geser cicilan lain.
+    if (periodDueOverride[i]) {
+      due = new Date(periodDueOverride[i] + 'T00:00:00');
+    } else if (period === 'monthly') {
       due = new Date(base.getFullYear(), base.getMonth() + i, 1);
+      const dim = new Date(due.getFullYear(), due.getMonth() + 1, 0).getDate();
+      due.setDate(Math.min(base.getDate(), dim));
     } else {
       due = new Date(base.getFullYear() + i, base.getMonth(), 1);
+      const dim = new Date(due.getFullYear(), due.getMonth() + 1, 0).getDate();
+      due.setDate(Math.min(base.getDate(), dim));
     }
-    const dim = new Date(due.getFullYear(), due.getMonth() + 1, 0).getDate();
-    due.setDate(Math.min(base.getDate(), dim));
     const amount = (i === count - 1) ? (d.amount - per * (count - 1)) : per;
     const paid = Math.min(amount, periodPaid[i] || 0);
     const pct  = amount > 0 ? Math.min(100, Math.round(paid / amount * 100)) : 0;
-    rows.push({ index: i + 1, due, amount, paid, pct, remaining: Math.max(0, amount - paid) });
+    rows.push({ index: i + 1, due, amount, paid, pct, remaining: Math.max(0, amount - paid), isManual: !!periodDueOverride[i] });
   }
   return rows;
 }
@@ -5981,7 +6021,12 @@ function openDebtBreakdown(id) {
           </label>
           <div class="dbf-row-idx">#${r.index}</div>
           <div class="dbf-row-body">
-            <div class="dbf-row-date">${fmtDateShort(r.due.toISOString().split('T')[0])}</div>
+            <div class="dbf-row-date-wrap">
+              <div class="dbf-row-date${r.isManual ? ' dbf-row-date-manual' : ''}">${fmtDateShort(r.due.toISOString().split('T')[0])}</div>
+              <div class="dbf-row-edit" onclick="event.stopPropagation();openDbfDueEdit(${d.id}, ${i})" title="Ubah jatuh tempo cicilan ini">
+                <svg class="ic" viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
+              </div>
+            </div>
             <div class="dbf-row-bar-bg"><div class="dbf-row-bar-fill" style="width:${r.pct}%;background:${debtPctColor(r.pct)}"></div></div>
           </div>
           <div>
@@ -6022,6 +6067,93 @@ function closeDebtBreakdown() {
   _dbfDebtId = null;
 }
 function closeDebtBreakdownOutside(e) { if (e.target === document.getElementById('debtBreakdownOverlay')) closeDebtBreakdown(); }
+
+/* ══════════════════════════════════════════
+   UBAH JATUH TEMPO 1 CICILAN SECARA MANUAL
+   Dibuka lewat tombol pensil di tiap baris kartu rincian (openDebtBreakdown).
+   Nyimpen tanggalnya ke d.periodDueOverride[index] (lihat
+   ensureDebtPeriodDueOverride & computeDebtInstallments) — cuma cicilan itu
+   yang berubah, cicilan lain tetap ngikutin pola otomatis dari base date asli.
+══════════════════════════════════════════ */
+const DBF_DUE_EDIT_DP = { year: new Date().getFullYear(), month: new Date().getMonth() };
+let _dbfDueEditDebtId = null;
+let _dbfDueEditIndex  = null;
+
+function openDbfDueEdit(debtId, index) {
+  const d = DEBTS.find(x => x.id === debtId);
+  if (!d) return;
+  const rows = computeDebtInstallments(d);
+  const row  = rows[index];
+  if (!row) return;
+  _dbfDueEditDebtId = debtId;
+  _dbfDueEditIndex  = index;
+  document.getElementById('dbfDueEditTitle').textContent = 'Ubah Jatuh Tempo #' + row.index;
+  DBF_DUE_EDIT_DP.year  = row.due.getFullYear();
+  DBF_DUE_EDIT_DP.month = row.due.getMonth();
+  renderDbfDueEditDp();
+  document.getElementById('dbfDueEditOverlay').classList.add('open');
+}
+
+function dbfDueEditDpNav(dir) {
+  DBF_DUE_EDIT_DP.month += dir;
+  if (DBF_DUE_EDIT_DP.month > 11) { DBF_DUE_EDIT_DP.month = 0; DBF_DUE_EDIT_DP.year++; }
+  if (DBF_DUE_EDIT_DP.month < 0)  { DBF_DUE_EDIT_DP.month = 11; DBF_DUE_EDIT_DP.year--; }
+  renderDbfDueEditDp();
+}
+
+// Sama kayak date picker lain — cuma update label & grid hari tiap render,
+// header/tombol nav-nya statis di HTML (lihat #dbfDueEditOverlay).
+function renderDbfDueEditDp() {
+  const months = ['Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember'];
+  document.getElementById('dbfDueEditDpLabel').textContent = months[DBF_DUE_EDIT_DP.month] + ' ' + DBF_DUE_EDIT_DP.year;
+  const d = DEBTS.find(x => x.id === _dbfDueEditDebtId);
+  const rows   = d ? computeDebtInstallments(d) : [];
+  const curRow = rows[_dbfDueEditIndex];
+  const curVal = curRow ? curRow.due.toISOString().split('T')[0] : '';
+  const firstDay    = new Date(DBF_DUE_EDIT_DP.year, DBF_DUE_EDIT_DP.month, 1).getDay();
+  const daysInMonth = new Date(DBF_DUE_EDIT_DP.year, DBF_DUE_EDIT_DP.month + 1, 0).getDate();
+  const todayStr    = new Date().toISOString().split('T')[0];
+  let html = '';
+  for (let i = 0; i < firstDay; i++) html += '<div class="dp-day dp-blank"></div>';
+  for (let dnum = 1; dnum <= daysInMonth; dnum++) {
+    const ds  = DBF_DUE_EDIT_DP.year + '-' + String(DBF_DUE_EDIT_DP.month+1).padStart(2,'0') + '-' + String(dnum).padStart(2,'0');
+    let cls = 'dp-day';
+    if (ds === todayStr) cls += ' today';
+    if (ds === curVal)   cls += ' selected';
+    html += '<div class="' + cls + '" onclick="pickDbfDueEditDate(\'' + ds + '\')">' + dnum + '</div>';
+  }
+  document.getElementById('dbfDueEditDpDays').innerHTML = html;
+}
+
+function pickDbfDueEditDate(ds) {
+  const d = DEBTS.find(x => x.id === _dbfDueEditDebtId);
+  if (!d) return;
+  ensureDebtPeriodDueOverride(d)[_dbfDueEditIndex] = ds;
+  saveToStorage();
+  const debtId = d.id;
+  closeDbfDueEdit();
+  openDebtBreakdown(debtId);
+  renderDebts();
+}
+
+// Balikin cicilan itu ke pola otomatis (hapus override manualnya).
+function resetDbfDueEdit() {
+  const d = DEBTS.find(x => x.id === _dbfDueEditDebtId);
+  if (!d) return;
+  ensureDebtPeriodDueOverride(d)[_dbfDueEditIndex] = null;
+  saveToStorage();
+  const debtId = d.id;
+  closeDbfDueEdit();
+  openDebtBreakdown(debtId);
+  renderDebts();
+}
+
+function closeDbfDueEdit() {
+  document.getElementById('dbfDueEditOverlay').classList.remove('open');
+  _dbfDueEditDebtId = null;
+  _dbfDueEditIndex  = null;
+}
+function closeDbfDueEditOutside(e) { if (e.target === document.getElementById('dbfDueEditOverlay')) closeDbfDueEdit(); }
 
 // Catat pembayaran dari kartu rincian cicilan. Cicilan yang dicentang user
 // diprioritaskan diisi duluan sesuai urutan dicentang; kalau nggak ada
@@ -6370,12 +6502,19 @@ function toggleDebtDuePicker() {
   openDp(panel);
 }
 
-// Render body + presets kalender — sama untuk semua mode periode, cuma
+// Render grid hari + presets kalender — sama untuk semua mode periode, cuma
 // kalender penuh biasa (lihat komentar di atas soal artinya per-mode).
+// PENTING: cuma update label (textContent) & grid hari (innerHTML #debtDueDpDays)
+// di sini — JANGAN re-create header/tombol navnya (dulu lewat body.innerHTML
+// yang nge-replace semuanya termasuk tombol ‹ › yang baru saja diklik itu
+// sendiri, bikin node itu ke-detach di tengah event klik sebelum sempat
+// bubbling ke listener "klik di luar" di bawah, jadi keanggep klik di luar
+// panel dan panelnya auto ketutup pas geser bulan padahal belum milih apa-apa).
+// Header sekarang statis di HTML (lihat #debtDuePicker), biar konsisten sama
+// date picker lain (tx/recur/goal/dll) yang gak kena bug ini.
 function renderDebtDueDp() {
-  const body    = document.getElementById('debtDuePickerBody');
   const presets = document.getElementById('debtDuePresets');
-  renderDebtDueDpFull(body);
+  renderDebtDueDpFull();
   presets.innerHTML = `
     <div class="dp-preset" onclick="debtDueDpPreset(7)">1 Minggu</div>
     <div class="dp-preset" onclick="debtDueDpPreset(30)">1 Bulan</div>
@@ -6386,24 +6525,14 @@ function debtDueDpNav(dir) {
   DEBT_DUE_DP.month += dir;
   if (DEBT_DUE_DP.month > 11) { DEBT_DUE_DP.month = 0; DEBT_DUE_DP.year++; }
   if (DEBT_DUE_DP.month < 0)  { DEBT_DUE_DP.month = 11; DEBT_DUE_DP.year--; }
-  renderDebtDueDp();
+  renderDebtDueDpFull();
 }
 
 // Kalender penuh — dipakai buat ketiga mode Periode.
-function renderDebtDueDpFull(body) {
+function renderDebtDueDpFull() {
   const months = ['Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember'];
   const curVal = document.getElementById('debtDueDate').value;
-  body.innerHTML = `
-    <div class="dp-header">
-      <div class="dp-month-nav" onclick="debtDueDpNav(-1)">‹</div>
-      <div class="dp-month-label">${months[DEBT_DUE_DP.month]} ${DEBT_DUE_DP.year}</div>
-      <div class="dp-month-nav" onclick="debtDueDpNav(1)">›</div>
-    </div>
-    <div class="dp-weekdays">
-      <div class="dp-wd">Min</div><div class="dp-wd">Sen</div><div class="dp-wd">Sel</div>
-      <div class="dp-wd">Rab</div><div class="dp-wd">Kam</div><div class="dp-wd">Jum</div><div class="dp-wd">Sab</div>
-    </div>
-    <div class="dp-days" id="debtDueDpDays"></div>`;
+  document.getElementById('debtDueDpLabel').textContent = months[DEBT_DUE_DP.month] + ' ' + DEBT_DUE_DP.year;
   const firstDay    = new Date(DEBT_DUE_DP.year, DEBT_DUE_DP.month, 1).getDay();
   const daysInMonth = new Date(DEBT_DUE_DP.year, DEBT_DUE_DP.month + 1, 0).getDate();
   const todayStr    = new Date().toISOString().split('T')[0];

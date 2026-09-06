@@ -1424,7 +1424,16 @@
   </div>
   <div class="dp-overlay" id="debtDuePickerOverlay" data-trigger="debtDueDateTrigger" onclick="if(event.target===this) closeDp(document.getElementById('debtDuePicker'))">
     <div class="date-picker-panel" id="debtDuePicker">
-      <div id="debtDuePickerBody"></div>
+      <div class="dp-header">
+        <div class="dp-month-nav" onclick="debtDueDpNav(-1)">‹</div>
+        <div class="dp-month-label" id="debtDueDpLabel"></div>
+        <div class="dp-month-nav" onclick="debtDueDpNav(1)">›</div>
+      </div>
+      <div class="dp-weekdays">
+        <div class="dp-wd">Min</div><div class="dp-wd">Sen</div><div class="dp-wd">Sel</div>
+        <div class="dp-wd">Rab</div><div class="dp-wd">Kam</div><div class="dp-wd">Jum</div><div class="dp-wd">Sab</div>
+      </div>
+      <div class="dp-days" id="debtDueDpDays"></div>
       <div class="dp-presets" id="debtDuePresets"></div>
     </div>
   </div>
@@ -1432,6 +1441,32 @@
   <!-- ══════ UTANG-PIUTANG: BREAKDOWN CICILAN (floating card, bukan modal) ══════ -->
   <div class="debt-float-overlay" id="debtBreakdownOverlay" onclick="closeDebtBreakdownOutside(event)">
     <div class="debt-float-card" id="debtBreakdownCard"></div>
+  </div>
+
+  <!-- ══════ UTANG-PIUTANG: UBAH JATUH TEMPO 1 CICILAN SECARA MANUAL ══════
+       Dibuka dari tombol pensil di tiap baris kartu rincian di atas. Cuma
+       ubah tanggal cicilan itu doang (lihat computeDebtInstallments) —
+       nggak ngegeser pola cicilan lain. ══════ -->
+  <div class="debt-float-overlay dbf-date-edit-overlay" id="dbfDueEditOverlay" onclick="closeDbfDueEditOutside(event)">
+    <div class="debt-float-card dbf-date-edit-card">
+      <div class="dbf-date-edit-head">
+        <div class="dbf-title" id="dbfDueEditTitle">Ubah Jatuh Tempo</div>
+        <button class="modal-close" onclick="closeDbfDueEdit()"><svg class="ic" viewBox="0 0 24 24"><path d="M5 5l14 14M19 5L5 19"/></svg></button>
+      </div>
+      <div class="dp-header">
+        <div class="dp-month-nav" onclick="dbfDueEditDpNav(-1)">‹</div>
+        <div class="dp-month-label" id="dbfDueEditDpLabel"></div>
+        <div class="dp-month-nav" onclick="dbfDueEditDpNav(1)">›</div>
+      </div>
+      <div class="dp-weekdays">
+        <div class="dp-wd">Min</div><div class="dp-wd">Sen</div><div class="dp-wd">Sel</div>
+        <div class="dp-wd">Rab</div><div class="dp-wd">Kam</div><div class="dp-wd">Jum</div><div class="dp-wd">Sab</div>
+      </div>
+      <div class="dp-days" id="dbfDueEditDpDays"></div>
+      <div class="dp-presets">
+        <div class="dp-preset" onclick="resetDbfDueEdit()">Pakai Pola Otomatis</div>
+      </div>
+    </div>
   </div>
 
   <!-- ══════ MODAL PILIH IKON (khusus field icon, mis. Ikon Goal) — grid ikon
