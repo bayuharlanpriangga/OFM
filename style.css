@@ -2234,6 +2234,7 @@ body {
 /* Bagian bayar/terima di bawah rincian cicilan — tetap fixed (gak ikut
    scroll bareng .dbf-rows), muncul cuma kalau utang/piutangnya belum lunas. */
 .dbf-pay { margin-top: 12px; padding-top: 12px; border-top: 1px solid rgba(18,21,31,0.10); flex-shrink: 0; }
+.dbf-pay .field { margin-bottom: 10px; }
 .dbf-pay-label {
   font-size: 10.5px; font-weight: 600; color: var(--txt3);
   text-transform: uppercase; letter-spacing: 0.4px;
@@ -2631,6 +2632,11 @@ body {
   color: var(--teal);
   background: rgba(42,232,196,0.08);
 }
+.picker-opt-disabled {
+  cursor: not-allowed;
+  opacity: 0.4;
+}
+.picker-opt-disabled:active { background: transparent; }
 
 /* ═══════════════════════════════════════
    CONFIRM MODAL (Liquid Glass)

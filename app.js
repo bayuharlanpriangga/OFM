@@ -2001,6 +2001,11 @@ function submitTransaction() {
 
   if (!S.selectedCat) { showToast('Pilih kategori transaksi dulu', 'warning'); return; }
   const account = document.getElementById('txAccount').value;
+  if (!account) { showToast('Pilih akun dulu', 'warning'); return; }
+  if (S.currentType === 'expense' && getWalletBalance(account) < S.amountRaw) {
+    showToast('Saldo akun tidak cukup untuk pengeluaran ini', 'warning');
+    return;
+  }
   const cats    = CATS[S.currentType] || [];
   const catId   = S.selectedCat;
   const cat     = cats.find(c=>c.id===catId) || { label:'Lainnya', color:'#888' };
@@ -2734,6 +2739,14 @@ document.addEventListener('touchstart', e => {
    WALLETS
 ══════════════════════════════════════════ */
 function walletName(walletId) {
+  // "goal:<id>" adalah id virtual buat sisi Goal di transaksi transfer
+  // Tambah/Ambil dana saving goal (lihat submitTopup/deleteGoal) — bukan
+  // akun beneran, jadi ditangani terpisah sebelum dicari di WALLETS.
+  if (typeof walletId === 'string' && walletId.indexOf('goal:') === 0) {
+    const gid = parseInt(walletId.slice(5), 10);
+    const g = GOALS.find(g => g.id === gid);
+    return g ? g.name : 'Goal';
+  }
   const w = WALLETS.find(w => w.id === walletId);
   return w ? w.name : (walletId || '—');
 }
@@ -2934,6 +2947,7 @@ function openEditWalletModal(id) {
   document.getElementById('editWalletNameInput').value = w.name;
   document.getElementById('editWalletBankInput').value = w.bank;
   document.getElementById('editWalletBalInput').value  = w.bal;
+  document.getElementById('editWalletAccountNumberInput').value = w.accountNumber || '';
   const n = w.name.toLowerCase();
   let wType = w.type;
   if (!wType) {
@@ -2948,6 +2962,7 @@ function openEditWalletModal(id) {
   const typeLabels = {bank:'Rekening', ewallet:'E-Wallet', tunai:'Tunai', invest:'Investasi'};
   const etl = document.getElementById('editWalletTypeLbl');
   if (etl) etl.innerHTML = (ICON[typeIcons[wType]]||'') + ' ' + escapeHtml(typeLabels[wType]||'Rekening');
+  syncWalletAccountNumberField('editWallet', wType);
   const currCode = w.currency || 'IDR';
   const eci = document.getElementById('editWalletCurrencyInput'); if (eci) eci.value = currCode;
   const ecl = document.getElementById('editWalletCurrencyLbl');   if (ecl) ecl.textContent = currencyLabelText(currCode);
@@ -2961,6 +2976,7 @@ function submitEditWallet() {
   const bank = document.getElementById('editWalletBankInput').value.trim() || name;
   const bal  = parseInt(document.getElementById('editWalletBalInput').value) || 0;
   const type = document.getElementById('editWalletTypeInput').value;
+  const accountNumber = (type === 'bank' || type === 'ewallet') ? document.getElementById('editWalletAccountNumberInput').value.trim() : '';
   const currency = document.getElementById('editWalletCurrencyInput').value || 'IDR';
   if (!name) { showToast('Nama akun wajib diisi', 'warning'); return; }
   const WALLET_THEMES = {
@@ -2970,7 +2986,7 @@ function submitEditWallet() {
     invest:  { bg:'linear-gradient(135deg,#1a0a3a,#3a1a6a)', chipColor:'#C4A8FF' },
   };
   const theme = WALLET_THEMES[type] || WALLET_THEMES.bank;
-  WALLETS = WALLETS.map(w => w.id === id ? { ...w, name, bank, bal, currency, type, ...theme } : w);
+  WALLETS = WALLETS.map(w => w.id === id ? { ...w, name, bank, bal, currency, type, accountNumber, ...theme } : w);
   saveToStorage();
   closeEditWalletModal();
   renderWallets();
@@ -3420,13 +3436,40 @@ function getDisplayUsername() {
   return 'Pengguna OFM';
 }
 
+// Tampilkan/sembunyikan field "Nomor Rekening"/"Nomor E-Wallet" di modal
+// Tambah/Edit Akun sesuai Tipe yang aktif — cuma relevan buat akun jenis
+// Rekening & E-Wallet (yang beneran punya nomor rekening/akun ke pihak
+// ketiga). Tunai jelas nggak butuh, dan Investasi (saham/reksadana/dst)
+// juga nggak dipaksa punya nomor rekening/e-wallet — akun investasi kalau
+// mau dicatat detail platformnya cukup lewat field "Bank / Institusi" yang
+// sudah ada, jadi field ini disembunyikan buat kedua tipe itu.
+function syncWalletAccountNumberField(prefix, type) {
+  const field = document.getElementById(prefix + 'AccountNumberField');
+  const label = document.getElementById(prefix + 'AccountNumberLabel');
+  const input = document.getElementById(prefix + 'AccountNumberInput');
+  if (!field || !label || !input) return;
+  if (type === 'bank') {
+    field.style.display = '';
+    label.textContent = 'Nomor Rekening';
+    input.placeholder = 'mis. 1234567890';
+  } else if (type === 'ewallet') {
+    field.style.display = '';
+    label.textContent = 'Nomor E-Wallet';
+    input.placeholder = 'mis. 081234567890';
+  } else {
+    field.style.display = 'none';
+  }
+}
+
 function openAddWalletModal() {
   document.getElementById('addWalletModalOverlay').classList.add('open');
   document.getElementById('walletNameInput').value   = '';
   document.getElementById('walletBankInput').value   = '';
   document.getElementById('walletBalInput').value    = '';
+  document.getElementById('walletAccountNumberInput').value = '';
   const wci = document.getElementById('walletCurrencyInput'); if (wci) wci.value = 'IDR';
   const wcl = document.getElementById('walletCurrencyLbl');   if (wcl) wcl.textContent = currencyLabelText('IDR');
+  syncWalletAccountNumberField('wallet', 'bank');
 }
 function closeAddWalletModal() { document.getElementById('addWalletModalOverlay').classList.remove('open'); }
 
@@ -3435,6 +3478,7 @@ function submitWallet() {
   const bank = document.getElementById('walletBankInput').value.trim() || name;
   const bal  = parseInt(document.getElementById('walletBalInput').value) || 0;
   const type = document.getElementById('walletTypeInput').value;
+  const accountNumber = (type === 'bank' || type === 'ewallet') ? document.getElementById('walletAccountNumberInput').value.trim() : '';
   const currency = document.getElementById('walletCurrencyInput').value || 'IDR';
   if (!name) { showToast('Nama akun wajib diisi', 'warning'); return; }
   const WALLET_THEMES = {
@@ -3445,7 +3489,7 @@ function submitWallet() {
   };
   const theme = WALLET_THEMES[type] || WALLET_THEMES.bank;
   const id = 'w_' + Date.now();
-  WALLETS = [...WALLETS, { id, name, bank, bal, currency, type, ...theme }];
+  WALLETS = [...WALLETS, { id, name, bank, bal, currency, type, accountNumber, ...theme }];
   saveToStorage();
   closeAddWalletModal();
   renderWallets();
@@ -5593,8 +5637,12 @@ function debtDueLabel(d) {
 function debtDueLabelFromValue(due, period) {
   if (!due) return 'Tanpa jatuh tempo';
   const dt = new Date(due + 'T00:00:00');
-  if (period === 'monthly') return 'Tgl ' + dt.getDate() + ' tiap bulan';
-  if (period === 'yearly')  return dt.getDate() + ' ' + DEBT_MONTH_SHORT[dt.getMonth()] + ' tiap tahun';
+  // Teks di field Jatuh Tempo selalu nunjukin tanggal PERSIS yang diklik user
+  // (bukan pola "tgl X setiap bulan/tahun") — cuma buat periode 'yearly'
+  // tahunnya ikut ditampilkan, karena tanpa tahun "1 Okt" ambigu jatuh tempo
+  // tahun yang mana; periode 'monthly' cukup tanggal+bulan tanpa tahun.
+  if (period === 'yearly') return dt.getDate() + ' ' + DEBT_MONTH_SHORT[dt.getMonth()] + ' ' + dt.getFullYear();
+  if (period === 'monthly') return dt.getDate() + ' ' + DEBT_MONTH_SHORT[dt.getMonth()];
   return fmtDateShort(due);
 }
 
@@ -5764,10 +5812,11 @@ function deleteGoal(id) {
   showConfirm('Hapus goal ini?', 'Goal akan dihapus permanen.', () => {
     const g = GOALS.find(g => g.id === id);
     // Dana yang sudah ke-park di goal ini dikembalikan ke akun yang
-    // terhubung, biar nggak raib begitu goal-nya dihapus.
+    // terhubung — dicatat sebagai transfer (goal -> akun) di riwayat
+    // transaksi juga, konsisten sama Tambah/Ambil dana goal biasa.
     if (g && g.accountId && g.saved) {
       const acc = WALLETS.find(w => w.id === g.accountId);
-      if (acc) acc.bal += g.saved;
+      if (acc) recordGoalTransferTx(g, acc, g.saved, 'withdraw');
     }
     GOALS = GOALS.filter(g => g.id !== id);
     saveToStorage();
@@ -5861,6 +5910,29 @@ function openTopupModal(goalId, mode) {
 function closeTopupModal() { document.getElementById('topupModalOverlay').classList.remove('open'); _activeTopupGoalId = null; }
 function closeTopupModalOutside(e) { if (e.target === document.getElementById('topupModalOverlay')) closeTopupModal(); }
 
+// Catat pergerakan dana Tambah/Ambil goal sebagai transaksi TRANSFER biasa
+// di riwayat transaksi — sisi "akun tujuan/asal"-nya pakai id virtual
+// "goal:<id>" (lihat walletName) yang cuma dipakai buat ditampilkan, bukan
+// akun beneran, jadi getWalletBalance tetap ngitung benar (cuma sisi akun
+// aslinya yang match). Kategorinya sengaja pakai judul goal itu sendiri,
+// biar di riwayat transaksi kelihatan jelas ini dana masuk/keluar goal yang mana.
+function recordGoalTransferTx(g, acc, amount, direction) {
+  const goalVId = 'goal:' + g.id;
+  const accCur  = acc ? (acc.currency || 'IDR') : 'IDR';
+  const tx = {
+    id: Date.now() + Math.floor(Math.random()*1000), type: 'transfer',
+    amount, convertedAmount: amount,
+    fromAccount: direction === 'add' ? (acc ? acc.id : null) : goalVId,
+    toAccount:   direction === 'add' ? goalVId : (acc ? acc.id : null),
+    fromCurrency: accCur, toCurrency: accCur, rate: 1,
+    account: direction === 'add' ? (acc ? acc.id : goalVId) : goalVId,
+    note: (direction === 'add' ? 'Tambah dana goal' : 'Ambil dana goal'),
+    date: new Date().toISOString().split('T')[0],
+    cat: g.name, catId: 'goal', catColor: goalColor(g),
+  };
+  S.transactions.unshift(tx);
+}
+
 function submitTopup() {
   const amount = parseInt(document.getElementById('topupAmount').value) || 0;
   if (!amount) { showToast('Jumlah harus lebih dari 0', 'warning'); return; }
@@ -5873,13 +5945,16 @@ function submitTopup() {
     if (room <= 0) { showToast('Belum ada dana tersimpan di goal ini', 'info'); closeTopupModal(); return; }
     const taken = Math.min(amount, room);
     g.saved -= taken;
-    // Dana yang diambil balik lagi ke akun yang terhubung sejak goal ini dibuat.
-    if (acc) acc.bal += taken;
+    // Dana yang diambil balik lagi ke akun yang terhubung — dicatat sebagai
+    // transfer (goal -> akun) di riwayat transaksi, bukan mengubah saldo
+    // awal akun langsung (biar getWalletBalance tetap konsisten).
+    recordGoalTransferTx(g, acc, taken, 'withdraw');
     saveToStorage();
     closeTopupModal();
     showToast(`Rp ${taken.toLocaleString('id-ID')} diambil dari "${g.name}"`, 'success');
     renderGoals();
     renderWallets();
+    renderDashboard();
     return;
   }
 
@@ -5888,15 +5963,17 @@ function submitTopup() {
   const added = Math.min(amount, room);
   if (acc && getWalletBalance(acc.id) < added) { showToast(`Saldo ${acc.name} tidak cukup`, 'warning'); return; }
   g.saved += added;
-  // Dana yang ditambahkan ke goal dipindah keluar dari saldo bebas akun yang
-  // terhubung, biar nominal akunnya ikut berkurang (bukan cuma dicatat dobel).
-  if (acc) acc.bal -= added;
+  // Dana yang ditambahkan ke goal dicatat sebagai transfer (akun -> goal) di
+  // riwayat transaksi — saldo akun ikut berkurang otomatis lewat
+  // getWalletBalance karena transaksinya punya fromAccount = akun ini.
+  recordGoalTransferTx(g, acc, added, 'add');
   saveToStorage();
   closeTopupModal();
   const pct = Math.round(g.saved / g.target * 100);
   showToast(pct >= 100 ? 'Goal tercapai!' : `+Rp ${added.toLocaleString('id-ID')} ditambahkan (${pct}%)`, 'success');
   renderGoals();
   renderWallets();
+  renderDashboard();
 }
 
 /* ══════════════════════════════════════════
@@ -6069,27 +6146,40 @@ function debtProgressPct(d) {
 // belum lunas (perilaku lama), jadi checknya opsional bukan wajib.
 let _dbfChecked = new Set();
 let _dbfDebtId  = null;
+let _dbfMode    = 'view';
+
+// Total maksimal yang boleh diisi di field "Jumlah Dibayar/Diterima" kartu
+// rincian: kalau ada cicilan yang dicentang, dibatasi ke jumlah SISA
+// cicilan-cicilan itu saja (biar nggak overpay cicilan yang gak dituju);
+// kalau nggak ada satupun yang dicentang, dibatasi ke total sisa SEMUA
+// cicilan yang belum lunas (perilaku default — bayar dari yang paling awal).
+function dbfMaxPayable(d, rows) {
+  const checked = [..._dbfChecked].filter(i => rows[i] && rows[i].remaining > 0);
+  const target = checked.length ? checked : rows.map((r, i) => i).filter(i => rows[i].remaining > 0);
+  return target.reduce((s, i) => s + rows[i].remaining, 0);
+}
 
 // Kartu rincian cicilan melayang di tengah layar (bukan modal) — dibuka
-// saat kartu utang/piutang diklik ATAU tombol Bayar/Terima-nya ditekan
-// (kalau utangnya berperiode >1 cicilan — lihat openDebtPayModal). Selain
-// menampilkan jumlah keseluruhan dipecah per cicilan (dengan progress %
-// masing-masing & checkbox buat milih cicilan mana yang diprioritaskan),
-// juga ada input+tombol Catat pembayaran di bagian bawah kalau belum lunas.
-// Kalau daftar cicilannya panjang, area baris otomatis scrollable tanpa
-// scrollbar terlihat (lihat .dbf-rows), sementara header/total/bagian bayar
-// tetap diam di tempat.
-function openDebtBreakdown(id) {
+// saat kartu utang/piutang diklik (mode 'view': cuma nampilin rincian
+// tiap cicilan, TANPA checkbox/field bayar) ATAU tombol Bayar/Terima-nya
+// ditekan (mode 'pay': checkbox pemilih cicilan + akun + field nominal
+// ikut ditampilkan — lihat openDebtPayModal). Kalau daftar cicilannya
+// panjang, area baris otomatis scrollable tanpa scrollbar terlihat (lihat
+// .dbf-rows), sementara header/total/bagian bayar tetap diam di tempat.
+function openDebtBreakdown(id, mode) {
   const d = DEBTS.find(x => x.id === id);
   if (!d || !isDebtClickable(d)) return;
   const rows = computeDebtInstallments(d);
   if (!rows.length) return;
   if (_dbfDebtId !== id) _dbfChecked.clear();
   _dbfDebtId = id;
+  _dbfMode = mode === 'pay' ? 'pay' : 'view';
   const isPiutang = d.kind === 'piutang';
   const lunas = d.status === 'lunas';
   const cur   = currencyInfo(d.currency || 'IDR');
   const unit  = DEBT_PERIOD_UNIT[d.period] || '';
+  const showPay = _dbfMode === 'pay' && !lunas;
+  const maxPayable = showPay ? dbfMaxPayable(d, rows) : 0;
   const card  = document.getElementById('debtBreakdownCard');
   card.innerHTML = `
     <div class="dbf-header">
@@ -6102,9 +6192,9 @@ function openDebtBreakdown(id) {
         const rowDone = r.remaining <= 0;
         return `
         <div class="dbf-row${rowDone ? ' dbf-row-done' : ''}">
-          <label class="dbf-row-check">
+          ${showPay ? `<label class="dbf-row-check">
             <input type="checkbox" ${_dbfChecked.has(i) ? 'checked' : ''} ${rowDone ? 'disabled' : ''} onchange="toggleDebtInstallmentCheck(${i}, this.checked)">
-          </label>
+          </label>` : ''}
           <div class="dbf-row-idx">#${r.index}</div>
           <div class="dbf-row-body">
             <div class="dbf-row-date-wrap">
@@ -6126,31 +6216,50 @@ function openDebtBreakdown(id) {
       <span>Jumlah Keseluruhan</span>
       <span>${cur.symbol} ${d.amount.toLocaleString(cur.locale)}</span>
     </div>
-    ${!lunas ? `
+    ${showPay ? `
     <div class="dbf-pay">
+      <div class="field">
+        <label>Akun ${isPiutang ? 'Tujuan Dana' : 'Sumber Dana'}</label>
+        <div class="picker-trigger" onclick="openPicker(this,'dbfPayAccount','Pilih Akun')">
+          <div class="pt-text"><span id="dbfPayAccountLabel">Pilih akun</span></div>
+          <span class="picker-arrow">▾</span>
+        </div>
+        <input type="hidden" id="dbfPayAccount">
+      </div>
       <div class="dbf-pay-label">
         <span>Jumlah ${isPiutang ? 'Diterima' : 'Dibayar'}</span>
-        <span class="dbf-pay-hint" id="dbfPayHint">${_dbfChecked.size ? _dbfChecked.size + ' cicilan dicentang' : 'default: cicilan paling awal'}</span>
+        <span class="dbf-pay-hint" id="dbfPayHint">${_dbfChecked.size ? _dbfChecked.size + ' cicilan dicentang' : 'seluruh cicilan tersisa'} · maks. ${cur.symbol} ${maxPayable.toLocaleString(cur.locale)}</span>
       </div>
-      <input type="number" id="dbfPayAmount" inputmode="numeric" placeholder="0">
+      <input type="number" id="dbfPayAmount" inputmode="numeric" placeholder="0" max="${maxPayable}">
       <button class="dbf-pay-btn" onclick="submitDebtBreakdownPay(${d.id})">Catat</button>
     </div>` : ''}`;
   document.getElementById('debtBreakdownOverlay').classList.add('open');
 }
 
 // Toggle centang salah satu baris cicilan — cuma perlu update state di
-// Set-nya + teks hint-nya, gak perlu render ulang seluruh kartu (biar
-// nominal yang lagi diketik di field Jumlah gak ke-reset).
+// Set-nya + teks hint & batas maksimal field Jumlah, gak perlu render ulang
+// seluruh kartu (biar nominal yang lagi diketik di field Jumlah gak ke-reset).
 function toggleDebtInstallmentCheck(i, checked) {
   if (checked) _dbfChecked.add(i); else _dbfChecked.delete(i);
+  const d = DEBTS.find(x => x.id === _dbfDebtId);
+  if (!d) return;
+  const rows = computeDebtInstallments(d);
+  const max  = dbfMaxPayable(d, rows);
+  const cur  = currencyInfo(d.currency || 'IDR');
   const hint = document.getElementById('dbfPayHint');
-  if (hint) hint.textContent = _dbfChecked.size ? _dbfChecked.size + ' cicilan dicentang' : 'default: cicilan paling awal';
+  if (hint) hint.textContent = `${_dbfChecked.size ? _dbfChecked.size + ' cicilan dicentang' : 'seluruh cicilan tersisa'} · maks. ${cur.symbol} ${max.toLocaleString(cur.locale)}`;
+  const input = document.getElementById('dbfPayAmount');
+  if (input) {
+    input.max = max;
+    if ((parseInt(input.value) || 0) > max) input.value = max;
+  }
 }
 
 function closeDebtBreakdown() {
   document.getElementById('debtBreakdownOverlay').classList.remove('open');
   _dbfChecked.clear();
   _dbfDebtId = null;
+  _dbfMode = 'view';
 }
 function closeDebtBreakdownOutside(e) { if (e.target === document.getElementById('debtBreakdownOverlay')) closeDebtBreakdown(); }
 
@@ -6218,7 +6327,7 @@ function pickDbfDueEditDate(ds) {
   saveToStorage();
   const debtId = d.id;
   closeDbfDueEdit();
-  openDebtBreakdown(debtId);
+  openDebtBreakdown(debtId, _dbfMode);
   renderDebts();
 }
 
@@ -6230,7 +6339,7 @@ function resetDbfDueEdit() {
   saveToStorage();
   const debtId = d.id;
   closeDbfDueEdit();
-  openDebtBreakdown(debtId);
+  openDebtBreakdown(debtId, _dbfMode);
   renderDebts();
 }
 
@@ -6251,10 +6360,20 @@ function submitDebtBreakdownPay(id) {
   const d = DEBTS.find(x => x.id === id);
   if (!d) return;
   const input  = document.getElementById('dbfPayAmount');
-  const amount = parseInt(input ? input.value : '') || 0;
+  let amount = parseInt(input ? input.value : '') || 0;
   if (!amount) { showToast('Jumlah harus lebih dari 0', 'warning'); return; }
 
   const rows = computeDebtInstallments(d);
+  const maxPayable = dbfMaxPayable(d, rows);
+  if (amount > maxPayable) {
+    showToast(`Jumlah melebihi cicilan yang dituju (maks. Rp ${maxPayable.toLocaleString('id-ID')})`, 'warning');
+    return;
+  }
+  const accountId = document.getElementById('dbfPayAccount').value;
+  if (!accountId) { showToast('Pilih akun dulu', 'warning'); return; }
+  const isPiutang = d.kind === 'piutang';
+  if (!isPiutang && getWalletBalance(accountId) < amount) { showToast('Saldo akun tidak cukup', 'warning'); return; }
+
   const periodPaid = ensureDebtPeriodPaid(d);
   let order = [..._dbfChecked].filter(i => rows[i] && rows[i].remaining > 0);
   if (!order.length) order = rows.map((r, i) => i).filter(i => rows[i].remaining > 0);
@@ -6274,13 +6393,27 @@ function submitDebtBreakdownPay(id) {
   }
 
   syncDebtPaidFromPeriods(d);
+
+  // Dicatat sebagai transaksi Pengeluaran (Bayar Utang) / Pemasukan (Terima
+  // Piutang) biasa di riwayat transaksi, sama kayak submitDebtPay — kategori
+  // pakai judul utang/piutangnya (d.person), saldo akun terpilih otomatis
+  // berkurang/bertambah lewat getWalletBalance.
+  S.transactions.unshift({
+    id: Date.now(), type: isPiutang ? 'income' : 'expense', amount,
+    note: (isPiutang ? 'Terima piutang — ' : 'Bayar utang — ') + d.person,
+    date: new Date().toISOString().split('T')[0],
+    account: accountId, cat: d.person, catId: 'debt', catColor: debtTxColor(d.kind),
+  });
+
   saveToStorage();
   _dbfChecked.clear();
   const pct = debtProgressPct(d);
   const cur = currencyInfo(d.currency || 'IDR');
   showToast(d.status === 'lunas' ? 'Lunas!' : `${cur.symbol} ${amount.toLocaleString(cur.locale)} dicatat (rata-rata ${pct}%)`, 'success');
   renderDebts();
-  if (d.status === 'lunas') closeDebtBreakdown(); else openDebtBreakdown(id);
+  renderWallets();
+  renderDashboard();
+  if (d.status === 'lunas') closeDebtBreakdown(); else openDebtBreakdown(id, 'pay');
 }
 
 // Interpolasi warna merah → kuning/oranye → hijau berdasarkan progress 0-100,
@@ -6532,12 +6665,12 @@ function submitDebt() {
 
 /* Bayar/Terima (partial) Modal — cuma buat utang/piutang TANPA jadwal
    cicilan (tanpa periode, atau berperiode tapi cuma 1x). Yang punya jadwal
-   cicilan >1x pembayarannya dialihkan ke kartu rincian (openDebtBreakdown)
-   supaya user bisa milih mau bayar cicilan yang mana. */
+   cicilan >1x pembayarannya dialihkan ke kartu rincian (openDebtBreakdown
+   mode 'pay') supaya user bisa milih mau bayar cicilan yang mana. */
 let _activeDebtPayId = null;
 function openDebtPayModal(id) {
   const dCheck = DEBTS.find(x => x.id === id);
-  if (dCheck && isDebtClickable(dCheck)) { openDebtBreakdown(id); return; }
+  if (dCheck && isDebtClickable(dCheck)) { openDebtBreakdown(id, 'pay'); return; }
   _activeDebtPayId = id;
   const d = dCheck;
   if (!d) return;
@@ -6545,24 +6678,55 @@ function openDebtPayModal(id) {
   document.getElementById('debtPayModalTitle').textContent = (d.kind === 'piutang' ? 'Terima Dana — ' : 'Bayar — ') + d.person;
   document.getElementById('debtPaySisa').textContent = 'Sisa: ' + cur.symbol + ' ' + Math.max(0, d.amount - d.paid).toLocaleString(cur.locale);
   document.getElementById('debtPayAmount').value = '';
+  document.getElementById('debtPayAmount').max = Math.max(0, d.amount - d.paid);
+  const hidden = document.getElementById('debtPayAccount');
+  const lbl    = document.getElementById('debtPayAccountLabel');
+  if (hidden) hidden.value = '';
+  if (lbl)    lbl.textContent = 'Pilih akun';
   document.getElementById('debtPayModalOverlay').classList.add('open');
 }
 function closeDebtPayModal() { document.getElementById('debtPayModalOverlay').classList.remove('open'); _activeDebtPayId = null; }
 function closeDebtPayModalOutside(e) { if (e.target === document.getElementById('debtPayModalOverlay')) closeDebtPayModal(); }
+
+// Warna kategori transaksi hasil Bayar Utang / Terima Piutang di riwayat
+// transaksi — merah (kayak pengeluaran biasa) buat utang, biru (kayak
+// transfer) buat piutang, konsisten sama warna kartu utang/piutangnya sendiri.
+function debtTxColor(kind) { return kind === 'piutang' ? '#5EB3FF' : '#DC2626'; }
 
 function submitDebtPay() {
   const amount = parseInt(document.getElementById('debtPayAmount').value) || 0;
   if (!amount) { showToast('Jumlah harus lebih dari 0', 'warning'); return; }
   const d = DEBTS.find(x => x.id === _activeDebtPayId);
   if (!d) return;
+  const sisa = Math.max(0, d.amount - d.paid);
+  if (amount > sisa) { showToast(`Jumlah melebihi sisa (maks. Rp ${sisa.toLocaleString('id-ID')})`, 'warning'); return; }
+  const accountId = document.getElementById('debtPayAccount').value;
+  if (!accountId) { showToast('Pilih akun dulu', 'warning'); return; }
+  const isPiutang = d.kind === 'piutang';
+  if (!isPiutang && getWalletBalance(accountId) < amount) { showToast('Saldo akun tidak cukup', 'warning'); return; }
+
   d.paid = Math.min(d.amount, d.paid + amount);
   if (d.paid >= d.amount) d.status = 'lunas';
+
+  // Dicatat sebagai transaksi Pengeluaran (Bayar Utang) / Pemasukan (Terima
+  // Piutang) biasa di riwayat transaksi — kategorinya pakai judul utang/
+  // piutangnya sendiri (d.person), dan saldo akun yang dipilih otomatis
+  // berkurang/bertambah lewat getWalletBalance (sama seperti transaksi biasa).
+  S.transactions.unshift({
+    id: Date.now(), type: isPiutang ? 'income' : 'expense', amount,
+    note: (isPiutang ? 'Terima piutang — ' : 'Bayar utang — ') + d.person,
+    date: new Date().toISOString().split('T')[0],
+    account: accountId, cat: d.person, catId: 'debt', catColor: debtTxColor(d.kind),
+  });
+
   saveToStorage();
   closeDebtPayModal();
   const pct = Math.round(d.paid / d.amount * 100);
   const cur = currencyInfo(d.currency || 'IDR');
   showToast(d.status === 'lunas' ? 'Lunas!' : `${cur.symbol} ${amount.toLocaleString(cur.locale)} dicatat (${pct}%)`, 'success');
   renderDebts();
+  renderWallets();
+  renderDashboard();
 }
 
 /* Debt due-date picker — selalu pakai kalender biasa (tanggal + bulan +
@@ -7666,10 +7830,32 @@ window.addEventListener('resize',()=>{ if(S.currentPage==='dashboard')drawRiver(
 ══════════════════════════════════════════ */
 
 // Registry: fieldId → { title, options: [{value, text, icon}] }
+// Opsi picker akun dengan saldo ditampilkan di tiap baris, dan opsi yang
+// saldonya kurang dari nominal yang dibutuhkan otomatis dinonaktifkan
+// (dipakai buat picker akun di transaksi Pengeluaran & Bayar Utang — biar
+// nggak bisa milih akun yang bakal jadi minus). requiredAmount null/0
+// berarti nggak ada pembatasan (semua akun bisa dipilih, cuma saldonya
+// tetap ditampilkan buat referensi).
+function walletOptsWithBalance(wallets, requiredAmount) {
+  return wallets.map(w => {
+    const bal = getWalletBalance(w.id);
+    const cur = currencyInfo(w.currency || 'IDR');
+    const disabled = !!(requiredAmount && requiredAmount > 0 && bal < requiredAmount);
+    return {
+      value: w.id,
+      text: w.name + ' — ' + cur.symbol + ' ' + bal.toLocaleString(cur.locale),
+      disabled,
+    };
+  });
+}
+
 const PICKER_REGISTRY = {
   txAccount: {
     title: 'Pilih Akun',
-    getOpts: () => WALLETS.map(w => ({ value: w.id, text: w.name })),
+    getOpts: () => {
+      const required = (S.currentType === 'expense' && S.amountRaw > 0) ? S.amountRaw : null;
+      return walletOptsWithBalance(WALLETS, required);
+    },
     labelId: 'txAccountLabel',
   },
   txToAccount: {
@@ -7773,6 +7959,35 @@ const PICKER_REGISTRY = {
     // nggak relevan buat dihubungkan.
     getOpts: () => WALLETS.filter(w => (w.currency || 'IDR') === 'IDR').map(w => ({ value: w.id, text: w.name })),
     labelId: 'goalAccountLabel',
+  },
+  // Akun yang berkurang/bertambah saldonya saat Bayar Utang / Terima Piutang
+  // lewat modal sederhana (utang/piutang TANPA jadwal cicilan >1x — lihat
+  // openDebtPayModal). Cuma akun bermata uang sama dengan catatan utang/
+  // piutangnya yang ditawarkan, dan buat Bayar Utang (uang keluar), akun
+  // yang saldonya kurang dari sisa yang mau dibayar otomatis dinonaktifkan.
+  debtPayAccount: {
+    title: 'Pilih Akun',
+    getOpts: () => {
+      const d = DEBTS.find(x => x.id === _activeDebtPayId);
+      const cur = d ? (d.currency || 'IDR') : 'IDR';
+      const wallets = WALLETS.filter(w => (w.currency || 'IDR') === cur);
+      const required = (d && d.kind === 'utang') ? Math.max(0, d.amount - d.paid) : null;
+      return walletOptsWithBalance(wallets, required);
+    },
+    labelId: 'debtPayAccountLabel',
+  },
+  // Sama seperti debtPayAccount, tapi buat kartu rincian cicilan
+  // (openDebtBreakdown mode 'pay' — lihat dbfPayAmount/submitDebtBreakdownPay).
+  dbfPayAccount: {
+    title: 'Pilih Akun',
+    getOpts: () => {
+      const d = DEBTS.find(x => x.id === _dbfDebtId);
+      const cur = d ? (d.currency || 'IDR') : 'IDR';
+      const wallets = WALLETS.filter(w => (w.currency || 'IDR') === cur);
+      const required = (d && d.kind === 'utang') ? Math.max(0, d.amount - d.paid) : null;
+      return walletOptsWithBalance(wallets, required);
+    },
+    labelId: 'dbfPayAccountLabel',
   },
 };
 
@@ -7881,12 +8096,13 @@ function openPicker(trigger, fieldId, title) {
   _pickerActiveOpts = opts;
   document.getElementById('pickerTitle').textContent = title || reg.title;
   document.getElementById('pickerOpts').innerHTML = opts.map((o, i) => `
-    <div class="picker-opt ${o.value === curVal ? 'selected' : ''}" data-idx="${i}">
+    <div class="picker-opt ${o.value === curVal ? 'selected' : ''}${o.disabled ? ' picker-opt-disabled' : ''}" data-idx="${i}">
       ${o.icon ? ICON[o.icon]||'' : ''}<span>${escapeHtml(o.text)}</span>
     </div>`).join('');
   document.querySelectorAll('#pickerOpts .picker-opt').forEach(el => {
     el.addEventListener('click', () => {
       const o = _pickerActiveOpts[+el.dataset.idx];
+      if (o.disabled) { showToast('Saldo akun ini tidak cukup', 'warning'); return; }
       pickOpt(fieldId, o);
     });
   });
@@ -7905,6 +8121,8 @@ function pickOpt(fieldId, o) {
   if ((fieldId === 'txAccount' || fieldId === 'txToAccount') && typeof updateTransferConvertPreview === 'function') updateTransferConvertPreview();
   if (fieldId === 'txCategory') S.selectedCat = o.value;
   if (fieldId === 'debtPeriod') onDebtPeriodChange(o.value);
+  if (fieldId === 'walletTypeInput')     syncWalletAccountNumberField('wallet', o.value);
+  if (fieldId === 'editWalletTypeInput') syncWalletAccountNumberField('editWallet', o.value);
   if (fieldId === 'fxFromInput' || fieldId === 'fxToInput') updateFxRateLabel();
   closePicker();
 }
