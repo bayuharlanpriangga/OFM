@@ -2,6 +2,7 @@
    TOKENS
 ═══════════════════════════════════════ */
 :root {
+  color-scheme: light;
   /* ─── LIGHT THEME ───
      Deep navy text on a soft off-white canvas, with the same accent hues
      as before but deepened a notch so they stay readable on light. */
@@ -50,7 +51,7 @@
    RESET
 ═══════════════════════════════════════ */
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
-html { font-size: 16px; }
+html { font-size: 16px; background: #F4F6FB; }
 body {
   font-family: var(--sans);
   color: var(--txt);
@@ -58,6 +59,12 @@ body {
   overflow-x: hidden;
   -webkit-font-smoothing: antialiased;
   position: relative;
+  /* Sama dengan theme-color meta & manifest background_color — dijadikan
+     background beneran (bukan cuma warna canvas transparan di atasnya)
+     supaya status bar & system nav bar Android (mode edge-to-edge) yang
+     nyontek warna paling bawah/atas halaman ikut selaras, bukan jatuh ke
+     hitam bawaan browser. */
+  background: #F4F6FB;
 }
 
 /* ═══════════════════════════════════════
@@ -1422,7 +1429,9 @@ body {
 .wallet-name { font-family: var(--disp); font-size: 20px; font-weight: 600; margin-bottom: 3px; position: relative; z-index: 1; }
 .wallet-bank { font-size: 12px; opacity: 0.55; margin-bottom: 16px; position: relative; z-index: 1; }
 .wallet-bal  { font-family: var(--mono); font-size: 24px; font-weight: 500; position: relative; z-index: 1; }
-.wallet-bal .wr-cur { font-size: 14px; opacity: 0.65; margin-right: 2px; }
+.wallet-bal .wr-cur { font-size: 14px; opacity: 0.65; margin-right: 2px; transition: color 0.2s; }
+.wb-goal-label { display: none; align-items: center; gap: 5px; font-family: var(--disp); font-size: 12px; font-weight: 500; opacity: 0.85; margin-left: 6px; vertical-align: middle; }
+.wb-goal-icon { display: inline-flex; align-items: center; font-size: 13px; }
 .wallet-footer { display: flex; justify-content: space-between; align-items: center; margin-top: 14px; padding-top: 12px; border-top: 1px solid rgba(255,255,255,0.12); position: relative; z-index: 1; }
 .wallet-last { font-size: 11px; opacity: 0.45; }
 .wallet-tag  { font-size: 10px; padding: 2px 8px; border-radius: 99px; background: rgba(255,255,255,0.12); }

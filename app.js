@@ -239,7 +239,6 @@ const S = {
   transactions: [],
   currentType: 'expense',
   selectedCat: null,
-  selectedBudgetCat: null,
   amountRaw: 0,
   currentPage: 'dashboard',
   _txReturnPage: 'dashboard',
@@ -1403,7 +1402,7 @@ function openModal() {
   if (_tdLbl) _tdLbl.textContent = 'Hari ini';
   document.getElementById('txNote').value = '';
   document.getElementById('amountDisplay').textContent = '0';
-  S.amountRaw = 0; S.selectedCat = null; S.selectedBudgetCat = null;
+  S.amountRaw = 0; S.selectedCat = null;
   removeReceipt();
   setType('expense');
   // Reset kotak "Catat Cepat" tiap kali form dibuka, biar ga ada teks/preview nyisa dari sesi sebelumnya
@@ -1423,7 +1422,6 @@ function openModal() {
     if (hid) hid.value = '';
   }
   updateTxAmountCurrency();
-  renderBudgetCatPicker();
 }
 function closeModal() { showPage(S._txReturnPage || 'dashboard'); }
 
@@ -1578,7 +1576,6 @@ function setType(t) {
   // If there's only one possible category (e.g. Transfer), pick it automatically —
   // otherwise force the user to choose explicitly.
   S.selectedCat = cats.length === 1 ? cats[0].id : null;
-  S.selectedBudgetCat = null;
   ['expense','income','transfer'].forEach(type => {
     const b = document.getElementById('type' + type.charAt(0).toUpperCase() + type.slice(1));
     b.className = 'type-btn' + (type === t ? ' active ' + t : '');
@@ -1595,7 +1592,6 @@ function setType(t) {
     if (catHidden) catHidden.value = '';
     if (catLbl) catLbl.textContent = 'Pilih kategori';
   }
-  renderBudgetCatPicker();
 
   // Transfer punya akun asal DAN akun tujuan, jadi field-nya beda dari
   // Keluar/Masuk: kategori disembunyikan (selalu "Antar Akun"), label
@@ -1617,33 +1613,6 @@ function setType(t) {
   } else if (typeof updateTransferConvertPreview === 'function') {
     updateTransferConvertPreview();
   }
-}
-
-function renderBudgetCatPicker() {
-  const wrap = document.getElementById('budgetCatWrap');
-  const picker = document.getElementById('budgetCatPicker');
-  if (!wrap || !picker) return;
-  const accId = document.getElementById('txAccount') ? document.getElementById('txAccount').value : '';
-  const accCurrency = walletCurrencyCode(accId);
-  // Cuma tampilkan kategori anggaran yang currency-nya cocok sama akun yang
-  // lagi dipilih — biar transaksi nggak bisa ke-assign ke budget beda currency.
-  const matchingCats = BUDGET.cats.filter(c => (c.currency || 'IDR') === accCurrency);
-  if (S.selectedBudgetCat && !matchingCats.some(c => c.id === S.selectedBudgetCat)) {
-    S.selectedBudgetCat = null; // akun diganti, kategori lama gak relevan lagi
-  }
-  if (S.currentType !== 'expense' || !matchingCats.length) {
-    wrap.style.display = 'none';
-    return;
-  }
-  wrap.style.display = 'flex';
-  picker.innerHTML = matchingCats.map(c =>
-    `<div class="cat-chip ${S.selectedBudgetCat===c.id?'selected':''}" onclick="selectBudgetCat('${c.id}')">${ICON[c.icon]||''} ${escapeHtml(c.label)}</div>`
-  ).join('');
-}
-
-function selectBudgetCat(id) {
-  S.selectedBudgetCat = (S.selectedBudgetCat === id) ? null : id;
-  renderBudgetCatPicker();
 }
 
 /* ══════════════════════════════════════════
@@ -2036,23 +2005,23 @@ function submitTransaction() {
   const catId   = S.selectedCat;
   const cat     = cats.find(c=>c.id===catId) || { label:'Lainnya', color:'#888' };
 
+  // Kategori anggaran nggak lagi punya picker terpisah — begitu kategori
+  // transaksi ini juga terdaftar sebagai kategori anggaran (dicocokkan lewat
+  // id, atau lewat nama+mata uang buat kategori anggaran lama yang chip-nya
+  // beda id), transaksinya otomatis nyambung ke anggaran itu.
+  const accCur = walletCurrencyCode(account);
+  const bc = (S.currentType === 'expense')
+    ? (BUDGET.cats.find(b=>b.id===catId)
+       || BUDGET.cats.find(b => (b.currency||'IDR') === accCur && b.label.trim().toLowerCase() === cat.label.trim().toLowerCase()))
+    : null;
+
   const tx = { id:Date.now(), type:S.currentType, amount:S.amountRaw,
     note, date, account, cat:cat.label, catId, catColor:cat.color,
-    budgetCatId: (S.currentType === 'expense' ? (S.selectedBudgetCat || null) : null),
+    budgetCatId: bc ? bc.id : null,
     receipt: S.pendingReceipt || null };
   S.transactions.unshift(tx);
 
   if (S.currentType === 'expense') {
-    // Prefer the explicitly-picked budget category; fall back to an id match
-    // (covers custom budget categories that also appear as a regular category chip).
-    const accCur = walletCurrencyCode(account);
-    const bc = (S.selectedBudgetCat && BUDGET.cats.find(b=>b.id===S.selectedBudgetCat))
-             || BUDGET.cats.find(b=>b.id===catId)
-             // Fallback: match by name (case-insensitive) + currency. Catches the
-             // case where a budget category shares a label with a regular expense
-             // category (e.g. two "Makan" chips with different ids) and the user
-             // picked the one that isn't directly linked — it should still count.
-             || BUDGET.cats.find(b => (b.currency||'IDR') === accCur && b.label.trim().toLowerCase() === cat.label.trim().toLowerCase());
     if (bc) {
       if (walletCurrencyCode(account) === (bc.currency || 'IDR')) {
         bc.spent += S.amountRaw;
@@ -2789,6 +2758,12 @@ function getWalletBalance(walletId) {
 function renderWallets() {
   const list = document.getElementById('walletList');
   if (!list) return;
+  // Hentikan ticker kartu akun lama sebelum render ulang, biar interval yang
+  // nempel ke elemen yang bakal dibuang (akun dihapus/urutan berubah) nggak
+  // nyangkut jalan terus di background.
+  Object.keys(_tickerState).forEach(k => {
+    if (k.indexOf('wallet_') === 0 && _tickerState[k].interval) clearInterval(_tickerState[k].interval);
+  });
   if (!WALLETS.length) {
     list.innerHTML = `<div class="empty"><div class="empty-icon">${ICON.creditCard}</div><h3>Belum ada akun</h3><p>Tambahkan rekening atau dompetmu</p></div>`;
     return;
@@ -2809,7 +2784,7 @@ function renderWallets() {
           <div class="wallet-chip" style="color:${w.chipColor}">${walletTypeLabel(w)}</div>
           <div class="wallet-name">${w.name}</div>
           <div class="wallet-bank">${w.bank}</div>
-          <div class="wallet-bal"><span class="wr-cur">${cur.symbol}</span>${bal.toLocaleString(cur.locale)}</div>
+          <div class="wallet-bal"><span class="wr-cur" id="wbCur-${w.id}">${cur.symbol}</span><span id="wbAmt-${w.id}">${bal.toLocaleString(cur.locale)}</span><span class="wb-goal-label" id="wbLabel-${w.id}" style="display:none"></span></div>
           <div class="wallet-footer">
             <div class="wallet-last">Saldo awal: ${cur.symbol} ${w.bal.toLocaleString(cur.locale)}</div>
             <div class="wallet-tag" style="color:${w.chipColor}">Aktif</div>
@@ -2819,6 +2794,46 @@ function renderWallets() {
     </div>`;
   }).join('');
   initWalletSwipe();
+  WALLETS.forEach(runWalletBillboard);
+}
+
+// Entri buat papan-iklan kartu akun: nominal pertama selalu "dana bebas"
+// (saldo akun apa adanya, karena dana yang sudah di-topup ke goal sudah
+// dipotong langsung dari saldo akun — lihat submitTopup()), lalu tiap goal
+// yang terhubung ke akun ini DAN nominalnya udah kedeteksi bukan 0 nambah
+// satu entri sendiri. Goal yang masih 0 sengaja nggak ikut nge-cycle.
+function walletBillboardEntries(w) {
+  const entries = [{ type:'free', amount: getWalletBalance(w.id) }];
+  GOALS.filter(g => g.accountId === w.id && g.saved).forEach(g => {
+    entries.push({ type:'goal', amount: g.saved, label: g.name, icon: g.icon, color: goalColor(g) });
+  });
+  return entries;
+}
+
+function runWalletBillboard(w) {
+  const key     = 'wallet_' + w.id;
+  const curEl   = document.getElementById('wbCur-' + w.id);
+  const labelEl = document.getElementById('wbLabel-' + w.id);
+  const amtEl   = document.getElementById('wbAmt-' + w.id);
+  if (!curEl || !amtEl) return;
+  const cur     = currencyInfo(w.currency);
+  const entries = walletBillboardEntries(w);
+  runGroupTicker(key, [curEl, labelEl, amtEl], entries, e => {
+    // Dana bebas pakai warna bawaan kartu; giliran goal, simbol mata uang &
+    // ikonnya ikut warna accent goal itu — teksnya (judul goal) tetap warna
+    // biasa (ikut warna angka nominal di kartu).
+    curEl.style.color = e.type === 'goal' ? e.color : '';
+    amtEl.textContent = e.amount.toLocaleString(cur.locale);
+    if (labelEl) {
+      if (e.type === 'goal') {
+        labelEl.style.display = 'inline-flex';
+        labelEl.innerHTML = `<span class="wb-goal-icon" style="color:${e.color}">${ICON[e.icon]||ICON.target}</span><span class="wb-goal-text">${escapeHtml(e.label)}</span>`;
+      } else {
+        labelEl.style.display = 'none';
+        labelEl.innerHTML = '';
+      }
+    }
+  });
 }
 
 /* Swipe-to-reveal for wallet cards — drag a card left to uncover its
@@ -5633,8 +5648,9 @@ function renderGoals() {
             <div class="goal-bar-bg">
               <div class="goal-bar-fill" style="width:${pct}%;background:linear-gradient(90deg,${color},${color}99)"></div>
             </div>
-            <div class="goal-footer" style="justify-content:flex-end">
-              <div class="goal-add-btn" style="color:${color};background:${color}1f;border-color:${color}55" onclick="event.stopPropagation();openTopupModal(${g.id})">＋ Tambah Dana</div>
+            <div class="goal-footer" style="justify-content:flex-end;gap:8px">
+              <div class="goal-add-btn" style="color:${color};background:${color}1f;border-color:${color}55" onclick="event.stopPropagation();openTopupModal(${g.id},'withdraw')">− Ambil</div>
+              <div class="goal-add-btn" style="color:${color};background:${color}1f;border-color:${color}55" onclick="event.stopPropagation();openTopupModal(${g.id},'add')">＋ Tambah</div>
             </div>
           </div>
         </div>
@@ -5746,9 +5762,17 @@ function renderGoalsPreview() {
 
 function deleteGoal(id) {
   showConfirm('Hapus goal ini?', 'Goal akan dihapus permanen.', () => {
+    const g = GOALS.find(g => g.id === id);
+    // Dana yang sudah ke-park di goal ini dikembalikan ke akun yang
+    // terhubung, biar nggak raib begitu goal-nya dihapus.
+    if (g && g.accountId && g.saved) {
+      const acc = WALLETS.find(w => w.id === g.accountId);
+      if (acc) acc.bal += g.saved;
+    }
     GOALS = GOALS.filter(g => g.id !== id);
     saveToStorage();
     renderGoals();
+    renderWallets();
     showToast('Goal dihapus', 'success');
   });
 }
@@ -5766,35 +5790,72 @@ function openGoalModal() {
   const gl = document.getElementById('goalIconLabel'); if(gl) gl.innerHTML = ICON.laptop;
   _pendingGoalColor = BUDGET_CAT_COLORS[GOALS.length % BUDGET_CAT_COLORS.length];
   updateColorTrigger('goal');
-  // Reset picker display
-  const gta = document.getElementById('txAccountLabel'); if(gta && WALLETS.length) gta.textContent = WALLETS[0].name;
+  // Reset picker akun — wajib pilih akun Rp yang mau dihubungkan ke goal ini.
+  const gaHidden = document.getElementById('goalAccount');
+  const gaLbl    = document.getElementById('goalAccountLabel');
+  const rpWallets = WALLETS.filter(w => (w.currency || 'IDR') === 'IDR');
+  if (rpWallets.length) {
+    if (gaHidden) gaHidden.value = rpWallets[0].id;
+    if (gaLbl)    gaLbl.textContent = rpWallets[0].name;
+  } else {
+    if (gaHidden) gaHidden.value = '';
+    if (gaLbl)    gaLbl.textContent = 'Tambah akun dulu';
+  }
 }
 function closeGoalModal() { document.getElementById('goalModalOverlay').classList.remove('open'); }
 function closeGoalModalOutside(e) { if (e.target === document.getElementById('goalModalOverlay')) closeGoalModal(); }
 
 function submitGoal() {
-  const name    = document.getElementById('goalName').value.trim();
-  const target  = parseInt(document.getElementById('goalTarget').value) || 0;
-  const saved   = parseInt(document.getElementById('goalSaved').value)  || 0;
-  const deadline= document.getElementById('goalDeadline').value;
-  const icon    = document.getElementById('goalIcon').value || 'target';
+  const name       = document.getElementById('goalName').value.trim();
+  const accountId  = document.getElementById('goalAccount').value || null;
+  const target     = parseInt(document.getElementById('goalTarget').value) || 0;
+  const saved      = parseInt(document.getElementById('goalSaved').value)  || 0;
+  const deadline   = document.getElementById('goalDeadline').value;
+  const icon       = document.getElementById('goalIcon').value || 'target';
   if (!name)   { showToast('Nama goal wajib diisi', 'warning'); return; }
+  if (WALLETS.some(w => (w.currency||'IDR')==='IDR') && !accountId) { showToast('Pilih akun dulu', 'warning'); return; }
   if (!target) { showToast('Target harus lebih dari 0', 'warning'); return; }
   const color = _pendingGoalColor || BUDGET_CAT_COLORS[GOALS.length % BUDGET_CAT_COLORS.length];
-  GOALS = [...GOALS, { id: Date.now(), name, icon, target, saved, deadline, color }];
+  GOALS = [...GOALS, { id: Date.now(), name, icon, target, saved, deadline, color, accountId }];
   saveToStorage();
   closeGoalModal();
   showToast('Goal berhasil ditambahkan!', 'success');
   renderGoals();
+  renderWallets();
 }
 
-/* Top-up Modal */
-function openTopupModal(goalId) {
+/* Top-up / Withdraw Modal — mode 'add' (Tambah) atau 'withdraw' (Ambil).
+   Judulnya sengaja nggak pakai tanda pemisah "—": warna nama goal-nya
+   sendiri (accent) yang jadi pembeda visual dari kata "Tambah"/"Ambil". */
+let _topupMode = 'add';
+
+function openTopupModal(goalId, mode) {
   _activeTopupGoalId = goalId;
+  _topupMode = mode === 'withdraw' ? 'withdraw' : 'add';
   const g = GOALS.find(g => g.id === goalId);
   if (!g) return;
-  document.getElementById('topupModalTitle').textContent = 'Tambah Dana — ' + g.name;
+  const color = goalColor(g);
+  const isAdd = _topupMode === 'add';
+  const titleEl = document.getElementById('topupModalTitle');
+  if (titleEl) titleEl.innerHTML = `${isAdd ? 'Tambah' : 'Ambil'} <span style="color:${color}">${escapeHtml(g.name)}</span>`;
+  const submitBtn = document.getElementById('topupSubmitBtn');
+  if (submitBtn) submitBtn.textContent = isAdd ? 'Tambah Sekarang' : 'Ambil Sekarang';
+  const lbl = document.getElementById('topupAmountLabel');
+  if (lbl) lbl.textContent = isAdd ? 'Jumlah Tambah (Rp)' : 'Jumlah Ambil (Rp)';
   document.getElementById('topupAmount').value = '';
+  const acc = g.accountId ? WALLETS.find(w => w.id === g.accountId) : null;
+  const info = document.getElementById('topupAccountInfo');
+  if (info) {
+    if (isAdd) {
+      info.textContent = acc
+        ? `Dana diambil dari ${acc.name} — saldo tersedia Rp ${getWalletBalance(acc.id).toLocaleString('id-ID')}`
+        : '';
+    } else {
+      info.textContent = acc
+        ? `Dana masuk ke ${acc.name} — tersimpan di goal Rp ${g.saved.toLocaleString('id-ID')}`
+        : '';
+    }
+  }
   document.getElementById('topupModalOverlay').classList.add('open');
 }
 function closeTopupModal() { document.getElementById('topupModalOverlay').classList.remove('open'); _activeTopupGoalId = null; }
@@ -5805,12 +5866,37 @@ function submitTopup() {
   if (!amount) { showToast('Jumlah harus lebih dari 0', 'warning'); return; }
   const g = GOALS.find(g => g.id === _activeTopupGoalId);
   if (!g) return;
-  g.saved = Math.min(g.target, g.saved + amount);
+  const acc = g.accountId ? WALLETS.find(w => w.id === g.accountId) : null;
+
+  if (_topupMode === 'withdraw') {
+    const room = Math.max(0, g.saved);
+    if (room <= 0) { showToast('Belum ada dana tersimpan di goal ini', 'info'); closeTopupModal(); return; }
+    const taken = Math.min(amount, room);
+    g.saved -= taken;
+    // Dana yang diambil balik lagi ke akun yang terhubung sejak goal ini dibuat.
+    if (acc) acc.bal += taken;
+    saveToStorage();
+    closeTopupModal();
+    showToast(`Rp ${taken.toLocaleString('id-ID')} diambil dari "${g.name}"`, 'success');
+    renderGoals();
+    renderWallets();
+    return;
+  }
+
+  const room = Math.max(0, g.target - g.saved);
+  if (room <= 0) { showToast('Goal ini sudah tercapai', 'info'); closeTopupModal(); return; }
+  const added = Math.min(amount, room);
+  if (acc && getWalletBalance(acc.id) < added) { showToast(`Saldo ${acc.name} tidak cukup`, 'warning'); return; }
+  g.saved += added;
+  // Dana yang ditambahkan ke goal dipindah keluar dari saldo bebas akun yang
+  // terhubung, biar nominal akunnya ikut berkurang (bukan cuma dicatat dobel).
+  if (acc) acc.bal -= added;
   saveToStorage();
   closeTopupModal();
   const pct = Math.round(g.saved / g.target * 100);
-  showToast(pct >= 100 ? 'Goal tercapai!' : `+Rp ${amount.toLocaleString('id-ID')} ditambahkan (${pct}%)`, 'success');
+  showToast(pct >= 100 ? 'Goal tercapai!' : `+Rp ${added.toLocaleString('id-ID')} ditambahkan (${pct}%)`, 'success');
   renderGoals();
+  renderWallets();
 }
 
 /* ══════════════════════════════════════════
@@ -7680,6 +7766,14 @@ const PICKER_REGISTRY = {
     getOpts: () => WALLETS.map(w => ({ value: w.id, text: w.name })),
     labelId: 'recurAccountLabel',
   },
+  goalAccount: {
+    title: 'Pilih Akun',
+    // Cuma akun berdenominasi Rp yang ditawarkan — nominal target/saved goal
+    // selalu dalam Rp (lihat label "Target (Rp)"), jadi akun beda mata uang
+    // nggak relevan buat dihubungkan.
+    getOpts: () => WALLETS.filter(w => (w.currency || 'IDR') === 'IDR').map(w => ({ value: w.id, text: w.name })),
+    labelId: 'goalAccountLabel',
+  },
 };
 
 let _pickerActiveField = null;
@@ -7808,7 +7902,6 @@ function pickOpt(fieldId, o) {
   if (hidden) hidden.value = o.value;
   if (lbl)    lbl.innerHTML = (o.icon ? ICON[o.icon]||'' : '') + ' ' + escapeHtml(o.text);
   if (fieldId === 'txAccount' && typeof updateTxAmountCurrency === 'function') updateTxAmountCurrency();
-  if (fieldId === 'txAccount' && typeof renderBudgetCatPicker === 'function') renderBudgetCatPicker();
   if ((fieldId === 'txAccount' || fieldId === 'txToAccount') && typeof updateTransferConvertPreview === 'function') updateTransferConvertPreview();
   if (fieldId === 'txCategory') S.selectedCat = o.value;
   if (fieldId === 'debtPeriod') onDebtPeriodChange(o.value);
