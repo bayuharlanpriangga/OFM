@@ -7843,7 +7843,8 @@ function walletOptsWithBalance(wallets, requiredAmount) {
     const disabled = !!(requiredAmount && requiredAmount > 0 && bal < requiredAmount);
     return {
       value: w.id,
-      text: w.name + ' — ' + cur.symbol + ' ' + bal.toLocaleString(cur.locale),
+      text: w.name,
+      sub: cur.symbol + ' ' + bal.toLocaleString(cur.locale),
       disabled,
     };
   });
@@ -8097,7 +8098,7 @@ function openPicker(trigger, fieldId, title) {
   document.getElementById('pickerTitle').textContent = title || reg.title;
   document.getElementById('pickerOpts').innerHTML = opts.map((o, i) => `
     <div class="picker-opt ${o.value === curVal ? 'selected' : ''}${o.disabled ? ' picker-opt-disabled' : ''}" data-idx="${i}">
-      ${o.icon ? ICON[o.icon]||'' : ''}<span>${escapeHtml(o.text)}</span>
+      ${o.icon ? ICON[o.icon]||'' : ''}<span class="picker-opt-name">${escapeHtml(o.text)}</span>${o.sub ? `<span class="picker-opt-amount">${escapeHtml(o.sub)}</span>` : ''}
     </div>`).join('');
   document.querySelectorAll('#pickerOpts .picker-opt').forEach(el => {
     el.addEventListener('click', () => {
