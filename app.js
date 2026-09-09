@@ -876,7 +876,10 @@ function applySmartParse() {
   if (result.amount > 0) {
     S.amountRaw = result.amount;
     document.getElementById('amountDisplay').textContent = result.amount.toLocaleString('id-ID');
-    chips.push({ text: 'Rp' + result.amount.toLocaleString('id-ID'), warn: false });
+    // Simbol ngikut akun yang lagi kepilih di form (fallback IDR kalau belum
+    // ada akun kepilih) — dulu di-hardcode "Rp" walau akunnya bukan Rupiah.
+    const cur = currencyInfo(currentTxAccountCurrencyCode());
+    chips.push({ text: cur.symbol + result.amount.toLocaleString(cur.locale), warn: false });
   } else {
     chips.push({ text: 'Nominal Tidak Terdeteksi', warn: true });
   }
@@ -1019,7 +1022,8 @@ function applySmsParse() {
   if (result.amount > 0) {
     S.amountRaw = result.amount;
     document.getElementById('amountDisplay').textContent = result.amount.toLocaleString('id-ID');
-    chips.push({ text: 'Rp' + result.amount.toLocaleString('id-ID'), warn: false });
+    const cur = currencyInfo(currentTxAccountCurrencyCode());
+    chips.push({ text: cur.symbol + result.amount.toLocaleString(cur.locale), warn: false });
   } else {
     chips.push({ text: 'Nominal Tidak Terdeteksi', warn: true });
   }
@@ -1944,7 +1948,8 @@ async function runReceiptOCR(dataUrl) {
       S.amountRaw = total;
       const amtEl = document.getElementById('amountDisplay');
       if (amtEl) amtEl.textContent = total.toLocaleString('id-ID');
-      chips.push({ text: 'Rp' + total.toLocaleString('id-ID'), warn: false });
+      const cur = currencyInfo(currentTxAccountCurrencyCode());
+      chips.push({ text: cur.symbol + total.toLocaleString(cur.locale), warn: false });
     } else {
       chips.push({ text: 'Nominal tidak kebaca — isi manual', warn: true });
     }
@@ -2536,7 +2541,7 @@ function renderTxList() {
             <div class="tx-name">${escapeHtml(t.note)}</div>
             <div class="tx-meta">${t.type==='transfer' ? `${escapeHtml(t.cat)} · ${escapeHtml(walletName(t.fromAccount||t.account))} → ${escapeHtml(walletName(t.toAccount))}` : `${escapeHtml(t.cat)} · ${escapeHtml(walletName(t.account))}`}</div>
           </div>
-          <div class="tx-amt ${t.type}">${t.type==='income'?'+':(t.type==='transfer'?'':'-')}Rp ${t.amount.toLocaleString('id-ID')}</div>
+          <div class="tx-amt ${t.type}">${t.type==='income'?'+':(t.type==='transfer'?'':'-')}${currencyInfo(walletCurrencyCode(t.type==='transfer'?(t.fromAccount||t.account):t.account)).symbol} ${t.amount.toLocaleString(currencyInfo(walletCurrencyCode(t.type==='transfer'?(t.fromAccount||t.account):t.account)).locale)}</div>
         </div>
       </div>
     `).join('')}
@@ -3672,6 +3677,15 @@ function updateTxAmountCurrency() {
   curEl.textContent = currencyInfo(code).symbol;
 }
 
+// Mata uang akun yang lagi kepilih di form "Catat Transaksi" (dipakai buat
+// chip smart-parse/SMS-parse/OCR struk supaya simbolnya konsisten sama akun
+// yang lagi aktif, bukan di-hardcode "Rp"). Fallback IDR kalau belum ada
+// akun kepilih sama sekali.
+function currentTxAccountCurrencyCode() {
+  const hid = document.getElementById('txAccount');
+  return (hid && hid.value) ? walletCurrencyCode(hid.value) : 'IDR';
+}
+
 /* ── Pembatas anggaran di form Catat Transaksi ──────────────────────────
    Kalau kategori transaksi yang dipilih juga terdaftar sebagai kategori
    anggaran (lihat pencocokan di submitTransaction), nominal di form ini
@@ -3892,7 +3906,7 @@ function setAnalyticsCurFilter(key, code) {
   if (lbl) lbl.textContent = code;
   closeDp(document.getElementById('acf' + key + 'Panel'));
   if (key === 'forecast') renderForecast();
-  if (key === 'donut')    drawDonut();
+  if (key === 'donut')  { drawDonut(); renderInsights(); }
   if (key === 'trend')    drawTrend();
 }
 // Filter pill only makes sense once there's actually more than one wallet
@@ -4142,7 +4156,14 @@ function renderInsights() {
   if (!list) return;
   const _af = typeof ANALYTICS_FILTER !== 'undefined' ? ANALYTICS_FILTER : {};
   const inRange = t => (!_af.dateFrom || t.date >= _af.dateFrom) && (!_af.dateTo || t.date <= _af.dateTo);
-  const expenses = S.transactions.filter(t => t.type === 'expense' && inRange(t));
+  // Insight ini nempel tepat di bawah card Kategori, jadi ngikutin mata uang
+  // yang lagi aktif di sana (analyticsEffectiveCur('donut')) — dulu semua
+  // transaksi lintas mata uang dijumlah mentah jadi satu angka berlabel
+  // "Rp", padahal bisa aja campuran IDR+USD dst.
+  const curCode = analyticsEffectiveCur('donut');
+  const sym = currencyInfo(curCode).symbol;
+  const loc = currencyInfo(curCode).locale;
+  const expenses = S.transactions.filter(t => t.type === 'expense' && inRange(t) && walletCurrencyCode(t.account) === curCode);
 
   if (!expenses.length) {
     list.innerHTML = '<div class="insight-card cc-tile"><div class="insight-icon" style="background:rgba(255,255,255,0.08);color:var(--txt3)">'+ICON.sparkles+'</div><div class="insight-body"><div class="insight-title">Belum ada insight</div></div></div>';
@@ -4167,7 +4188,7 @@ function renderInsights() {
         <div class="insight-icon" style="background:${topCat.color}22;color:${topCat.color}">${ICON.flame}</div>
         <div class="insight-body">
           <div class="insight-title">Kategori paling boros: ${escapeHtml(topCat.label)}</div>
-          <div class="insight-desc">Rp ${topCat.total.toLocaleString('id-ID')} (${pct}% dari total pengeluaran periode ini, dari ${topCat.count} transaksi)</div>
+          <div class="insight-desc">${sym} ${topCat.total.toLocaleString(loc)} (${pct}% dari total pengeluaran periode ini, dari ${topCat.count} transaksi)</div>
         </div>
       </div>`);
   }
@@ -4180,7 +4201,7 @@ function renderInsights() {
         <div class="insight-icon" style="background:rgba(255,107,132,0.15);color:var(--red)">${ICON.alertOctagon}</div>
         <div class="insight-body">
           <div class="insight-title">Transaksi terbesar: ${escapeHtml(biggestTx.note || biggestTx.cat)}</div>
-          <div class="insight-desc">Rp ${biggestTx.amount.toLocaleString('id-ID')} · ${escapeHtml(biggestTx.cat)} · ${fmtDate(biggestTx.date)}</div>
+          <div class="insight-desc">${sym} ${biggestTx.amount.toLocaleString(loc)} · ${escapeHtml(biggestTx.cat)} · ${fmtDate(biggestTx.date)}</div>
         </div>
       </div>`);
   }
@@ -4188,7 +4209,7 @@ function renderInsights() {
   // 3) Category that spiked the most vs the previous period (only if a bounded period is selected)
   const prev = getPreviousPeriod(_af.dateFrom, _af.dateTo);
   if (prev) {
-    const prevExpenses = S.transactions.filter(t => t.type === 'expense' && t.date >= prev.from && t.date <= prev.to);
+    const prevExpenses = S.transactions.filter(t => t.type === 'expense' && t.date >= prev.from && t.date <= prev.to && walletCurrencyCode(t.account) === curCode);
     const prevCatMap = {};
     prevExpenses.forEach(t => { prevCatMap[t.catId] = (prevCatMap[t.catId] || 0) + t.amount; });
     let spike = null;
@@ -4205,7 +4226,7 @@ function renderInsights() {
           <div class="insight-icon" style="background:${spike.color}22;color:${spike.color}">${ICON.trendUp}</div>
           <div class="insight-body">
             <div class="insight-title">${escapeHtml(spike.label)} melonjak</div>
-            <div class="insight-desc">Naik Rp ${spike.diff.toLocaleString('id-ID')} (${spike.prevTotal > 0 ? '+' + spike.pct + '%' : 'kategori baru'}) dibanding periode sebelumnya</div>
+            <div class="insight-desc">Naik ${sym} ${spike.diff.toLocaleString(loc)} (${spike.prevTotal > 0 ? '+' + spike.pct + '%' : 'kategori baru'}) dibanding periode sebelumnya</div>
           </div>
         </div>`);
     }
@@ -4526,7 +4547,7 @@ function renderAccountBreakdown() {
   const rows = Object.entries(map)
     .sort((a,b) => b[1].count - a[1].count)
     .slice(0, 6)
-    .map(([id, d], i) => ({ id, name: walletName(id), color: palette[i % palette.length], ...d }));
+    .map(([id, d], i) => ({ id, name: walletName(id), color: palette[i % palette.length], cur: walletCurrencyCode(id), ...d }));
 
   if (!rows.length) {
     wrap.innerHTML = `<div style="color:var(--txt3);font-size:12px;text-align:center;padding:8px 0">Belum ada transaksi pada periode ini.</div>`;
@@ -4540,7 +4561,7 @@ function renderAccountBreakdown() {
         <div class="dl-sub">${r.count}x transaksi</div>
       </div>
       <div class="dl-bar"><div class="dl-fill" style="width:${Math.round(r.count/maxCount*100)}%;background:${r.color}"></div></div>
-      <div class="dl-pct">Rp ${fmtK(r.total)}</div>
+      <div class="dl-pct">${currencyInfo(r.cur).symbol} ${fmtK(r.total)}</div>
     </div>`).join('');
 }
 
@@ -4878,7 +4899,7 @@ function renderRecurList() {
               </div>
             </div>
             <div class="recur-right">
-              <div class="recur-amt" style="color:${color}">${r.type==='income'?'+':'-'}Rp ${fmtK(r.amount)}</div>
+              <div class="recur-amt" style="color:${color}">${r.type==='income'?'+':'-'}${currencyInfo(walletCurrencyCode(r.account)).symbol} ${fmtK(r.amount)}</div>
               <div class="recur-next">${next.toLocaleDateString('id-ID',{day:'numeric',month:'short'})}</div>
             </div>
           </div>
@@ -4997,7 +5018,7 @@ function renderRecurPreview() {
         <div class="rp-name">${r.name}</div>
         <div class="rp-date">${daysUntil(r.next)} · ${r.next.toLocaleDateString('id-ID',{day:'numeric',month:'short'})}</div>
       </div>
-      <div class="rp-amt ${r.type}">${r.type==='income'?'+':'-'}Rp ${fmtK(r.amount)}</div>
+      <div class="rp-amt ${r.type}">${r.type==='income'?'+':'-'}${currencyInfo(walletCurrencyCode(r.account)).symbol} ${fmtK(r.amount)}</div>
     </div>`).join('');
 }
 
@@ -5180,7 +5201,7 @@ function renderSubDetections() {
       <div class="insight-icon" style="background:${c.catColor}22;color:${c.catColor}">${ICON.refresh}</div>
       <div class="insight-body">
         <div class="insight-title">Kemungkinan langganan: ${escapeHtml(c.name)}</div>
-        <div class="insight-desc">Rp ${c.avgAmount.toLocaleString('id-ID')} · ${freqLabel(c.freq)} · terdeteksi ${c.occurrences}x · terakhir ${fmtDate(c.lastDate)}</div>
+        <div class="insight-desc">${currencyInfo(walletCurrencyCode(c.account)).symbol} ${c.avgAmount.toLocaleString(currencyInfo(walletCurrencyCode(c.account)).locale)} · ${freqLabel(c.freq)} · terdeteksi ${c.occurrences}x · terakhir ${fmtDate(c.lastDate)}</div>
         <div class="sub-detect-actions">
           <button class="sub-detect-btn primary" onclick="quickAddDetectedSub('${c.key.replace(/'/g, "\\'")}')">+ Jadikan Rutin</button>
           <button class="sub-detect-btn" onclick="dismissSubDetection('${c.key.replace(/'/g, "\\'")}')">Abaikan</button>
@@ -5411,10 +5432,11 @@ function initNotifSwipe() {
 function checkBudgetAlerts() {
   BUDGET.cats.forEach(c => {
     const pct = c.limit > 0 ? Math.round(c.spent / c.limit * 100) : 0;
-    const sym = currencyInfo(c.currency || 'IDR').symbol;
+    const cInfo = currencyInfo(c.currency || 'IDR');
+    const sym = cInfo.symbol, loc = cInfo.locale;
     if (pct >= 100 && !c._alerted100) {
       c._alerted100 = true;
-      addNotif(`Budget ${c.label} Habis!`, `Pengeluaran sudah melampaui limit ${sym} ${c.limit.toLocaleString('id-ID')}`, 'danger');
+      addNotif(`Budget ${c.label} Habis!`, `Pengeluaran sudah melampaui limit ${sym} ${c.limit.toLocaleString(loc)}`, 'danger');
     } else if (pct >= 80 && !c._alerted80) {
       c._alerted80 = true;
       addNotif(`Budget ${c.label} ${pct}%`, `Sisa ${sym} ${fmtK(Math.max(0, c.limit - c.spent))} dari ${sym} ${fmtK(c.limit)}`, 'warn');
@@ -5438,12 +5460,13 @@ function checkBudgetAlerts() {
     const diff = Math.ceil((resolved - new Date()) / SMART_DAY_MS);
     const sisa = Math.max(0, d.amount - d.paid);
     const label = d.kind === 'piutang' ? 'Piutang' : 'Utang';
+    const dCur  = currencyInfo(d.currency || 'IDR');
     if (diff < 0 && !d._alertedOverdue) {
       d._alertedOverdue = true;
-      addNotif(`${label} ke ${d.person} lewat jatuh tempo`, `Sisa Rp ${sisa.toLocaleString('id-ID')}`, 'danger');
+      addNotif(`${label} ke ${d.person} lewat jatuh tempo`, `Sisa ${dCur.symbol} ${sisa.toLocaleString(dCur.locale)}`, 'danger');
     } else if (diff >= 0 && diff <= 3 && !d._alertedDue) {
       d._alertedDue = true;
-      addNotif(`${label} ke ${d.person} jatuh tempo`, `${diff === 0 ? 'Hari ini' : diff + ' hari lagi'} — Rp ${sisa.toLocaleString('id-ID')}`, 'warn');
+      addNotif(`${label} ke ${d.person} jatuh tempo`, `${diff === 0 ? 'Hari ini' : diff + ' hari lagi'} — ${dCur.symbol} ${sisa.toLocaleString(dCur.locale)}`, 'warn');
     }
   });
 
@@ -5453,7 +5476,8 @@ function checkBudgetAlerts() {
     const diff = Math.ceil((next - new Date()) / 86400000);
     if (diff <= 3 && !r._alerted) {
       r._alerted = true;
-      addNotif(`${r.name} jatuh tempo`, `${daysUntil(next)} — Rp ${r.amount.toLocaleString('id-ID')}`, 'blue');
+      const rCur = currencyInfo(walletCurrencyCode(r.account));
+      addNotif(`${r.name} jatuh tempo`, `${daysUntil(next)} — ${rCur.symbol} ${r.amount.toLocaleString(rCur.locale)}`, 'blue');
     }
   });
 }
@@ -6704,7 +6728,8 @@ function submitDebtBreakdownPay(id) {
   const rows = computeDebtInstallments(d);
   const maxPayable = dbfMaxPayable(d, rows);
   if (amount > maxPayable) {
-    showToast(`Jumlah melebihi cicilan yang dituju (maks. Rp ${maxPayable.toLocaleString('id-ID')})`, 'warning');
+    const dCur = currencyInfo(d.currency || 'IDR');
+    showToast(`Jumlah melebihi cicilan yang dituju (maks. ${dCur.symbol} ${maxPayable.toLocaleString(dCur.locale)})`, 'warning');
     return;
   }
   const accountId = document.getElementById('dbfPayAccount').value;
@@ -7037,7 +7062,11 @@ function submitDebtPay() {
   const d = DEBTS.find(x => x.id === _activeDebtPayId);
   if (!d) return;
   const sisa = Math.max(0, d.amount - d.paid);
-  if (amount > sisa) { showToast(`Jumlah melebihi sisa (maks. Rp ${sisa.toLocaleString('id-ID')})`, 'warning'); return; }
+  if (amount > sisa) {
+    const dCur = currencyInfo(d.currency || 'IDR');
+    showToast(`Jumlah melebihi sisa (maks. ${dCur.symbol} ${sisa.toLocaleString(dCur.locale)})`, 'warning');
+    return;
+  }
   const accountId = document.getElementById('debtPayAccount').value;
   if (!accountId) { showToast('Pilih akun dulu', 'warning'); return; }
   const isPiutang = d.kind === 'piutang';
@@ -7203,7 +7232,12 @@ function computeNetWorth() {
    CHART INTERACTIVE TOOLTIP
 ══════════════════════════════════════════ */
 function buildRiverData() {
-  // Build 7-day cashflow from real transactions
+  // Build 7-day cashflow from real transactions.
+  // Rp adalah mata uang utama buat chart ringkasan Dashboard ini (sama
+  // seperti Total Pemasukan/Pengeluaran bulan ini & Budget/Savings — lihat
+  // komentar di renderDashboard()) — cuma transaksi ber-IDR yang dijumlah,
+  // supaya nggak nyampur nominal mata uang lain jadi satu angka yang nggak
+  // berarti apa-apa (misal Rp50.000 + $5 ditumpuk jadi "55000").
   const days = 7;
   const labels = [], income = [], expense = [];
   for (let i = days - 1; i >= 0; i--) {
@@ -7211,7 +7245,7 @@ function buildRiverData() {
     const dateStr = localISODate(d);
     const dayName = d.toLocaleDateString('id-ID', { weekday: 'short' });
     labels.push(dayName.charAt(0).toUpperCase() + dayName.slice(1, 3));
-    const dayTxs = S.transactions.filter(t => t.date === dateStr);
+    const dayTxs = S.transactions.filter(t => t.date === dateStr && walletCurrencyCode(t.account) === 'IDR');
     income.push(dayTxs.filter(t => t.type === 'income').reduce((s, t) => s + t.amount, 0));
     expense.push(dayTxs.filter(t => t.type === 'expense').reduce((s, t) => s + t.amount, 0));
   }
@@ -9350,7 +9384,8 @@ function renderRiwayat() {
     }, {passive:true});
     item.addEventListener('touchend', () => {
       if (dx < -60) {
-        showConfirm('Hapus transaksi ini?', t.note + ' — Rp ' + t.amount.toLocaleString('id-ID'), () => {
+        const tCur = currencyInfo(walletCurrencyCode(t.type==='transfer'?(t.fromAccount||t.account):t.account));
+        showConfirm('Hapus transaksi ini?', t.note + ' — ' + tCur.symbol + ' ' + t.amount.toLocaleString(tCur.locale), () => {
           item.style.transition = 'transform 0.25s, opacity 0.25s';
           item.style.transform  = 'translateX(-100%)';
           item.style.opacity    = '0';
