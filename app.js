@@ -3197,6 +3197,10 @@ function submitBudgetCatModal() {
     cat.currency = currency;
     cat.period   = period;
     CUSTOM_CAT_ICONS[cat.id] = _pendingBudgetCatIcon;
+    // Catat jejak perubahan (lihat pushBudgetHistory) — supaya kalau Analitik
+    // difilter ke tanggal SEBELUM perubahan ini, nilai lama tetap kebaca,
+    // bukan ketimpa nilai terbaru.
+    pushBudgetHistory(cat);
     // Keep the matching expense category in sync (name/icon/warna shown when logging transactions)
     const expCat = CATS.expense.find(c => c.id === cat.id);
     if (expCat) { expCat.label = name; expCat.color = color; }
@@ -3218,7 +3222,13 @@ function submitBudgetCatModal() {
     const existingExpCat = CATS.expense.find(c => c.label.trim().toLowerCase() === name.trim().toLowerCase());
     const id = existingExpCat ? existingExpCat.id
       : ('cat_' + name.toLowerCase().replace(/[^a-z0-9]+/g,'_').replace(/^_+|_+$/g,'').slice(0,20) + '_' + Date.now().toString(36));
-    BUDGET.cats.push({ id, label:name, icon:_pendingBudgetCatIcon, color, limit, spent:0, currency, period, linkedExisting: !!existingExpCat });
+    const createdAt = localISODate(new Date());
+    const newCat = { id, label:name, icon:_pendingBudgetCatIcon, color, limit, spent:0, currency, period, linkedExisting: !!existingExpCat, createdAt, history: [] };
+    BUDGET.cats.push(newCat);
+    // Jejak awal — jadi titik acuan pertama buat lookup "state per tanggal"
+    // (lihat budgetCatStateAt()). Kategori ini dianggap "belum ada" buat
+    // tanggal SEBELUM createdAt.
+    pushBudgetHistory(newCat);
     CUSTOM_CAT_ICONS[id] = _pendingBudgetCatIcon;
     if (existingExpCat) {
       // Keep the existing chip's color in sync rather than duplicating it.
@@ -3954,9 +3964,19 @@ function setAnalyticsSelFilter(key, value) {
 function updateAnalyticsSelFilterVisibility() {
   const type = _donutType || 'expense';
   const setVis = (id, show) => { const el = document.getElementById(id); if (el) el.style.display = show ? '' : 'none'; };
-  setVis('aselkatCatWrap',    (CATS[type] || []).length >= 1);
-  setVis('aselangBudgetWrap', BUDGET.cats.filter(c => c.limit > 0).length > 1);
-  setVis('aselakunAccWrap',   WALLETS.length > 1);
+  // Tombol filter (icon) DAN baris keterangan labelnya di .ana-card-info
+  // di-toggle bareng, sama-sama cuma nongol kalau item yang bisa dipilih
+  // lebih dari 1 — sesuai instruksi "hanya muncul ketika terdeteksi lebih
+  // dari 1 kategori/akun".
+  const katShow = (CATS[type] || []).length > 1;
+  setVis('aselkatCatWrap', katShow);
+  setVis('katSelInfo',     katShow);
+  const angShow = BUDGET.cats.filter(c => c.limit > 0).length > 1;
+  setVis('aselangBudgetWrap', angShow);
+  setVis('angSelInfo',       angShow);
+  const akunShow = WALLETS.length > 1;
+  setVis('aselakunAccWrap', akunShow);
+  setVis('akunSelInfo',     akunShow);
 }
 
 function renderAnalytics() {
@@ -4351,24 +4371,101 @@ function renderForecast() {
   card.innerHTML = html;
 }
 
+/* ══════════════════════════════════════════
+   JEJAK PERUBAHAN ANGGARAN (budget history)
+   Tiap kategori anggaran nyimpen `createdAt` (tanggal pertama kali dibuat)
+   dan `history`: daftar snapshot {date, label, icon, color, limit, currency,
+   period} — satu entri per tanggal terjadinya perubahan. Ini dipakai supaya
+   card Anggaran di Analitik bisa "difilter berdasarkan tanggal" secara
+   akurat:
+     - Kategori yang tanggal filternya JATUH SEBELUM createdAt dianggap
+       belum ada → nggak ditampilkan (lihat budgetCatStateAt()).
+     - Kategori yang pernah diedit (limit/nama/periode berubah) tetap
+       nunjukin nilai LAMA buat tanggal sebelum perubahan itu, dan nilai
+       BARU buat tanggal sesudahnya — jejak lama nggak pernah dibuang,
+       cuma ditambah entri baru tiap kali ada perubahan.
+══════════════════════════════════════════ */
+function pushBudgetHistory(cat) {
+  if (!Array.isArray(cat.history)) cat.history = [];
+  const today = localISODate(new Date());
+  const snap = { date: today, label: cat.label, icon: cat.icon, color: cat.color, limit: cat.limit, currency: cat.currency || 'IDR', period: cat.period || 'monthly' };
+  const last = cat.history[cat.history.length - 1];
+  if (last && last.date === today) {
+    // Perubahan lebih dari sekali di hari yang sama → update entri hari itu
+    // aja, nggak numpuk banyak titik jejak buat satu hari yang sama.
+    cat.history[cat.history.length - 1] = snap;
+  } else {
+    cat.history.push(snap);
+  }
+  if (!cat.createdAt) cat.createdAt = cat.history[0].date;
+}
+
+// Nyari state (limit/currency/period/label) suatu kategori anggaran YANG
+// BERLAKU pada tanggal `dateStr` tertentu, berdasarkan jejak `history`-nya.
+// Return null kalau kategori itu belum dibuat sama sekali per tanggal itu
+// (dateStr < createdAt) — artinya kategori ini harus disembunyikan dari
+// tampilan Analitik waktu difilter ke tanggal segitu.
+function budgetCatStateAt(cat, dateStr) {
+  if (!dateStr) {
+    // Mode "Otomatis"/live → selalu pakai nilai terkini kategori, apa adanya.
+    return { label: cat.label, icon: cat.icon, color: cat.color, limit: cat.limit, currency: cat.currency || 'IDR', period: cat.period || 'monthly' };
+  }
+  // Data lama (sebelum fitur jejak ini ada) belum punya createdAt/history —
+  // anggap kategori itu selalu ada, biar nggak tiba-tiba hilang dari layar.
+  if (!cat.createdAt || !Array.isArray(cat.history) || !cat.history.length) {
+    return { label: cat.label, icon: cat.icon, color: cat.color, limit: cat.limit, currency: cat.currency || 'IDR', period: cat.period || 'monthly' };
+  }
+  if (dateStr < cat.createdAt) return null; // belum dibuat per tanggal ini
+  // Ambil entri jejak PALING BARU yang tanggalnya <= dateStr.
+  let effective = cat.history[0];
+  for (const h of cat.history) {
+    if (h.date <= dateStr) effective = h; else break;
+  }
+  return { label: effective.label, icon: effective.icon, color: effective.color, limit: effective.limit, currency: effective.currency || 'IDR', period: effective.period || 'monthly' };
+}
+
 /* ── Budget overlay: actual spend vs budget limit per category ── */
 function renderBudgetOverlay() {
   const wrap = document.getElementById('budgetOverlayList');
   const noteEl = document.getElementById('angPeriodNote');
   if (!wrap) return;
-  let catsWithLimit = BUDGET.cats.filter(c => c.limit > 0);
-  if (!catsWithLimit.length) {
+  const refDate = ANG_FILTER.refDate;
+
+  if (!BUDGET.cats.length) {
     wrap.innerHTML = `<div style="color:var(--txt3);font-size:12px;text-align:center;padding:8px 0">Belum ada limit anggaran. Atur limit per kategori di halaman <b style="color:var(--txt2)">Anggaran</b> dulu supaya bisa dibandingkan di sini.</div>`;
     if (noteEl) noteEl.style.display = 'none';
     return;
   }
-  if (ANALYTICS_SEL_FILTER.angBudget) catsWithLimit = catsWithLimit.filter(c => c.id === ANALYTICS_SEL_FILTER.angBudget);
-  const refDate = ANG_FILTER.refDate;
 
-  wrap.innerHTML = catsWithLimit.map(c => {
-    const cCode  = c.currency || 'IDR';
+  // State EFEKTIF tiap kategori anggaran per tanggal filter (lihat
+  // budgetCatStateAt/pushBudgetHistory) — kategori yang belum dibuat per
+  // tanggal itu otomatis kebuang (state === null), dan yang limitnya waktu
+  // itu masih 0 juga nggak ditampilkan. Mode "Otomatis" (refDate null)
+  // selalu pakai nilai terkini, sama kayak sebelumnya.
+  let rows = BUDGET.cats
+    .map(c => ({ cat: c, state: budgetCatStateAt(c, refDate) }))
+    .filter(r => r.state && r.state.limit > 0);
+
+  if (!rows.length) {
+    const msg = refDate
+      ? 'Belum ada anggaran yang dibuat sampai tanggal ini.'
+      : 'Belum ada limit anggaran. Atur limit per kategori di halaman <b style="color:var(--txt2)">Anggaran</b> dulu supaya bisa dibandingkan di sini.';
+    wrap.innerHTML = `<div style="color:var(--txt3);font-size:12px;text-align:center;padding:8px 0">${msg}</div>`;
+    if (noteEl) noteEl.style.display = 'none';
+    return;
+  }
+
+  if (ANALYTICS_SEL_FILTER.angBudget) rows = rows.filter(r => r.cat.id === ANALYTICS_SEL_FILTER.angBudget);
+  if (!rows.length) {
+    wrap.innerHTML = `<div style="color:var(--txt3);font-size:12px;text-align:center;padding:8px 0">Anggaran ini belum dibuat pada tanggal yang dipilih.</div>`;
+    if (noteEl) noteEl.style.display = 'none';
+    return;
+  }
+
+  wrap.innerHTML = rows.map(({ cat: c, state }) => {
+    const cCode  = state.currency;
     const sym    = currencyInfo(cCode).symbol;
-    const period = c.period || 'monthly';
+    const period = state.period;
     // Rentang DIHITUNG PER KATEGORI sesuai periodenya masing-masing (bukan
     // satu rentang seragam) — kategori tahunan nggak ikut ke-reset cuma
     // karena kategori lain periodenya mingguan, dst.
@@ -4377,14 +4474,14 @@ function renderBudgetOverlay() {
       t.type === 'expense' && t.catId === c.id && walletCurrencyCode(t.account) === cCode &&
       t.date >= range.from && t.date <= range.to
     ).reduce((s,t) => s+t.amount, 0);
-    const pct = Math.round((spent / c.limit) * 100);
-    const over = spent > c.limit;
-    const barColor = over ? 'var(--red)' : c.color;
+    const pct = Math.round((spent / state.limit) * 100);
+    const over = spent > state.limit;
+    const barColor = over ? 'var(--red)' : state.color;
     return `
       <div class="dl-item">
         <div class="dl-color" style="background:${barColor}"></div>
-        <div class="dl-name">${escapeHtml(c.label)}
-          <div class="dl-sub">${over ? 'Lebih ' : ''}${sym} ${spent.toLocaleString(currencyInfo(cCode).locale)} / ${sym} ${c.limit.toLocaleString(currencyInfo(cCode).locale)}</div>
+        <div class="dl-name">${escapeHtml(state.label)}
+          <div class="dl-sub">${over ? 'Lebih ' : ''}${sym} ${spent.toLocaleString(currencyInfo(cCode).locale)} / ${sym} ${state.limit.toLocaleString(currencyInfo(cCode).locale)}</div>
         </div>
         <div class="dl-bar"><div class="dl-fill" style="width:${Math.min(100,pct)}%;background:${barColor}"></div></div>
         <div class="dl-pct" style="color:${over?'var(--red)':'var(--txt2)'}">${pct}%</div>
@@ -4396,9 +4493,9 @@ function renderBudgetOverlay() {
   // periode & rentang beda-beda. Nggak ditampilkan buat periode harian
   // (rentangnya cuma 1 hari, udah kebaca dari label tanggal di atas).
   if (noteEl) {
-    const selCat = ANALYTICS_SEL_FILTER.angBudget ? catsWithLimit.find(c => c.id === ANALYTICS_SEL_FILTER.angBudget) : null;
-    if (selCat && (selCat.period || 'monthly') !== 'daily') {
-      const range = angRangeFor(selCat.period || 'monthly', refDate);
+    const selRow = ANALYTICS_SEL_FILTER.angBudget ? rows.find(r => r.cat.id === ANALYTICS_SEL_FILTER.angBudget) : null;
+    if (selRow && selRow.state.period !== 'daily') {
+      const range = angRangeFor(selRow.state.period, refDate);
       noteEl.textContent = fmtDateShort(range.from) + ' – ' + fmtDateShort(range.to);
       noteEl.style.display = '';
     } else {

@@ -581,10 +581,11 @@
           </div>
           <!-- Filter kalender khusus card ini — SELALU tampil, nggak nunggu ada
                data (lihat drawDonut()). Klik satu tanggal melebar dari awal
-               bulan tanggal itu s/d tanggal yang diklik. -->
+               bulan tanggal itu s/d tanggal yang diklik. Icon-only — labelnya
+               (mis. "Bulan Ini") dipindah ke baris .ana-card-info di bawah. -->
           <div class="date-filter-wrap" id="katDtWrap">
-            <div class="date-filter-trigger icon-btn" id="katDtTrigger" onclick="toggleCardDatePicker('kat')" style="border-radius:12px;width:auto;padding:0 10px;gap:5px;font-size:11px">
-              <svg class="ic" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg> <span id="katDtLabel">Bulan Ini</span>
+            <div class="date-filter-trigger ah-icon-btn" id="katDtTrigger" onclick="toggleCardDatePicker('kat')" title="Filter tanggal">
+              <svg class="ic" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg>
             </div>
             <div class="dp-overlay" id="katDatePickerOverlay" data-trigger="katDtTrigger" onclick="if(event.target===this) closeDp(document.getElementById('katDatePicker'))">
             <div class="date-picker-panel" id="katDatePicker">
@@ -609,21 +610,29 @@
             </div>
             </div>
           </div>
-          <!-- Filter per-kategori spesifik — beda dari kalender di atas, ini
-               yang butuh syarat data: cuma tampil kalau minimal ada 1
-               kategori (lihat updateAnalyticsSelFilterVisibility()). -->
-          <div class="acf-wrap" id="aselkatCatWrap" style="display:none">
-            <div class="acf-trigger" id="aselkatCatTrigger" onclick="toggleAnalyticsSelFilter('katCat')"><span id="aselkatCatLabel">Semua</span><span class="acf-arrow">▾</span></div>
-            <div class="dp-overlay" id="aselkatCatOverlay" data-trigger="aselkatCatTrigger" onclick="if(event.target===this) closeDp(document.getElementById('aselkatCatPanel'))">
-              <div class="currency-filter-panel" id="aselkatCatPanel"></div>
-            </div>
-          </div>
           <div class="river-tabs" id="donutTabs">
             <div class="river-tab-indicator" id="donutTabIndicator"></div>
             <div class="river-tab icon-tab expense active" id="donutTabExpense" onclick="setDonutType('expense', this)" title="Pengeluaran"><svg class="ic" viewBox="0 0 24 24"><path d="M3 7l6 6 4-4 8 9"/><path d="M15 18h6v-6"/></svg></div>
             <div class="river-tab icon-tab income" id="donutTabIncome" onclick="setDonutType('income', this)" title="Pemasukan"><svg class="ic" viewBox="0 0 24 24"><path d="M3 17l6-6 4 4 8-9"/><path d="M15 6h6v6"/></svg></div>
           </div>
+          <!-- Filter per-kategori spesifik — beda dari kalender di atas. Icon-only,
+               ditaro paling kanan, dan cuma tampil kalau kategorinya lebih dari 1
+               (lihat updateAnalyticsSelFilterVisibility()). -->
+          <div class="acf-wrap" id="aselkatCatWrap" style="display:none">
+            <div class="acf-trigger ah-icon-btn" id="aselkatCatTrigger" onclick="toggleAnalyticsSelFilter('katCat')" title="Filter kategori">
+              <svg class="ic" viewBox="0 0 24 24"><path d="M4 5h16l-6.5 7.5V19l-3 1.5v-8z"/></svg>
+            </div>
+            <div class="dp-overlay" id="aselkatCatOverlay" data-trigger="aselkatCatTrigger" onclick="if(event.target===this) closeDp(document.getElementById('aselkatCatPanel'))">
+              <div class="currency-filter-panel" id="aselkatCatPanel"></div>
+            </div>
+          </div>
         </div>
+      </div>
+      <!-- Baris keterangan — pindahan dari label teks yang tadinya di dalam
+           tombol kalender/filter, biar header card nggak sesak. -->
+      <div class="ana-card-info" id="katCardInfo">
+        <span id="katDtLabel">Bulan Ini</span>
+        <span class="aci-sel" id="katSelInfo" style="display:none"><span class="aci-dot">·</span><span id="aselkatCatLabel">Semua</span></span>
       </div>
       <div class="donut-wrap">
         <canvas id="donutCanvas"></canvas>
@@ -646,8 +655,8 @@
         <h3>Anggaran</h3>
         <div style="display:flex;align-items:center;gap:8px">
           <div class="date-filter-wrap" id="angDtWrap">
-            <div class="date-filter-trigger icon-btn" id="angDtTrigger" onclick="toggleAngDatePicker()" style="border-radius:12px;width:auto;padding:0 10px;gap:5px;font-size:11px">
-              <svg class="ic" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg> <span id="angDtLabel">Otomatis</span>
+            <div class="date-filter-trigger ah-icon-btn" id="angDtTrigger" onclick="toggleAngDatePicker()" title="Filter tanggal">
+              <svg class="ic" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg>
             </div>
             <!-- Beda dari Kategori/Per Akun (satu rentang rata), kalender ini cuma
                  nyimpen SATU tanggal ACUAN: klik satu tanggal = mode kumulatif
@@ -674,14 +683,20 @@
             </div>
           </div>
           <!-- Filter per-anggaran spesifik — cuma tampil kalau kategori
-               anggaran yang punya limit lebih dari 1. -->
+               anggaran yang punya limit lebih dari 1. Icon-only, paling kanan. -->
           <div class="acf-wrap" id="aselangBudgetWrap" style="display:none">
-            <div class="acf-trigger" id="aselangBudgetTrigger" onclick="toggleAnalyticsSelFilter('angBudget')"><span id="aselangBudgetLabel">Semua</span><span class="acf-arrow">▾</span></div>
+            <div class="acf-trigger ah-icon-btn" id="aselangBudgetTrigger" onclick="toggleAnalyticsSelFilter('angBudget')" title="Filter kategori anggaran">
+              <svg class="ic" viewBox="0 0 24 24"><path d="M4 5h16l-6.5 7.5V19l-3 1.5v-8z"/></svg>
+            </div>
             <div class="dp-overlay" id="aselangBudgetOverlay" data-trigger="aselangBudgetTrigger" onclick="if(event.target===this) closeDp(document.getElementById('aselangBudgetPanel'))">
               <div class="currency-filter-panel" id="aselangBudgetPanel"></div>
             </div>
           </div>
         </div>
+      </div>
+      <div class="ana-card-info" id="angCardInfo">
+        <span id="angDtLabel">Otomatis</span>
+        <span class="aci-sel" id="angSelInfo" style="display:none"><span class="aci-dot">·</span><span id="aselangBudgetLabel">Semua</span></span>
       </div>
       <div class="donut-legend" id="budgetOverlayList" style="padding:0"></div>
       <!-- Cuma muncul kalau filter lagi dipersempit ke SATU kategori anggaran
@@ -696,8 +711,8 @@
         <h3>Per Akun</h3>
         <div style="display:flex;align-items:center;gap:8px">
           <div class="date-filter-wrap" id="akunDtWrap">
-            <div class="date-filter-trigger icon-btn" id="akunDtTrigger" onclick="toggleCardDatePicker('akun')" style="border-radius:12px;width:auto;padding:0 10px;gap:5px;font-size:11px">
-              <svg class="ic" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg> <span id="akunDtLabel">Bulan Ini</span>
+            <div class="date-filter-trigger ah-icon-btn" id="akunDtTrigger" onclick="toggleCardDatePicker('akun')" title="Filter tanggal">
+              <svg class="ic" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg>
             </div>
             <div class="dp-overlay" id="akunDatePickerOverlay" data-trigger="akunDtTrigger" onclick="if(event.target===this) closeDp(document.getElementById('akunDatePicker'))">
             <div class="date-picker-panel" id="akunDatePicker">
@@ -722,14 +737,20 @@
             </div>
             </div>
           </div>
-          <!-- Filter akun spesifik — cuma tampil kalau akunnya lebih dari 1. -->
+          <!-- Filter akun spesifik — cuma tampil kalau akunnya lebih dari 1. Icon-only, paling kanan. -->
           <div class="acf-wrap" id="aselakunAccWrap" style="display:none">
-            <div class="acf-trigger" id="aselakunAccTrigger" onclick="toggleAnalyticsSelFilter('akunAcc')"><span id="aselakunAccLabel">Semua</span><span class="acf-arrow">▾</span></div>
+            <div class="acf-trigger ah-icon-btn" id="aselakunAccTrigger" onclick="toggleAnalyticsSelFilter('akunAcc')" title="Filter akun">
+              <svg class="ic" viewBox="0 0 24 24"><path d="M4 5h16l-6.5 7.5V19l-3 1.5v-8z"/></svg>
+            </div>
             <div class="dp-overlay" id="aselakunAccOverlay" data-trigger="aselakunAccTrigger" onclick="if(event.target===this) closeDp(document.getElementById('aselakunAccPanel'))">
               <div class="currency-filter-panel" id="aselakunAccPanel"></div>
             </div>
           </div>
         </div>
+      </div>
+      <div class="ana-card-info" id="akunCardInfo">
+        <span id="akunDtLabel">Bulan Ini</span>
+        <span class="aci-sel" id="akunSelInfo" style="display:none"><span class="aci-dot">·</span><span id="aselakunAccLabel">Semua</span></span>
       </div>
       <div class="donut-legend" id="accountBreakdownList" style="padding:0"></div>
     </div>

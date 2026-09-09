@@ -3156,6 +3156,30 @@ body {
 .acf-trigger:active { background: rgba(18,21,31,0.1); }
 .acf-arrow { font-size: 8px; color: var(--txt3); }
 
+/* ═══════════════════════════════════════
+   ANALYTICS CARD HEADER — ICON-ONLY BUTTONS
+   Dipakai khusus di halaman Analitik (card Kategori/Anggaran/Per Akun) biar
+   header card nggak sesak sama teks tombol. Tombol kalender & tombol filter
+   per-item sama-sama jadi bulatan icon-only berukuran sama (lihat
+   .ah-icon-btn di bawah); keterangan teksnya (mis. "Bulan Ini", "Semua")
+   dipindah ke baris .ana-card-info di bawah card-head, pojok kiri.
+═══════════════════════════════════════ */
+.date-filter-trigger.ah-icon-btn,
+.acf-trigger.ah-icon-btn {
+  display: flex; align-items: center; justify-content: center;
+  width: 34px; height: 34px; padding: 0; gap: 0;
+  border-radius: 11px; flex-shrink: 0;
+}
+.date-filter-trigger.ah-icon-btn .ic,
+.acf-trigger.ah-icon-btn .ic { width: 16px; height: 16px; }
+.ana-card-info {
+  display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
+  font-size: 11px; font-weight: 600; color: var(--txt3);
+  margin: -6px 0 14px;
+}
+.ana-card-info .aci-sel { display: flex; align-items: center; gap: 6px; }
+.ana-card-info .aci-dot { opacity: 0.5; }
+
 .filter-chip-row {
   display: flex; gap: 6px; padding: 0 16px 10px;
 }
