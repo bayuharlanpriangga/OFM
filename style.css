@@ -450,6 +450,7 @@ body {
   transition: border-color .2s;
 }
 .auth-input:focus { border-color: rgba(42,232,196,0.5); }
+.auth-input::placeholder { color: var(--txt3); }
 .auth-tabs { display: flex; background: rgba(18,21,31,0.06); border-radius: 12px; padding: 3px; margin-bottom: 24px; position: relative; z-index: 1; }
 .auth-tab { flex: 1; text-align: center; padding: 8px; border-radius: 9px; font-size: 13px; font-weight: 600; cursor: pointer; color: var(--txt3); transition: all .2s; }
 .auth-tab.sel { background: #fff; color: var(--txt); box-shadow: 0 1px 4px rgba(30,41,59,0.12); }
@@ -3336,3 +3337,16 @@ body {
 .device-menu-item:active { background: rgba(18,21,31,0.05); }
 .device-menu-item .ic { width: 14px; height: 14px; }
 .device-menu-item.danger { color: var(--red); }
+
+/* Tombol "Hubungkan" di modal Kelola Autentikasi — badge teal yang bisa diklik
+   (beda dari .device-badge yang cuma label status "Terhubung", read-only). */
+.auth-link-btn {
+  font-size: 11px; font-weight: 700; padding: 6px 12px; border-radius: 99px;
+  background: var(--teal); color: #001a14; border: none; cursor: pointer;
+  flex-shrink: 0; transition: opacity 0.15s;
+}
+.auth-link-btn:active { opacity: 0.75; }
+.auth-link-btn-outline {
+  background: transparent; color: var(--teal);
+  border: 1.5px solid rgba(42,232,196,0.4);
+}

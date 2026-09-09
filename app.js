@@ -15,7 +15,9 @@
   const { initializeApp } = await import('https://www.gstatic.com/firebasejs/11.0.0/firebase-app.js');
   const {
     getAuth, GoogleAuthProvider, signInWithPopup, signInWithEmailAndPassword,
-    createUserWithEmailAndPassword, sendPasswordResetEmail, onAuthStateChanged, signOut
+    createUserWithEmailAndPassword, sendPasswordResetEmail, onAuthStateChanged, signOut,
+    linkWithPopup, linkWithCredential, EmailAuthProvider,
+    reauthenticateWithCredential, updatePassword
   } = await import('https://www.gstatic.com/firebasejs/11.0.0/firebase-auth.js');
   const { getFirestore, doc, setDoc, getDoc, onSnapshot } = await import('https://www.gstatic.com/firebasejs/11.0.0/firebase-firestore.js');
 
@@ -41,7 +43,9 @@
     signInWithPopup, signInWithEmailAndPassword,
     createUserWithEmailAndPassword, sendPasswordResetEmail, signOut,
     doc, setDoc, getDoc, onSnapshot,
-    GoogleAuthProvider
+    GoogleAuthProvider,
+    linkWithPopup, linkWithCredential, EmailAuthProvider,
+    reauthenticateWithCredential, updatePassword
   };
 
   // Auth state observer
@@ -158,14 +162,43 @@
         .replace(/'/g, '&#39;');
     }
 
-/* ── Service worker registration ── */
+/* ── Service worker registration ──
+   updateViaCache:'none' stops the browser's own HTTP cache from ever
+   serving a stale copy of sw.js/importScripts when checking for updates —
+   without it, some browsers can treat the SW script itself as "cache
+   first" for up to 24h, which is exactly what silently delayed updates
+   from landing. reg.update() is also called immediately on load and again
+   every time the tab regains focus, instead of waiting on the browser's
+   own (up to 24h) background check timer. */
     if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('sw.js').then(r => {
+      navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).then(r => {
+        r.update().catch(()=>{});
+        document.addEventListener('visibilitychange', () => {
+          if (document.visibilityState === 'visible') r.update().catch(()=>{});
+        });
         r.addEventListener('updatefound', () => {
           r.installing.addEventListener('statechange', e => {
             if (e.target.state === 'activated') console.log('[OFM] SW updated');
           });
         });
+      });
+
+      // sw.js sudah skipWaiting()+clients.claim() (lihat sw.js), jadi versi baru
+      // ambil alih otomatis TANPA reload paksa — tapi itu artinya update-nya
+      // bisa kejadian diam-diam. 'controllerchange' nandain persis momen SW
+      // baru ambil alih; kalau ini BUKAN kejadian pertama (sudah ada controller
+      // sebelumnya = bukan instalasi pertama kali), munculin notif lonceng biar
+      // user tau app-nya baru aja diperbarui otomatis.
+      let _swControllerSeen = !!navigator.serviceWorker.controller;
+      navigator.serviceWorker.addEventListener('controllerchange', () => {
+        if (_swControllerSeen && typeof addNotif === 'function') {
+          addNotif(
+            'Aplikasi Diperbarui',
+            'OFM baru saja diperbarui otomatis ke versi terbaru. Data kamu aman, gak perlu install ulang.',
+            'blue'
+          );
+        }
+        _swControllerSeen = true;
       });
     }
 
@@ -2265,13 +2298,11 @@ const HIDDEN_CUR_SYMBOLS = Object.values(CURRENCIES).map(c => c.symbol);
 function runHiddenCurrencySymbolCycle(curEl) {
   const key = 'balanceCurSymbol';
   if (_tickerState[key] && _tickerState[key].interval) clearInterval(_tickerState[key].interval);
-  if (!curEl) { _tickerState[key] = { interval: null }; return; }
-  let idx = 0;
-  curEl.textContent = HIDDEN_CUR_SYMBOLS[idx];
-  _tickerState[key] = { interval: setInterval(() => {
-    idx = (idx + 1) % HIDDEN_CUR_SYMBOLS.length;
-    _tickerFade(curEl, () => { curEl.textContent = HIDDEN_CUR_SYMBOLS[idx]; });
-  }, 1400) };
+  _tickerState[key] = { interval: null };
+  if (!curEl) return;
+  // Dulu ini nyiklus semua simbol mata uang tiap 1.4 detik (dekorasi doang) —
+  // sekarang cukup tampilkan satu simbol netral yang diam, tanpa animasi.
+  curEl.textContent = HIDDEN_CUR_SYMBOLS[0] || '';
 }
 function stopHiddenCurrencySymbolCycle() {
   const key = 'balanceCurSymbol';
@@ -7748,6 +7779,7 @@ function updateProfileHeroUI() {
     if (avatarEl) { avatarEl.textContent = (displayName || 'U')[0].toUpperCase(); avatarEl.style.display = 'flex'; }
     if (editBtn)  editBtn.style.display = 'flex';
     if (authBtn)  authBtn.style.display = 'none';
+    updateAuthMethodDesc();
   } else {
     if (nameEl)   nameEl.textContent  = 'Mode Tamu';
     if (emailEl)  emailEl.textContent = 'Data tidak tersimpan';
@@ -7759,6 +7791,7 @@ function updateProfileHeroUI() {
       authBtn.setAttribute('onclick', 'exitGuestToLogin()');
       authBtn.style.display = 'flex';
     }
+    updateAuthMethodDesc();
   }
 }
 
@@ -7822,6 +7855,190 @@ async function doLogout() {
   showConfirm('Keluar dari OFM?', 'Lo harus login lagi untuk mengakses data.', async () => {
     await window._fbFns.signOut(window._fbAuth);
   }, 'logout');
+}
+
+/* ══════════════════════════════════════════
+   KELOLA AUTENTIKASI
+   Nambah/lihat metode login (Google / Email & Password) yang tersambung
+   ke akun yang lagi login, lewat Firebase account linking — bukan bikin
+   akun baru, cuma nambah cara masuk lain ke akun yang sama.
+══════════════════════════════════════════ */
+function _authProviderIds() {
+  const user = window._currentUser;
+  return (user && user.providerData) ? user.providerData.map(p => p.providerId) : [];
+}
+
+// Sinkron teks deskripsi di item Pengaturan > Akun > Kelola Autentikasi.
+function updateAuthMethodDesc() {
+  const el = document.getElementById('settingsAuthDesc');
+  if (!el) return;
+  if (window._isGuest || !window._currentUser) { el.textContent = 'Login dulu'; return; }
+  const ids = _authProviderIds();
+  const labels = [];
+  if (ids.includes('google.com')) labels.push('Google');
+  if (ids.includes('password'))   labels.push('Email & Password');
+  el.textContent = labels.length ? labels.join(' + ') : 'Belum diatur';
+}
+
+function openAuthManageModal() {
+  if (window._isGuest || !window._currentUser) {
+    showToast('Login dulu untuk mengelola autentikasi', 'warning');
+    return;
+  }
+  const form = document.getElementById('authLinkPasswordForm');
+  if (form) form.style.display = 'none';
+  const changeForm = document.getElementById('authChangePasswordForm');
+  if (changeForm) changeForm.style.display = 'none';
+  renderAuthProviderList();
+  document.getElementById('authManageModalOverlay').classList.add('open');
+}
+function closeAuthManageModal() {
+  document.getElementById('authManageModalOverlay').classList.remove('open');
+}
+
+const GOOGLE_G_ICON = '<svg width="17" height="17" viewBox="0 0 18 18"><path fill="#4285F4" d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844c-.209 1.125-.843 2.078-1.796 2.717v2.258h2.908c1.702-1.567 2.684-3.874 2.684-6.615z"/><path fill="#34A853" d="M9 18c2.43 0 4.467-.806 5.956-2.18l-2.908-2.259c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332A8.997 8.997 0 0 0 9 18z"/><path fill="#FBBC05" d="M3.964 10.71A5.41 5.41 0 0 1 3.682 9c0-.593.102-1.17.282-1.71V4.958H.957A8.996 8.996 0 0 0 0 9c0 1.452.348 2.827.957 4.042l3.007-2.332z"/><path fill="#EA4335" d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0A8.997 8.997 0 0 0 .957 4.958L3.964 6.29C4.672 4.163 6.656 3.58 9 3.58z"/></svg>';
+
+function renderAuthProviderList() {
+  const el = document.getElementById('authProviderList');
+  if (!el) return;
+  const ids = _authProviderIds();
+  const hasGoogle   = ids.includes('google.com');
+  const hasPassword = ids.includes('password');
+  const user = window._currentUser;
+  el.innerHTML = `
+    <div class="device-row">
+      <div class="device-row-icon">${GOOGLE_G_ICON}</div>
+      <div class="device-row-text">
+        <div class="device-row-name">Google</div>
+        <div class="device-row-sub">${hasGoogle ? 'Login dengan akun Google' : 'Belum terhubung'}</div>
+      </div>
+      ${hasGoogle ? '<span class="device-badge">Terhubung</span>' : '<button class="auth-link-btn" onclick="doLinkGoogle()">Hubungkan</button>'}
+    </div>
+    <div class="device-row">
+      <div class="device-row-icon">${ICON.lock || ''}</div>
+      <div class="device-row-text">
+        <div class="device-row-name">Email &amp; Password</div>
+        <div class="device-row-sub">${hasPassword ? escapeHtml(user.email || '') : 'Belum diatur'}</div>
+      </div>
+      ${hasPassword
+        ? '<div style="display:flex;align-items:center;gap:8px;flex-shrink:0"><span class="device-badge">Terhubung</span><button class="auth-link-btn auth-link-btn-outline" onclick="showChangePasswordForm()">Ubah</button></div>'
+        : '<button class="auth-link-btn" onclick="showLinkPasswordForm()">Buat Password</button>'}
+    </div>`;
+}
+
+function showLinkPasswordForm() {
+  const form = document.getElementById('authLinkPasswordForm');
+  const input = document.getElementById('authLinkPasswordInput');
+  const err = document.getElementById('authLinkError');
+  document.getElementById('authChangePasswordForm').style.display = 'none';
+  if (err) err.textContent = '';
+  if (input) input.value = '';
+  if (form) form.style.display = '';
+  if (input) input.focus();
+}
+
+// Cuma dipanggil dari tombol "Ubah" yang cuma dirender kalau hasPassword
+// true (lihat renderAuthProviderList) — jadi form ganti password ini
+// gak akan pernah kebuka buat akun yang belum punya Email & Password.
+function showChangePasswordForm() {
+  const form  = document.getElementById('authChangePasswordForm');
+  const oldEl = document.getElementById('authOldPasswordInput');
+  const newEl = document.getElementById('authNewPasswordInput');
+  const err   = document.getElementById('authChangePasswordError');
+  document.getElementById('authLinkPasswordForm').style.display = 'none';
+  if (err) err.textContent = '';
+  if (oldEl) oldEl.value = '';
+  if (newEl) newEl.value = '';
+  if (form) form.style.display = '';
+  if (oldEl) oldEl.focus();
+}
+
+// Akun ini baru punya Google — nambahin Email & Password pakai email yang
+// sama persis dengan akun Google-nya (Firebase linking mengharuskan itu;
+// EmailAuthProvider.credential butuh email + password baru buat disambungkan
+// ke user yang lagi login, BUKAN bikin akun/user baru).
+async function submitLinkEmailPassword() {
+  const user  = window._currentUser;
+  const pass  = document.getElementById('authLinkPasswordInput').value;
+  const errEl = document.getElementById('authLinkError');
+  const btn   = document.getElementById('authLinkPasswordBtn');
+  if (!user || !user.email) { errEl.textContent = 'Akun ini tidak punya email terdaftar'; return; }
+  if (!pass || pass.length < 6) { errEl.textContent = 'Password minimal 6 karakter'; return; }
+
+  btn.textContent = '...'; btn.disabled = true;
+  try {
+    const cred = window._fbFns.EmailAuthProvider.credential(user.email, pass);
+    await window._fbFns.linkWithCredential(user, cred);
+    document.getElementById('authLinkPasswordForm').style.display = 'none';
+    renderAuthProviderList();
+    updateAuthMethodDesc();
+    showToast('Email & Password berhasil ditambahkan', 'success');
+  } catch(e) {
+    const msgs = {
+      'auth/provider-already-linked': 'Email & Password sudah terhubung',
+      'auth/email-already-in-use':   'Email ini sudah dipakai akun lain',
+      'auth/weak-password':          'Password minimal 6 karakter',
+      'auth/requires-recent-login':  'Sesi login terlalu lama — logout, login lagi, baru coba lagi',
+      'auth/network-request-failed': 'Tidak ada koneksi internet',
+    };
+    errEl.textContent = msgs[e.code] || 'Gagal menyimpan password, coba lagi';
+  }
+  btn.textContent = 'Simpan Password'; btn.disabled = false;
+}
+
+// Selalu minta password lama dulu (reauthenticate) sebelum updatePassword —
+// Firebase kadang nolak updatePassword langsung kalau sesi login udah agak
+// lama (auth/requires-recent-login), jadi sekalian aja selalu re-auth biar
+// konsisten gak peduli baru atau lama sesinya.
+async function submitChangePassword() {
+  const user   = window._currentUser;
+  const oldPass = document.getElementById('authOldPasswordInput').value;
+  const newPass = document.getElementById('authNewPasswordInput').value;
+  const errEl  = document.getElementById('authChangePasswordError');
+  const btn    = document.getElementById('authChangePasswordBtn');
+  if (!user || !user.email) { errEl.textContent = 'Akun ini tidak punya email terdaftar'; return; }
+  if (!oldPass) { errEl.textContent = 'Masukkan password lama'; return; }
+  if (!newPass || newPass.length < 6) { errEl.textContent = 'Password baru minimal 6 karakter'; return; }
+
+  btn.textContent = '...'; btn.disabled = true;
+  try {
+    const cred = window._fbFns.EmailAuthProvider.credential(user.email, oldPass);
+    await window._fbFns.reauthenticateWithCredential(user, cred);
+    await window._fbFns.updatePassword(user, newPass);
+    document.getElementById('authChangePasswordForm').style.display = 'none';
+    showToast('Password berhasil diubah', 'success');
+  } catch(e) {
+    const msgs = {
+      'auth/wrong-password':         'Password lama salah',
+      'auth/invalid-credential':     'Password lama salah',
+      'auth/weak-password':          'Password baru minimal 6 karakter',
+      'auth/too-many-requests':      'Terlalu banyak percobaan, coba lagi nanti',
+      'auth/network-request-failed': 'Tidak ada koneksi internet',
+    };
+    errEl.textContent = msgs[e.code] || 'Gagal mengubah password, coba lagi';
+  }
+  btn.textContent = 'Simpan Password Baru'; btn.disabled = false;
+}
+
+// Akun ini baru punya Email & Password — nambahin Google lewat popup lalu
+// disambungkan (link) ke user yang lagi login, bukan pindah/ganti akun.
+async function doLinkGoogle() {
+  const user = window._currentUser;
+  if (!user) return;
+  try {
+    await window._fbFns.linkWithPopup(user, window._fbProvider);
+    renderAuthProviderList();
+    updateAuthMethodDesc();
+    showToast('Google berhasil dihubungkan', 'success');
+  } catch(e) {
+    if (e.code === 'auth/popup-closed-by-user') return;
+    const msgs = {
+      'auth/credential-already-in-use': 'Akun Google ini sudah dipakai di akun lain',
+      'auth/requires-recent-login':     'Sesi login terlalu lama — logout, login lagi, baru coba lagi',
+      'auth/network-request-failed':    'Tidak ada koneksi internet',
+    };
+    showToast(msgs[e.code] || 'Gagal menghubungkan Google, coba lagi', 'warning');
+  }
 }
 
 window.addEventListener('resize',()=>{ if(S.currentPage==='dashboard')drawRiver(); if(S.currentPage==='analytics')renderAnalytics(); });

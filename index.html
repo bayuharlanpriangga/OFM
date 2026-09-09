@@ -66,16 +66,16 @@
 
       <!-- Email field -->
       <div style="margin-bottom:12px;position:relative;z-index:1">
-        <input id="authEmail" type="email" class="auth-input">
+        <input id="authEmail" type="email" class="auth-input" placeholder="Email">
       </div>
       <!-- Password field -->
       <div style="margin-bottom:4px;position:relative;z-index:1">
-        <input id="authPassword" type="password" class="auth-input" onkeydown="if(event.key==='Enter')doEmailAuth()">
+        <input id="authPassword" type="password" class="auth-input" placeholder="Password" onkeydown="if(event.key==='Enter')doEmailAuth()">
       </div>
       <div id="authForgotPw" onclick="doForgotPassword()" style="text-align:right;font-size:11.5px;color:rgba(255,255,255,0.4);cursor:pointer;margin-bottom:8px;position:relative;z-index:1">Lupa password?</div>
       <!-- Name field (register only) -->
       <div id="authNameWrap" style="margin-bottom:8px;display:none;position:relative;z-index:1">
-        <input id="authName" type="text" class="auth-input">
+        <input id="authName" type="text" class="auth-input" placeholder="Nama lengkap">
       </div>
 
       <!-- Error msg -->
@@ -774,6 +774,14 @@
       <button class="profile-auth-btn" id="profileAuthBtn" onclick="exitGuestToLogin()" style="display:none">Masuk</button>
     </div>
     <div class="settings-group">
+      <div class="settings-label">Akun</div>
+      <div class="s-items">
+        <div class="settings-item" onclick="openAuthManageModal()">
+          <div class="si-icon"><svg class="ic" viewBox="0 0 24 24"><path d="M12 3l7 3v6c0 5-3 8-7 9-4-1-7-4-7-9V6z"/><path d="M9 12l2 2 4-4"/></svg></div><div class="si-text"><div class="si-name">Kelola Autentikasi</div><div class="si-desc" id="settingsAuthDesc">Login dulu</div></div><div class="si-arrow">›</div>
+        </div>
+      </div>
+    </div>
+    <div class="settings-group">
       <div class="settings-label">Aplikasi</div>
       <div class="s-items">
         <div class="settings-item" id="settingsNotifTrigger" onclick="toggleNotifPanel()">
@@ -1030,6 +1038,42 @@
       <div class="device-list" id="deviceList" style="padding:0 16px 4px"></div>
       <div class="modal-form" style="padding-top:8px">
         <button class="modal-submit" style="background:transparent;color:var(--red);border:1.5px solid rgba(255,107,132,0.3);box-shadow:none" onclick="doLogout()">Keluar dari Perangkat Ini</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════ KELOLA AUTENTIKASI MODAL ══════ -->
+  <div class="goal-modal-overlay" id="authManageModalOverlay" onclick="if(event.target===this)closeAuthManageModal()">
+    <div class="modal-sheet">
+      <div class="modal-handle"></div>
+      <div class="modal-header">
+        <div class="modal-title">Kelola Autentikasi</div>
+        <button class="modal-close" onclick="closeAuthManageModal()"><svg class="ic" viewBox="0 0 24 24"><path d="M5 5l14 14M19 5L5 19"/></svg></button>
+      </div>
+      <p style="padding:0 16px 12px;font-size:12px;color:var(--txt3)">Cara masuk yang tersambung ke akun ini. Tambahin lebih dari satu biar tetap bisa login walau salah satunya lupa/hilang.</p>
+      <div id="authProviderList" style="padding:0 16px 4px;display:flex;flex-direction:column;gap:10px"></div>
+      <!-- Muncul cuma kalau user klik "Buat Password" (akun ini baru punya Google) -->
+      <div id="authLinkPasswordForm" class="modal-form" style="display:none;padding-top:8px">
+        <div class="field">
+          <label>Password Baru</label>
+          <input type="password" id="authLinkPasswordInput" placeholder="Minimal 6 karakter">
+        </div>
+        <div id="authLinkError" style="font-size:12px;color:#FF6B84;margin:0 16px 8px;min-height:16px"></div>
+        <button class="modal-submit" id="authLinkPasswordBtn" onclick="submitLinkEmailPassword()">Simpan Password</button>
+      </div>
+      <!-- Muncul cuma kalau user klik "Ubah" di baris Email & Password (baris itu
+           sendiri cuma dirender kalau akun ini sudah punya Email & Password) -->
+      <div id="authChangePasswordForm" class="modal-form" style="display:none;padding-top:8px">
+        <div class="field">
+          <label>Password Lama</label>
+          <input type="password" id="authOldPasswordInput">
+        </div>
+        <div class="field">
+          <label>Password Baru</label>
+          <input type="password" id="authNewPasswordInput" placeholder="Minimal 6 karakter">
+        </div>
+        <div id="authChangePasswordError" style="font-size:12px;color:#FF6B84;margin:0 16px 8px;min-height:16px"></div>
+        <button class="modal-submit" id="authChangePasswordBtn" onclick="submitChangePassword()">Simpan Password Baru</button>
       </div>
     </div>
   </div>
