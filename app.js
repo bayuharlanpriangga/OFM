@@ -533,6 +533,15 @@ async function registerCurrentDevice() {
   const existing = DEVICES.find(d => d.id === id);
   if (existing) { existing.name = getDeviceName(); existing.lastActive = now; }
   else DEVICES.push({ id, name: getDeviceName(), lastActive: now });
+  // Perangkat ini baru saja berhasil login/reload — kalau id-nya masih
+  // "nyangkut" di forceLogoutIds (mis. dulu sempat dikeluarkan lewat
+  // "Hapus Perangkat" / "Keluar dari semua perangkat lain" dari perangkat
+  // lain), bersihkan sekarang. Kalau nggak dibersihkan, begitu listener
+  // realtime (_watchForForceLogout) nyala, dia bakal nemu id ini masih
+  // ada di forceLogoutIds lalu langsung signOut lagi — biarpun login-nya
+  // sendiri berhasil dan datanya sudah kebaca (ini yang bikin device
+  // "kepental" / dianggap belum login padahal baru saja login).
+  FORCE_LOGOUT_IDS = FORCE_LOGOUT_IDS.filter(fid => fid !== id);
   await _saveDeviceFields();
 }
 async function _saveDeviceFields() {
@@ -2300,9 +2309,10 @@ function runHiddenCurrencySymbolCycle(curEl) {
   if (_tickerState[key] && _tickerState[key].interval) clearInterval(_tickerState[key].interval);
   _tickerState[key] = { interval: null };
   if (!curEl) return;
-  // Dulu ini nyiklus semua simbol mata uang tiap 1.4 detik (dekorasi doang) —
-  // sekarang cukup tampilkan satu simbol netral yang diam, tanpa animasi.
-  curEl.textContent = HIDDEN_CUR_SYMBOLS[0] || '';
+  // Mode privacy: label mata uang ikut disembunyikan juga (dulu masih
+  // nongol "Rp" statis di samping titik-titiknya) — sekarang dikosongkan
+  // total, biar cuma titik-titik gradasi yang keliatan.
+  curEl.textContent = '';
 }
 function stopHiddenCurrencySymbolCycle() {
   const key = 'balanceCurSymbol';
@@ -5229,7 +5239,13 @@ window._loadUserData = async function(uid) {
       window._customUsername = (window._currentUser && window._currentUser.displayName) || (window._currentUser && window._currentUser.email ? window._currentUser.email.split('@')[0] : null);
     }
     updateBrandTitle();
-    registerCurrentDevice();
+    // Penting: tunggu registerCurrentDevice() (yang membersihkan id
+    // perangkat ini dari forceLogoutIds) selesai TERSIMPAN dulu, baru
+    // nyalain listener realtime-nya. Kalau nggak di-await, listener bisa
+    // sempat nyala & baca snapshot lama (yang masih ada id ini di
+    // forceLogoutIds) sebelum tulisan pembersihannya nyampe ke server,
+    // trus device ini keburu di-signOut sendiri.
+    await registerCurrentDevice();
     _watchForForceLogout(uid);
     // Init app after data loaded
     _initApp();
