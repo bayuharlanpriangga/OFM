@@ -168,7 +168,7 @@
       </div>
 
       <div class="nav-bubble" data-nav="budget" id="nav-budget" onclick="navRailSelect('budget')">
-        <div class="nb-glyph"><svg class="ic" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="4"/><circle cx="12" cy="12" r="0.6" fill="currentColor" stroke="none"/></svg></div>
+        <div class="nb-glyph"><svg class="ic" viewBox="0 0 24 24"><ellipse cx="12" cy="13" rx="8" ry="6"/><path d="M4 13H1.5M17 8l2-2M9 19v2M15 19v2"/><circle cx="15.5" cy="11" r="0.7" fill="currentColor" stroke="none"/></svg></div>
         <div class="nb-label">Anggaran</div>
       </div>
 
@@ -470,7 +470,6 @@
     <div class="empty" id="txEmpty" style="display:none">
       <div class="empty-icon"><svg class="ic" viewBox="0 0 24 24"><rect x="2" y="6" width="20" height="12" rx="2"/><circle cx="12" cy="12" r="3"/></svg></div>
       <h3>Belum ada transaksi hari ini</h3>
-      <p>Tekan + untuk mulai catat</p>
     </div>
     <div style="height:16px"></div>
   </div>
@@ -485,7 +484,7 @@
         <div class="icon-btn" onclick="openAddBudgetModal()" title="Tambah Anggaran">＋</div>
         <div class="date-filter-wrap">
           <div class="date-filter-trigger icon-btn" id="budgetDtTrigger" onclick="toggleBudgetDatePicker()" style="border-radius:12px;width:auto;padding:0 12px;gap:6px;font-size:12px">
-            <svg class="ic" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg> <span id="budgetDtLabel">Bulan Ini</span>
+            <svg class="ic" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg> <span id="budgetDtLabel">Hari Ini</span>
           </div>
           <div class="dp-overlay" id="budgetDatePickerOverlay" data-trigger="budgetDtTrigger" onclick="if(event.target===this) closeDp(document.getElementById('budgetDatePicker'))">
           <div class="date-picker-panel" id="budgetDatePicker">
@@ -500,11 +499,13 @@
             </div>
             <div class="dp-days" id="budgetDpDays"></div>
             <div class="dp-range-info" id="budgetDpRangeInfo"></div>
+            <!-- Preset cuma "Hari Ini" (ngikut tanggal perangkat, reset otomatis)
+                 dan "Semua" (total sepanjang masa) — pilih tanggal lain lewat
+                 kalender di atas buat lihat kategori per periodenya masing-masing
+                 (klik satu hari = tanggal acuan itu; kategori tahunan akan tetap
+                 pakai 1 Jan tahun itu, mingguan pakai Senin minggu itu, dst). -->
             <div class="dp-presets">
-              <div class="dp-preset" onclick="budgetDpPreset('today')">Hari ini</div>
-              <div class="dp-preset active" onclick="budgetDpPreset('month')">Bulan Ini</div>
-              <div class="dp-preset" onclick="budgetDpPreset('last3')">3 Bulan</div>
-              <div class="dp-preset" onclick="budgetDpPreset('year')">Tahun Ini</div>
+              <div class="dp-preset active" onclick="budgetDpPreset('today')">Hari Ini</div>
               <div class="dp-preset" onclick="budgetDpPreset('all')">Semua</div>
             </div>
           </div>
@@ -514,10 +515,15 @@
     </div>
     <div class="budget-header-bg">
       <div class="budget-overview">
-        <div class="bov-card glass-sm"><div class="bov-label">Anggaran</div><div class="bov-val teal" id="bov-total">Rp 0</div></div>
-        <div class="bov-card glass-sm"><div class="bov-label">Terpakai</div><div class="bov-val red"  id="bov-used">Rp 0</div></div>
-        <div class="bov-card glass-sm"><div class="bov-label">Sisa</div><div class="bov-val gold" id="bov-left">Rp 0</div></div>
-        <div class="bov-card glass-sm"><div class="bov-label">Hemat</div><div class="bov-val teal" id="bov-save">0%</div></div>
+        <!-- 4 card ini nggak lagi nunjukin Anggaran/Terpakai/Sisa/Hemat
+             total — masing-masing sekarang jadi satu bucket PERIODE
+             (Harian/Mingguan/Bulanan/Tahunan), nunjukin total terpakai
+             vs total batas dari SEMUA kategori anggaran yang punya
+             periode itu (lihat renderBudget() di app.js). -->
+        <div class="bov-card glass-sm"><div class="bov-label">Harian</div><div class="bov-val bov-val-ratio teal" id="bov-daily">0 / 0</div></div>
+        <div class="bov-card glass-sm"><div class="bov-label">Mingguan</div><div class="bov-val bov-val-ratio teal" id="bov-weekly">0 / 0</div></div>
+        <div class="bov-card glass-sm"><div class="bov-label">Bulanan</div><div class="bov-val bov-val-ratio teal" id="bov-monthly">0 / 0</div></div>
+        <div class="bov-card glass-sm"><div class="bov-label">Tahunan</div><div class="bov-val bov-val-ratio teal" id="bov-yearly">0 / 0</div></div>
       </div>
     </div>
     <div class="section-head" style="padding-top:4px"><h2>Per Kategori</h2></div>
@@ -530,7 +536,6 @@
     <div class="topbar">
       <div class="topbar-left">
         <div class="tb-title">Saving Goals</div>
-        <div class="tb-subtitle">Target tabunganmu</div>
       </div>
       <div class="topbar-actions">
         <div class="icon-btn" onclick="openGoalModal()">＋</div>
@@ -545,36 +550,6 @@
     <div class="topbar">
       <div class="topbar-left">
         <div class="tb-title">Analitik</div>
-        <div class="tb-subtitle">Kebiasaan keuanganmu</div>
-      </div>
-      <div class="topbar-actions">
-        <div class="date-filter-wrap">
-          <div class="icon-btn date-filter-trigger" id="analyticsDtTrigger" onclick="toggleAnalyticsDatePicker()" style="border-radius:12px;width:auto;padding:0 12px;gap:6px;font-size:12px">
-            <svg class="ic" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg> <span id="analyticsDtLabel">Bulan Ini</span>
-          </div>
-          <div class="dp-overlay" id="analyticsDatePickerOverlay" data-trigger="analyticsDtTrigger" onclick="if(event.target===this) closeDp(document.getElementById('analyticsDatePicker'))">
-          <div class="date-picker-panel" id="analyticsDatePicker">
-            <div class="dp-header">
-              <div class="dp-month-nav" onclick="analyticsDpNav(-1)">‹</div>
-              <div class="dp-month-label" id="analyticsDpLabel"></div>
-              <div class="dp-month-nav" onclick="analyticsDpNav(1)">›</div>
-            </div>
-            <div class="dp-weekdays">
-              <div class="dp-wd">Min</div><div class="dp-wd">Sen</div><div class="dp-wd">Sel</div>
-              <div class="dp-wd">Rab</div><div class="dp-wd">Kam</div><div class="dp-wd">Jum</div><div class="dp-wd">Sab</div>
-            </div>
-            <div class="dp-days" id="analyticsDpDays"></div>
-            <div class="dp-range-info" id="analyticsDpRangeInfo">Pilih tanggal awal</div>
-            <div class="dp-presets">
-              <div class="dp-preset" onclick="analyticsDpPreset('week')">7 Hari</div>
-              <div class="dp-preset active" onclick="analyticsDpPreset('month')">Bulan Ini</div>
-              <div class="dp-preset" onclick="analyticsDpPreset('last3')">3 Bulan</div>
-              <div class="dp-preset" onclick="analyticsDpPreset('year')">Tahun Ini</div>
-              <div class="dp-preset" onclick="analyticsDpPreset('all')">Semua</div>
-            </div>
-          </div>
-          </div>
-        </div>
       </div>
     </div>
     <!-- Proyeksi Saldo -->
@@ -594,21 +569,6 @@
       <div id="forecastCard"></div>
     </div>
 
-    <!-- Perbandingan periode -->
-    <div class="compare-wrap glass">
-      <div class="card-head">
-        <h3>Perbandingan</h3>
-        <div class="acf-wrap" id="acfcompareWrap" style="display:none">
-          <div class="acf-trigger" id="acfcompareTrigger" onclick="toggleAnalyticsCurFilter('compare')"><span id="acfcompareLabel">IDR</span><span class="acf-arrow">▾</span></div>
-          <div class="dp-overlay" id="acfcompareOverlay" data-trigger="acfcompareTrigger" onclick="if(event.target===this) closeDp(document.getElementById('acfcomparePanel'))">
-            <div class="currency-filter-panel" id="acfcomparePanel"></div>
-          </div>
-        </div>
-      </div>
-      <div class="compare-grid" id="compareGrid"></div>
-      <div class="compare-grid" id="avgGrid" style="margin-top:10px"></div>
-    </div>
-
     <div class="analytics-hero glass">
       <div class="card-head">
         <h3>Kategori</h3>
@@ -617,6 +577,45 @@
             <div class="acf-trigger" id="acfdonutTrigger" onclick="toggleAnalyticsCurFilter('donut')"><span id="acfdonutLabel">IDR</span><span class="acf-arrow">▾</span></div>
             <div class="dp-overlay" id="acfdonutOverlay" data-trigger="acfdonutTrigger" onclick="if(event.target===this) closeDp(document.getElementById('acfdonutPanel'))">
               <div class="currency-filter-panel" id="acfdonutPanel"></div>
+            </div>
+          </div>
+          <!-- Filter kalender khusus card ini — SELALU tampil, nggak nunggu ada
+               data (lihat drawDonut()). Klik satu tanggal melebar dari awal
+               bulan tanggal itu s/d tanggal yang diklik. -->
+          <div class="date-filter-wrap" id="katDtWrap">
+            <div class="date-filter-trigger icon-btn" id="katDtTrigger" onclick="toggleCardDatePicker('kat')" style="border-radius:12px;width:auto;padding:0 10px;gap:5px;font-size:11px">
+              <svg class="ic" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg> <span id="katDtLabel">Bulan Ini</span>
+            </div>
+            <div class="dp-overlay" id="katDatePickerOverlay" data-trigger="katDtTrigger" onclick="if(event.target===this) closeDp(document.getElementById('katDatePicker'))">
+            <div class="date-picker-panel" id="katDatePicker">
+              <div class="dp-header">
+                <div class="dp-month-nav" onclick="cardDpNav('kat',-1)">‹</div>
+                <div class="dp-month-label" id="katDpLabel"></div>
+                <div class="dp-month-nav" onclick="cardDpNav('kat',1)">›</div>
+              </div>
+              <div class="dp-weekdays">
+                <div class="dp-wd">Min</div><div class="dp-wd">Sen</div><div class="dp-wd">Sel</div>
+                <div class="dp-wd">Rab</div><div class="dp-wd">Kam</div><div class="dp-wd">Jum</div><div class="dp-wd">Sab</div>
+              </div>
+              <div class="dp-days" id="katDpDays"></div>
+              <div class="dp-range-info" id="katDpRangeInfo">Pilih tanggal awal</div>
+              <div class="dp-presets">
+                <div class="dp-preset" onclick="cardDpPreset('kat','week')">7 Hari</div>
+                <div class="dp-preset active" onclick="cardDpPreset('kat','month')">Bulan Ini</div>
+                <div class="dp-preset" onclick="cardDpPreset('kat','last3')">3 Bulan</div>
+                <div class="dp-preset" onclick="cardDpPreset('kat','year')">Tahun Ini</div>
+                <div class="dp-preset" onclick="cardDpPreset('kat','all')">Semua</div>
+              </div>
+            </div>
+            </div>
+          </div>
+          <!-- Filter per-kategori spesifik — beda dari kalender di atas, ini
+               yang butuh syarat data: cuma tampil kalau minimal ada 1
+               kategori (lihat updateAnalyticsSelFilterVisibility()). -->
+          <div class="acf-wrap" id="aselkatCatWrap" style="display:none">
+            <div class="acf-trigger" id="aselkatCatTrigger" onclick="toggleAnalyticsSelFilter('katCat')"><span id="aselkatCatLabel">Semua</span><span class="acf-arrow">▾</span></div>
+            <div class="dp-overlay" id="aselkatCatOverlay" data-trigger="aselkatCatTrigger" onclick="if(event.target===this) closeDp(document.getElementById('aselkatCatPanel'))">
+              <div class="currency-filter-panel" id="aselkatCatPanel"></div>
             </div>
           </div>
           <div class="river-tabs" id="donutTabs">
@@ -634,6 +633,7 @@
         </div>
       </div>
       <div class="donut-legend" id="donutLegend"></div>
+      <div class="kat-avg-note" id="katAvgNote"></div>
     </div>
 
     <div class="insight-wrap glass">
@@ -642,12 +642,95 @@
     </div>
 
     <div class="budget-overlay-wrap glass">
-      <div class="card-head"><h3>Anggaran</h3></div>
+      <div class="card-head">
+        <h3>Anggaran</h3>
+        <div style="display:flex;align-items:center;gap:8px">
+          <div class="date-filter-wrap" id="angDtWrap">
+            <div class="date-filter-trigger icon-btn" id="angDtTrigger" onclick="toggleAngDatePicker()" style="border-radius:12px;width:auto;padding:0 10px;gap:5px;font-size:11px">
+              <svg class="ic" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg> <span id="angDtLabel">Otomatis</span>
+            </div>
+            <!-- Beda dari Kategori/Per Akun (satu rentang rata), kalender ini cuma
+                 nyimpen SATU tanggal ACUAN: klik satu tanggal = mode kumulatif
+                 (awal periode kategori itu s/d tanggal yang diklik), preset
+                 "Otomatis" = balik ke periode berjalan penuh sesuai tanggal
+                 device (lihat ANG_FILTER/angRangeFor di app.js). -->
+            <div class="dp-overlay" id="angDatePickerOverlay" data-trigger="angDtTrigger" onclick="if(event.target===this) closeDp(document.getElementById('angDatePicker'))">
+            <div class="date-picker-panel" id="angDatePicker">
+              <div class="dp-header">
+                <div class="dp-month-nav" onclick="angDpNav(-1)">‹</div>
+                <div class="dp-month-label" id="angDpLabel"></div>
+                <div class="dp-month-nav" onclick="angDpNav(1)">›</div>
+              </div>
+              <div class="dp-weekdays">
+                <div class="dp-wd">Min</div><div class="dp-wd">Sen</div><div class="dp-wd">Sel</div>
+                <div class="dp-wd">Rab</div><div class="dp-wd">Kam</div><div class="dp-wd">Jum</div><div class="dp-wd">Sab</div>
+              </div>
+              <div class="dp-days" id="angDpDays"></div>
+              <div class="dp-range-info" id="angDpRangeInfo">Otomatis (periode berjalan)</div>
+              <div class="dp-presets">
+                <div class="dp-preset active" onclick="angDpPreset('auto')">Otomatis</div>
+              </div>
+            </div>
+            </div>
+          </div>
+          <!-- Filter per-anggaran spesifik — cuma tampil kalau kategori
+               anggaran yang punya limit lebih dari 1. -->
+          <div class="acf-wrap" id="aselangBudgetWrap" style="display:none">
+            <div class="acf-trigger" id="aselangBudgetTrigger" onclick="toggleAnalyticsSelFilter('angBudget')"><span id="aselangBudgetLabel">Semua</span><span class="acf-arrow">▾</span></div>
+            <div class="dp-overlay" id="aselangBudgetOverlay" data-trigger="aselangBudgetTrigger" onclick="if(event.target===this) closeDp(document.getElementById('aselangBudgetPanel'))">
+              <div class="currency-filter-panel" id="aselangBudgetPanel"></div>
+            </div>
+          </div>
+        </div>
+      </div>
       <div class="donut-legend" id="budgetOverlayList" style="padding:0"></div>
+      <!-- Cuma muncul kalau filter lagi dipersempit ke SATU kategori anggaran
+           spesifik (lihat renderBudgetOverlay di app.js) — nunjukin rentang
+           tanggal aktual yang lagi dipakai buat kategori itu sesuai
+           periodenya (mingguan/bulanan/tahunan). -->
+      <div class="dl-sub" id="angPeriodNote" style="display:none;text-align:center;padding:8px 0 2px"></div>
     </div>
 
     <div class="account-breakdown-wrap glass">
-      <div class="card-head"><h3>Per Akun</h3></div>
+      <div class="card-head">
+        <h3>Per Akun</h3>
+        <div style="display:flex;align-items:center;gap:8px">
+          <div class="date-filter-wrap" id="akunDtWrap">
+            <div class="date-filter-trigger icon-btn" id="akunDtTrigger" onclick="toggleCardDatePicker('akun')" style="border-radius:12px;width:auto;padding:0 10px;gap:5px;font-size:11px">
+              <svg class="ic" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg> <span id="akunDtLabel">Bulan Ini</span>
+            </div>
+            <div class="dp-overlay" id="akunDatePickerOverlay" data-trigger="akunDtTrigger" onclick="if(event.target===this) closeDp(document.getElementById('akunDatePicker'))">
+            <div class="date-picker-panel" id="akunDatePicker">
+              <div class="dp-header">
+                <div class="dp-month-nav" onclick="cardDpNav('akun',-1)">‹</div>
+                <div class="dp-month-label" id="akunDpLabel"></div>
+                <div class="dp-month-nav" onclick="cardDpNav('akun',1)">›</div>
+              </div>
+              <div class="dp-weekdays">
+                <div class="dp-wd">Min</div><div class="dp-wd">Sen</div><div class="dp-wd">Sel</div>
+                <div class="dp-wd">Rab</div><div class="dp-wd">Kam</div><div class="dp-wd">Jum</div><div class="dp-wd">Sab</div>
+              </div>
+              <div class="dp-days" id="akunDpDays"></div>
+              <div class="dp-range-info" id="akunDpRangeInfo">Pilih tanggal awal</div>
+              <div class="dp-presets">
+                <div class="dp-preset" onclick="cardDpPreset('akun','week')">7 Hari</div>
+                <div class="dp-preset active" onclick="cardDpPreset('akun','month')">Bulan Ini</div>
+                <div class="dp-preset" onclick="cardDpPreset('akun','last3')">3 Bulan</div>
+                <div class="dp-preset" onclick="cardDpPreset('akun','year')">Tahun Ini</div>
+                <div class="dp-preset" onclick="cardDpPreset('akun','all')">Semua</div>
+              </div>
+            </div>
+            </div>
+          </div>
+          <!-- Filter akun spesifik — cuma tampil kalau akunnya lebih dari 1. -->
+          <div class="acf-wrap" id="aselakunAccWrap" style="display:none">
+            <div class="acf-trigger" id="aselakunAccTrigger" onclick="toggleAnalyticsSelFilter('akunAcc')"><span id="aselakunAccLabel">Semua</span><span class="acf-arrow">▾</span></div>
+            <div class="dp-overlay" id="aselakunAccOverlay" data-trigger="aselakunAccTrigger" onclick="if(event.target===this) closeDp(document.getElementById('aselakunAccPanel'))">
+              <div class="currency-filter-panel" id="aselakunAccPanel"></div>
+            </div>
+          </div>
+        </div>
+      </div>
       <div class="donut-legend" id="accountBreakdownList" style="padding:0"></div>
     </div>
 
@@ -682,7 +765,6 @@
     <div class="topbar">
       <div class="topbar-left">
         <div class="tb-title">Akun & Dompet</div>
-        <div class="tb-subtitle">Semua rekening dalam satu tempat</div>
       </div>
       <div class="topbar-actions"><div class="icon-btn" onclick="openAddWalletModal()">＋</div></div>
     </div>
@@ -695,7 +777,6 @@
     <div class="topbar">
       <div class="topbar-left">
         <div class="tb-title">Utang Piutang</div>
-        <div class="tb-subtitle">Catat siapa berutang ke siapa</div>
       </div>
       <div class="topbar-actions"><div class="icon-btn" onclick="openDebtModal()">＋</div></div>
     </div>
@@ -709,7 +790,6 @@
     <div class="topbar">
       <div class="topbar-left">
         <div class="tb-title">Kelola Kategori</div>
-        <div class="tb-subtitle">Kategori transaksimu</div>
       </div>
       <div class="topbar-actions"><div class="icon-btn" onclick="openAddCategoryModal()">＋</div></div>
     </div>
@@ -777,7 +857,7 @@
       <div class="settings-label">Akun</div>
       <div class="s-items">
         <div class="settings-item" onclick="openAuthManageModal()">
-          <div class="si-icon"><svg class="ic" viewBox="0 0 24 24"><path d="M12 3l7 3v6c0 5-3 8-7 9-4-1-7-4-7-9V6z"/><path d="M9 12l2 2 4-4"/></svg></div><div class="si-text"><div class="si-name">Kelola Autentikasi</div><div class="si-desc" id="settingsAuthDesc">Login dulu</div></div><div class="si-arrow">›</div>
+          <div class="si-icon"><svg class="ic" viewBox="0 0 24 24"><path d="M12 3l7 3v6c0 5-3 8-7 9-4-1-7-4-7-9V6z"/><path d="M9 12l2 2 4-4"/></svg></div><div class="si-text"><div class="si-name">Kelola Autentikasi</div></div><div class="si-arrow">›</div>
         </div>
       </div>
     </div>
@@ -785,10 +865,10 @@
       <div class="settings-label">Aplikasi</div>
       <div class="s-items">
         <div class="settings-item" id="settingsNotifTrigger" onclick="toggleNotifPanel()">
-          <div class="si-icon"><svg class="ic" viewBox="0 0 24 24"><path d="M6 9a6 6 0 0 1 12 0c0 5 2 6 2 6H4s2-1 2-6z"/><path d="M10 20a2 2 0 0 0 4 0"/></svg></div><div class="si-text"><div class="si-name">Notifikasi</div><div class="si-desc" id="settingsNotifDesc">0 peringatan aktif</div></div><div class="si-badge" id="settingsPushBadge" onclick="event.stopPropagation();requestPushPermission()" title="Notifikasi perangkat">Aktifkan</div>
+          <div class="si-icon"><svg class="ic" viewBox="0 0 24 24"><path d="M6 9a6 6 0 0 1 12 0c0 5 2 6 2 6H4s2-1 2-6z"/><path d="M10 20a2 2 0 0 0 4 0"/></svg></div><div class="si-text"><div class="si-name">Notifikasi</div></div><div class="si-badge" id="settingsPushBadge" onclick="event.stopPropagation();requestPushPermission()" title="Notifikasi perangkat">Aktifkan</div>
         </div>
         <div class="settings-item" id="installAppItem" onclick="installApp()" style="display:none">
-          <div class="si-icon"><svg class="ic" viewBox="0 0 24 24"><path d="M12 3v12M12 15l-4-4M12 15l4-4"/><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg></div><div class="si-text"><div class="si-name">Instal Aplikasi</div><div class="si-desc">Pasang OFM di perangkatmu</div></div><div class="si-arrow">›</div>
+          <div class="si-icon"><svg class="ic" viewBox="0 0 24 24"><path d="M12 3v12M12 15l-4-4M12 15l4-4"/><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg></div><div class="si-text"><div class="si-name">Instal Aplikasi</div></div><div class="si-arrow">›</div>
         </div>
       </div>
     </div>
@@ -796,7 +876,7 @@
       <div class="settings-label">Mata Uang</div>
       <div class="s-items">
         <div class="settings-item" onclick="openExchangeRateModal()">
-          <div class="si-icon"><svg class="ic" viewBox="0 0 24 24"><path d="M7 8h13M17 4l3 4-3 4"/><path d="M17 16H4M7 20l-3-4 3-4"/></svg></div><div class="si-text"><div class="si-name">Kurs Mata Uang</div><div class="si-desc" id="settingsFxDesc">Belum ada kurs diatur</div></div><div class="si-arrow">›</div>
+          <div class="si-icon"><svg class="ic" viewBox="0 0 24 24"><path d="M7 8h13M17 4l3 4-3 4"/><path d="M17 16H4M7 20l-3-4 3-4"/></svg></div><div class="si-text"><div class="si-name">Kurs Mata Uang</div></div><div class="si-arrow">›</div>
         </div>
       </div>
     </div>
@@ -804,7 +884,7 @@
       <div class="settings-label">Perangkat</div>
       <div class="s-items">
         <div class="settings-item" onclick="openDeviceModal()">
-          <div class="si-icon"><svg class="ic" viewBox="0 0 24 24"><rect x="2" y="4" width="20" height="13" rx="2"/><path d="M8 21h8M12 17v4"/></svg></div><div class="si-text"><div class="si-name">Kelola Perangkat</div><div class="si-desc" id="settingsDeviceDesc">1 perangkat aktif</div></div><div class="si-arrow">›</div>
+          <div class="si-icon"><svg class="ic" viewBox="0 0 24 24"><rect x="2" y="4" width="20" height="13" rx="2"/><path d="M8 21h8M12 17v4"/></svg></div><div class="si-text"><div class="si-name">Kelola Perangkat</div></div><div class="si-arrow">›</div>
         </div>
       </div>
     </div>
@@ -812,7 +892,7 @@
       <div class="settings-label">Keamanan</div>
       <div class="s-items">
         <div class="settings-item" onclick="openLockSettings()">
-          <div class="si-icon"><svg class="ic" viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg></div><div class="si-text"><div class="si-name">Kunci Aplikasi</div><div class="si-desc" id="settingsLockDesc">Nonaktif — data tanpa PIN</div></div><div class="si-badge" id="settingsLockBadge" style="opacity:0.6">Nonaktif</div>
+          <div class="si-icon"><svg class="ic" viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg></div><div class="si-text"><div class="si-name">Kunci Aplikasi</div></div><div class="si-badge" id="settingsLockBadge" style="opacity:0.6">Nonaktif</div>
         </div>
       </div>
     </div>
@@ -820,10 +900,10 @@
       <div class="settings-label">Data</div>
       <div class="s-items">
         <div class="settings-item" onclick="openExportModal()">
-          <div class="si-icon"><svg class="ic" viewBox="0 0 24 24"><path d="M12 16V4M8 8l4-4 4 4"/><path d="M4 16v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3"/></svg></div><div class="si-text"><div class="si-name">Export Data</div><div class="si-desc">CSV buat Excel, atau backup JSON lengkap</div></div><div class="si-arrow">›</div>
+          <div class="si-icon"><svg class="ic" viewBox="0 0 24 24"><path d="M12 16V4M8 8l4-4 4 4"/><path d="M4 16v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3"/></svg></div><div class="si-text"><div class="si-name">Export Data</div></div><div class="si-arrow">›</div>
         </div>
         <div class="settings-item" onclick="cloudBackupTap()">
-          <div class="si-icon"><svg class="ic" viewBox="0 0 24 24"><path d="M7 18a4 4 0 1 1 .6-7.96A5.5 5.5 0 0 1 18 12.5 3.5 3.5 0 0 1 17.5 18H7z"/></svg></div><div class="si-text"><div class="si-name">Cloud Backup</div><div class="si-desc" id="settingsCloudDesc">Aktif</div></div><div class="si-badge" id="settingsCloudBadge">Sinkron</div>
+          <div class="si-icon"><svg class="ic" viewBox="0 0 24 24"><path d="M7 18a4 4 0 1 1 .6-7.96A5.5 5.5 0 0 1 18 12.5 3.5 3.5 0 0 1 17.5 18H7z"/></svg></div><div class="si-text"><div class="si-name">Cloud Backup</div></div><div class="si-badge" id="settingsCloudBadge">Sinkron</div>
         </div>
       </div>
     </div>
@@ -852,11 +932,12 @@
     <div class="amount-display">
       <div class="ad-label">Nominal</div>
       <div>
-        <span class="ad-cur" id="txAmountCur">Rp</span>
+        <span class="ad-cur" id="txAmountCur"></span>
         <span class="ad-val" id="amountDisplay" contenteditable="true" inputmode="numeric"
           oninput="formatAmount(this)"
           onfocus="this.style.borderColor='var(--teal)'"
           onblur="this.style.borderColor='rgba(255,255,255,0.15)'">0</span>
+        <span class="ad-limiter" id="txAmountLimiter" style="display:none"></span>
       </div>
     </div>
     <div class="modal-form">
@@ -976,11 +1057,13 @@
     <div class="modal-sheet">
       <div class="modal-handle"></div>
       <div class="modal-header">
-        <div class="modal-title">Kurs Mata Uang</div>
+        <div class="modal-title-group">
+          <div class="modal-title">Kurs Mata Uang</div>
+          <button class="info-tip-btn" onclick="toggleInfoTip(this)" data-tip="Dipakai buat konversi nominal waktu transfer antar akun yang mata uangnya beda.">i</button>
+        </div>
         <button class="modal-close" onclick="closeExchangeRateModal()"><svg class="ic" viewBox="0 0 24 24"><path d="M5 5l14 14M19 5L5 19"/></svg></button>
       </div>
-      <p style="padding:0 16px 12px;font-size:12px;color:var(--txt3)">Dipakai buat konversi nominal waktu transfer antar akun yang mata uangnya beda.</p>
-      <div class="fx-list" id="fxList" style="padding:0 16px 4px"></div>
+      <div class="fx-list" id="fxList" style="padding:0 16px 4px;margin-top:6px"></div>
       <div class="modal-form" style="padding-top:8px">
         <button class="modal-submit" style="background:transparent;color:var(--teal);border:1.5px dashed rgba(42,232,196,0.4);box-shadow:none" onclick="openAddExchangeRateModal()">＋ Tambah Kurs</button>
       </div>
@@ -1028,11 +1111,13 @@
     <div class="modal-sheet">
       <div class="modal-handle"></div>
       <div class="modal-header">
-        <div class="modal-title">Kelola Perangkat</div>
+        <div class="modal-title-group">
+          <div class="modal-title">Kelola Perangkat</div>
+          <button class="info-tip-btn" onclick="toggleInfoTip(this)" data-tip="Perangkat yang pernah login ke akun ini.">i</button>
+        </div>
         <button class="modal-close" onclick="closeDeviceModal()"><svg class="ic" viewBox="0 0 24 24"><path d="M5 5l14 14M19 5L5 19"/></svg></button>
       </div>
-      <p style="padding:0 16px 12px;font-size:12px;color:var(--txt3)">Perangkat yang pernah login ke akun ini.</p>
-      <div id="deviceLogoutAllWrap" style="padding:0 16px 12px;display:none">
+      <div id="deviceLogoutAllWrap" style="padding:0 16px 12px;margin-top:6px;display:none">
         <button class="modal-submit" style="background:rgba(255,107,132,0.1);color:var(--red);box-shadow:none" onclick="logoutAllOtherDevices()">Keluar dari Semua Perangkat Lain</button>
       </div>
       <div class="device-list" id="deviceList" style="padding:0 16px 4px"></div>
@@ -1047,11 +1132,13 @@
     <div class="modal-sheet">
       <div class="modal-handle"></div>
       <div class="modal-header">
-        <div class="modal-title">Kelola Autentikasi</div>
+        <div class="modal-title-group">
+          <div class="modal-title">Kelola Autentikasi</div>
+          <button class="info-tip-btn" onclick="toggleInfoTip(this)" data-tip="Cara masuk yang tersambung ke akun ini. Tambahin lebih dari satu biar tetap bisa login walau salah satunya lupa/hilang.">i</button>
+        </div>
         <button class="modal-close" onclick="closeAuthManageModal()"><svg class="ic" viewBox="0 0 24 24"><path d="M5 5l14 14M19 5L5 19"/></svg></button>
       </div>
-      <p style="padding:0 16px 12px;font-size:12px;color:var(--txt3)">Cara masuk yang tersambung ke akun ini. Tambahin lebih dari satu biar tetap bisa login walau salah satunya lupa/hilang.</p>
-      <div id="authProviderList" style="padding:0 16px 4px;display:flex;flex-direction:column;gap:10px"></div>
+      <div id="authProviderList" style="padding:0 16px 4px;margin-top:6px;display:flex;flex-direction:column;gap:10px"></div>
       <!-- Muncul cuma kalau user klik "Buat Password" (akun ini baru punya Google) -->
       <div id="authLinkPasswordForm" class="modal-form" style="display:none;padding-top:8px">
         <div class="field">
@@ -1132,7 +1219,10 @@
     <div class="modal-sheet" style="max-height:88vh;overflow-y:auto">
       <div class="modal-handle"></div>
       <div class="modal-header">
-        <div class="modal-title" id="budgetModalTitle">Tambah Anggaran</div>
+        <div class="modal-title-group">
+          <div class="modal-title" id="budgetModalTitle">Tambah Anggaran</div>
+          <button class="info-tip-btn" onclick="toggleInfoTip(this)" data-tip="Total anggaran di halaman ini dihitung otomatis dari jumlah limit semua kategori (mata uang Rp). Anggaran otomatis reset setiap awal periode yang dipilih (harian = tiap lewat jam 12 malam, mingguan = tiap Senin, bulanan = tiap tanggal 1, tahunan = tiap 1 Januari).">i</button>
+        </div>
         <button class="modal-close" onclick="closeBudgetSettingsModal()"><svg class="ic" viewBox="0 0 24 24"><path d="M5 5l14 14M19 5L5 19"/></svg></button>
       </div>
       <input type="hidden" id="editBudgetCatId">
@@ -1144,6 +1234,14 @@
         <div class="field" style="margin-top:12px">
           <label>Limit Anggaran</label>
           <input type="number" id="budgetCatLimitInput" inputmode="numeric">
+        </div>
+        <div class="field" style="margin-top:12px">
+          <label>Periode Reset</label>
+          <div class="picker-trigger" onclick="openPicker(this,'budgetCatPeriod','Periode')">
+            <div class="pt-text"><span id="budgetCatPeriodLbl">Bulanan</span></div>
+            <span class="picker-arrow">▾</span>
+          </div>
+          <input type="hidden" id="budgetCatPeriod" value="monthly">
         </div>
         <div class="field-row" style="margin-top:12px">
           <div class="field">
@@ -1168,7 +1266,6 @@
             <input type="hidden" id="budgetCatColor">
           </div>
         </div>
-        <div style="font-size:11px;color:var(--txt3);line-height:1.5;margin-top:10px">Total anggaran di halaman ini dihitung otomatis dari jumlah limit semua kategori (mata uang Rp).</div>
       </div>
       <button class="modal-submit" id="budgetModalSubmitBtn" onclick="submitBudgetCatModal()">Tambah Anggaran</button>
     </div>
@@ -1207,7 +1304,6 @@
     <div class="topbar">
       <div class="topbar-left">
         <div class="tb-title">Transaksi Rutin</div>
-        <div class="tb-subtitle">Otomatis tercatat setiap periode</div>
       </div>
       <div class="topbar-actions">
         <div class="icon-btn" onclick="openRecurModal()">＋</div>
@@ -1578,6 +1674,11 @@
 
 
   <!-- ══════ UNIVERSAL PICKER MODAL ══════ -->
+  <!-- Bubble penjelasan buat tombol info kecil (.info-tip-btn) — satu elemen
+       dipakai ulang buat semua tombol info di app ini, isinya diganti tiap
+       kali diketuk sesuai data-tip milik tombolnya (lihat toggleInfoTip()). -->
+  <div class="info-tip-bubble" id="infoTipBubble"></div>
+
   <div class="picker-overlay" id="pickerOverlay" onclick="if(event.target===this)closePicker()">
     <div class="picker-modal">
       <div class="picker-modal-title" id="pickerTitle">Pilih</div>
@@ -1631,17 +1732,17 @@
         <div class="s-items flat">
           <div class="settings-item" onclick="exportCSV();closeExportModal();">
             <div class="si-icon"><svg class="ic" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18M9 10v10"/></svg></div>
-            <div class="si-text"><div class="si-name">CSV — Transaksi</div><div class="si-desc">Daftar transaksi mentah, gampang dibuka di Excel / Google Sheets</div></div>
+            <div class="si-text"><div class="si-name">CSV — Transaksi</div></div>
             <div class="si-arrow">›</div>
           </div>
           <div class="settings-item" onclick="exportJSON();closeExportModal();">
             <div class="si-icon"><svg class="ic" viewBox="0 0 24 24"><path d="M4 7h3l2-3h6l2 3h3v13H4z"/><path d="M9 12l2 2 4-4"/></svg></div>
-            <div class="si-text"><div class="si-name">JSON — Backup Lengkap</div><div class="si-desc">Transaksi, akun, anggaran, goals & tagihan rutin — buat backup pribadi</div></div>
+            <div class="si-text"><div class="si-name">JSON — Backup Lengkap</div></div>
             <div class="si-arrow">›</div>
           </div>
           <div class="settings-item" onclick="triggerImportFile();closeExportModal();">
             <div class="si-icon"><svg class="ic" viewBox="0 0 24 24"><path d="M12 4v12M8 12l4 4 4-4"/><path d="M4 16v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3"/></svg></div>
-            <div class="si-text"><div class="si-name">Import — Pulihkan Backup</div><div class="si-desc">Pulihkan dari file JSON backup (menimpa data yang ada sekarang)</div></div>
+            <div class="si-text"><div class="si-name">Import — Pulihkan Backup</div></div>
             <div class="si-arrow">›</div>
           </div>
         </div>
@@ -1655,7 +1756,10 @@
     <div class="modal-sheet">
       <div class="modal-handle"></div>
       <div class="modal-header">
-        <div class="modal-title">Kunci Aplikasi</div>
+        <div class="modal-title-group">
+          <div class="modal-title">Kunci Aplikasi</div>
+          <button class="info-tip-btn" onclick="toggleInfoTip(this)" data-tip="Kunci aplikasi pakai PIN 6 digit sebelum siapa pun bisa lihat data keuanganmu. PIN disimpan cuma di perangkat ini (terenkripsi/hash), tidak dikirim ke server mana pun.">i</button>
+        </div>
         <button class="modal-close" onclick="closeLockModal()"><svg class="ic" viewBox="0 0 24 24"><path d="M5 5l14 14M19 5L5 19"/></svg></button>
       </div>
       <div id="lockModalBody" style="padding:0 16px 24px"></div>
@@ -1702,7 +1806,6 @@
     <div class="topbar" id="riwayatTopbar">
       <div class="topbar-left">
         <div class="tb-title">Riwayat</div>
-        <div class="tb-subtitle">Semua catatan transaksimu</div>
       </div>
       <div class="topbar-actions">
         <div class="icon-btn" onclick="exportCSV()" title="Export CSV"><svg class="ic" viewBox="0 0 24 24"><path d="M12 16V4M8 8l4-4 4 4"/><path d="M4 16v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3"/></svg></div>
@@ -1778,9 +1881,8 @@
     <div class="riwayat-scroll">
       <div class="tx-list" id="riwayatList"></div>
       <div class="riwayat-empty" id="riwayatEmpty" style="display:none">
-        <div class="riwayat-empty-icon"><svg class="ic" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.35-4.35"/></svg></div>
+        <div class="riwayat-empty-icon"><svg class="ic" viewBox="0 0 24 24"><path d="M4 13h4l2 3h4l2-3h4"/><path d="M5 13L3 6h18l-2 7"/><path d="M3 13v6a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-6"/></svg></div>
         <h3 style="font-size:15px;color:var(--txt2);margin-bottom:6px">Tidak ada transaksi</h3>
-        <p style="font-size:13px">Coba ubah filter atau rentang tanggal</p>
       </div>
       <div style="height:16px"></div>
     </div>

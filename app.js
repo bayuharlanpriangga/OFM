@@ -5,6 +5,23 @@
 ═══════════════════════════════════════ */
 
 /* ══════════════════════════════════════════
+   localISODate() — PENTING: dipakai di SELURUH file ini alih-alih
+   `date.toISOString().split('T')[0]`.
+   `.toISOString()` selalu mengonversi ke waktu UTC dulu sebelum diformat.
+   Untuk user di zona waktu positif (mis. WIB/UTC+7), jam 00:00 waktu lokal
+   itu masih hari SEBELUMNYA di UTC (00:00 WIB = 17:00 UTC hari sebelumnya),
+   jadi setiap kali kita bikin tanggal lewat `new Date(y, m, 1)` (default jam
+   00:00 lokal) lalu format pakai toISOString(), hasilnya mundur satu hari —
+   ini penyebab bug "31 Agu" muncul padahal seharusnya "1 Sep" di card
+   Anggaran/Per Akun. localISODate() format tanggal dari komponen LOKAL
+   (getFullYear/getMonth/getDate), jadi selalu match tanggal yang terlihat
+   di kalender device, di zona waktu manapun.
+══════════════════════════════════════════ */
+function localISODate(d) {
+  return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+}
+
+/* ══════════════════════════════════════════
    FIREBASE INIT
    Dimuat lewat dynamic import() (bukan <script type="module">)
    supaya tetap satu file app.js dan semua fungsi lain di file ini
@@ -303,6 +320,17 @@ const BUDGET = {
   cats: []
 };
 
+// Reset period for a budget category's spending window. Setiap kategori
+// anggaran punya periodenya sendiri (bukan cuma bulanan) — dipakai sama
+// periodRangeFor() buat hitung ulang rentang tanggal "terpakai" kategori
+// itu tiap kali di-render, jadi resetnya otomatis begitu tanggal berjalan
+// masuk ke periode baru, tanpa perlu nyimpen counter terpisah.
+const BUDGET_PERIOD_LABELS = { daily: 'Harian', weekly: 'Mingguan', monthly: 'Bulanan', yearly: 'Tahunan' };
+// Suffix nominal batas per kategori anggaran (mis. "Rp 80.000/Minggu") —
+// dipasang di sebelah nominal batas di bawah progress bar, BUKAN lagi di
+// sebelah nama kategori (lihat renderBudget()).
+const BUDGET_PERIOD_SUFFIX = { daily: 'Hari', weekly: 'Minggu', monthly: 'Bulan', yearly: 'Tahun' };
+
 // Curated icon set for custom budget/transaction categories — kept visually
 // consistent with the app's icon language. Diperluas biar variasinya selebar
 // pemilih ikon Saving Goals (GOAL_ICON_OPTIONS), jadi user hampir selalu
@@ -404,7 +432,7 @@ function renderFxList() {
   const el = document.getElementById('fxList');
   if (!el) return;
   if (!EXCHANGE_RATES.length) {
-    el.innerHTML = `<div class="empty" style="padding:20px 0"><div class="empty-icon">${ICON.trendUp||''}</div><h3>Belum ada kurs</h3><p>Tambahkan kurs biar transfer antar mata uang bisa dihitung otomatis</p></div>`;
+    el.innerHTML = `<div class="empty" style="padding:20px 0"><div class="empty-icon">${ICON.trendUp||''}</div><h3>Belum ada kurs</h3></div>`;
     return;
   }
   el.innerHTML = EXCHANGE_RATES.map(r => `
@@ -1438,7 +1466,7 @@ function cloudBackupTap() {
 ══════════════════════════════════════════ */
 function openModal() {
   showPage('addtx');
-  const _td = new Date().toISOString().split('T')[0];
+  const _td = localISODate(new Date());
   document.getElementById('txDate').value = _td;
   const _tdLbl = document.getElementById('txDateLabel');
   if (_tdLbl) _tdLbl.textContent = 'Hari ini';
@@ -1655,6 +1683,7 @@ function setType(t) {
   } else if (typeof updateTransferConvertPreview === 'function') {
     updateTransferConvertPreview();
   }
+  updateBudgetLimiterUI();
 }
 
 /* ══════════════════════════════════════════
@@ -2490,7 +2519,7 @@ function renderTxList() {
   // "Terbaru" on the dashboard is meant to be a same-day feed — only show
   // today's transactions here; once the day rolls over it goes back to the
   // empty state automatically (full history still lives in Riwayat).
-  const todayStr = new Date().toISOString().split('T')[0];
+  const todayStr = localISODate(new Date());
   const txs = S.transactions.filter(t => t.date === todayStr).slice(0, 15);
   if (!txs.length) { list.innerHTML=''; empty.style.display='block'; return; }
   empty.style.display='none';
@@ -2606,68 +2635,123 @@ function computeBudgetTotal() {
   return BUDGET.cats.filter(c => (c.currency || 'IDR') === 'IDR').reduce((s,c) => s + (c.limit || 0), 0);
 }
 
+// Rentang tanggal "periode berjalan" sebuah kategori anggaran, dihitung dari
+// tanggal acuan (refDate, biasanya hari ini). Karena "terpakai" tiap kategori
+// selalu dihitung ULANG dari transaksi tiap render (bukan counter yang
+// disimpan), reset periode terjadi otomatis begitu refDate masuk ke periode
+// baru — nggak perlu logic reset terpisah:
+//  - daily   → refDate itu sendiri (reset tiap lewat jam 12 malam)
+//  - weekly  → Senin di minggu yang sama (reset tiap Senin)
+//  - monthly → tanggal 1 di bulan yang sama (reset tiap awal bulan)
+//  - yearly  → 1 Januari di tahun yang sama (reset tiap awal tahun)
+function periodRangeFor(period, refDate) {
+  const d = new Date(refDate + 'T00:00:00');
+  let from;
+  if (period === 'daily') {
+    from = refDate;
+  } else if (period === 'weekly') {
+    const day = d.getDay(); // 0=Min..6=Sab
+    const diffToMonday = day === 0 ? 6 : day - 1;
+    const monday = new Date(d); monday.setDate(d.getDate() - diffToMonday);
+    from = localISODate(monday);
+  } else if (period === 'yearly') {
+    from = d.getFullYear() + '-01-01';
+  } else { // 'monthly' (default)
+    from = localISODate(new Date(d.getFullYear(), d.getMonth(), 1));
+  }
+  return { from, to: refDate };
+}
+
 function renderBudget() {
   BUDGET.total = computeBudgetTotal();
-  // Apply budget filter to compute real spent from transactions
-  const bf   = typeof BUDGET_FILTER !== 'undefined' ? BUDGET_FILTER : {};
-  const filtTx = S.transactions.filter(t => {
-    if (t.type !== 'expense') return false;
-    if (bf.dateFrom && t.date < bf.dateFrom) return false;
-    if (bf.dateTo   && t.date > bf.dateTo)   return false;
-    return true;
-  });
-  // Overview (bov-*) — dipecah per mata uang KATEGORI ANGGARAN (bukan per
-  // wallet): tiap kategori anggaran sudah punya currency-nya sendiri, jadi
-  // overview-nya harus ikut semua currency yang dipakai anggaran, bukan
-  // cuma Rp. Kalau anggarannya lebih dari satu mata uang, keempat angka
-  // (Anggaran/Terpakai/Sisa/Hemat) jalan bareng sebagai papan iklan.
-  const totalByCur = {}, usedByCur = {};
+  // Tanggal acuan dari filter kalender halaman Anggaran — null berarti
+  // "Semua Waktu" (jumlah total sepanjang masa, periode diabaikan).
+  const bf      = typeof BUDGET_FILTER !== 'undefined' ? BUDGET_FILTER : {};
+  const refDate = bf.refDate || null;
+  // Rentang tanggal DIHITUNG PER KATEGORI sesuai periode masing-masing
+  // (bukan satu rentang seragam buat semua kategori) — kategori tahunan
+  // nggak ikut ke-reset cuma karena kalendernya digeser antar bulan.
+  // Sekaligus dikelompokkan per PERIODE (bukan cuma per currency) buat
+  // 4 card ringkasan di atas (Harian/Mingguan/Bulanan/Tahunan) — tiap card
+  // nunjukin total terpakai & total batas dari SEMUA kategori yang punya
+  // periode itu (mis. 2 kategori mingguan 40rb+40rb terpakai 10rb+5rb →
+  // card Mingguan nunjukin 15rb/80rb).
+  const spentByCat = {};
+  const byPeriod = {
+    daily:   { totalByCur: {}, usedByCur: {} },
+    weekly:  { totalByCur: {}, usedByCur: {} },
+    monthly: { totalByCur: {}, usedByCur: {} },
+    yearly:  { totalByCur: {}, usedByCur: {} },
+  };
   BUDGET.cats.forEach(c => {
-    const cCode = c.currency || 'IDR';
-    totalByCur[cCode] = (totalByCur[cCode] || 0) + (c.limit || 0);
+    const cCode  = c.currency || 'IDR';
+    const period = (c.period && byPeriod[c.period]) ? c.period : 'monthly';
+    const bucket = byPeriod[period];
+    bucket.totalByCur[cCode] = (bucket.totalByCur[cCode] || 0) + (c.limit || 0);
+    const range = refDate ? periodRangeFor(period, refDate) : { from: null, to: null };
+    const spent = S.transactions.filter(t =>
+      t.type === 'expense' && t.catId === c.id && walletCurrencyCode(t.account) === cCode &&
+      (!range.from || t.date >= range.from) && (!range.to || t.date <= range.to)
+    ).reduce((s,t) => s + t.amount, 0);
+    spentByCat[c.id] = spent;
+    bucket.usedByCur[cCode] = (bucket.usedByCur[cCode] || 0) + spent;
   });
-  filtTx.forEach(t => {
-    const cat = BUDGET.cats.find(c => c.id === t.catId);
-    if (!cat) return;
-    const cCode = cat.currency || 'IDR';
-    if (walletCurrencyCode(t.account) !== cCode) return; // beda mata uang, gak dihitung ke budget ini (sama seperti submitTransaction())
-    usedByCur[cCode] = (usedByCur[cCode] || 0) + t.amount;
-  });
-  const fallbackCode = WALLETS.length ? (WALLETS[0].currency || 'IDR') : 'IDR';
-  const bovCodes = Object.keys(totalByCur);
-  const bovEntries = bovCodes.length
-    ? bovCodes.sort((a,b) => (a==='IDR'?-1:1) - (b==='IDR'?-1:1)).map(code => {
-        const total = totalByCur[code] || 0;
-        const used  = usedByCur[code]  || 0;
-        const left  = Math.max(0, total - used);
-        return { code, total, used, left, savePct: total > 0 ? Math.round(left / total * 100) : null };
-      })
-    : [{ code: fallbackCode, total: 0, used: 0, left: 0, savePct: null }];
 
-  const bovTotalEl = document.getElementById('bov-total');
-  const bovUsedEl  = document.getElementById('bov-used');
-  const bovLeftEl  = document.getElementById('bov-left');
-  const bovSaveEl  = document.getElementById('bov-save');
-  runGroupTicker('budgetOverview', [bovTotalEl, bovUsedEl, bovLeftEl, bovSaveEl], bovEntries, e => {
-    if (bovTotalEl) bovTotalEl.textContent = fmtTickerAmount({ code: e.code, amount: e.total });
-    if (bovUsedEl)  bovUsedEl.textContent  = fmtTickerAmount({ code: e.code, amount: e.used });
-    if (bovLeftEl)  bovLeftEl.textContent  = fmtTickerAmount({ code: e.code, amount: e.left });
-    if (bovSaveEl)  bovSaveEl.textContent  = e.savePct === null ? '—' : e.savePct + '%';
+  [
+    { period: 'daily',   elId: 'bov-daily'   },
+    { period: 'weekly',  elId: 'bov-weekly'  },
+    { period: 'monthly', elId: 'bov-monthly' },
+    { period: 'yearly',  elId: 'bov-yearly'  },
+  ].forEach(({ period, elId }) => {
+    const bucket = byPeriod[period];
+    // Satu entry per mata uang yang BENERAN punya kategori anggaran di
+    // periode ini — kalau lebih dari satu mata uang terdeteksi (mis.
+    // kategori "Makan" Rupiah & "Jajan" Dolar sama-sama periode harian),
+    // card ini otomatis jadi papan iklan bergantian antar mata uang lewat
+    // runGroupTicker di bawah. Kalau belum ada kategori anggaran sama
+    // sekali di periode ini, jangan maksa nampilin mata uang tebakan (dulu
+    // fallback ke IDR/wallet pertama) — pakai entry blank: polos "0 / 0"
+    // tanpa simbol apapun, sama seperti pola blank-entry di dashboard.
+    const codes  = Object.keys(bucket.totalByCur);
+    const entries = codes.length
+      ? codes.sort((a,b) => (a==='IDR'?-1:1) - (b==='IDR'?-1:1)).map(code => ({
+          code, total: bucket.totalByCur[code] || 0, used: bucket.usedByCur[code] || 0,
+        }))
+      : [{ code: null, total: 0, used: 0, blank: true }];
+    const el = document.getElementById(elId);
+    runGroupTicker('bov-' + period, [el], entries, e => {
+      if (!el) return;
+      if (e.blank) {
+        el.style.color = 'var(--teal)';
+        el.textContent = '0 / 0';
+        return;
+      }
+      const sym  = currencyInfo(e.code).symbol;
+      const loc  = currencyInfo(e.code).locale;
+      const over = e.total > 0 && e.used > e.total;
+      el.style.color = over ? 'var(--red)' : 'var(--teal)';
+      el.textContent = sym + ' ' + e.used.toLocaleString(loc) + ' / ' + sym + ' ' + e.total.toLocaleString(loc);
+    });
   });
-  // Period label
+  // Period label — tanggal acuan aja (rentang aslinya beda-beda per kategori
+  // sesuai periode masing-masing, jadi nggak ada satu rentang seragam lagi).
   const periodEl = document.getElementById('budgetPeriod');
   if (periodEl) {
-    if (!bf.dateFrom) periodEl.textContent = 'Semua Waktu';
-    else if (bf.dateFrom === bf.dateTo) periodEl.textContent = fmtDateShort(bf.dateFrom);
-    else periodEl.textContent = fmtDateShort(bf.dateFrom) + ' – ' + fmtDateShort(bf.dateTo);
+    periodEl.textContent = refDate ? fmtDateShort(refDate) : 'Semua Waktu';
   }
   document.getElementById('budgetCats').innerHTML = BUDGET.cats.length ? BUDGET.cats.map(c => {
     const cCode = c.currency || 'IDR';
     const sym   = currencyInfo(cCode).symbol;
-    // Spent kategori ini cuma dari transaksi yang wallet-nya se-currency sama kategorinya
-    const spent = filtTx.filter(t => t.catId === c.id && walletCurrencyCode(t.account) === cCode).reduce((s,t) => s+t.amount, 0);
-    const pct   = c.limit > 0 ? Math.min(100, Math.round(spent/c.limit*100)) : 0;
-    const color = pct>90?'var(--red)':pct>70?'var(--gold)':c.color;
+    const spent = spentByCat[c.id] || 0;
+    // pct TIDAK dibatasi 100 lagi — kalau kepakai udah lewat limit anggaran
+    // itu nggak apa-apa (bukan hard cap), jadi bar-nya harus tetap ngikutin
+    // kondisi terpakai yang sebenarnya, bukan menetap diam di 100% begitu
+    // limit-nya kelewat. Container bar-nya sendiri overflow:hidden, jadi
+    // begitu lewat 100% bar-nya kelihatan penuh tanpa jebol keluar kartu.
+    // Warnanya tetap warna accent kategori itu sendiri terus — nggak
+    // berubah jadi merah/kuning cuma karena udah lewat/mendekati limit.
+    const pct   = c.limit > 0 ? Math.round(spent/c.limit*100) : 0;
+    const color = c.color;
     return `
       <div class="bcat-item-wrap">
         <div class="bcat-actions">
@@ -2679,18 +2763,17 @@ function renderBudget() {
             <div class="bcat-head">
               <div class="bcat-icon" style="background:${c.color}22">${ICON[c.icon]||''}</div>
               <div class="bcat-name">${escapeHtml(c.label)}</div>
-              <div class="bcat-remain" style="color:${c.color}">${sym} ${fmtK(Math.max(0,c.limit-spent))}</div>
+              <div class="bcat-remain" style="color:${c.color}">${sym} ${fmtK(spent)}</div>
             </div>
-            <div class="bcat-bar-bg"><div class="bcat-bar-fill" style="width:${pct}%;background:${color}"></div></div>
-            <div class="bcat-amounts"><span style="color:${c.color}">${sym} ${spent.toLocaleString(currencyInfo(cCode).locale)}</span><span style="color:${c.color}">${sym} ${c.limit.toLocaleString(currencyInfo(cCode).locale)}</span></div>
+            <div class="bcat-bar-bg"><div class="bcat-bar-fill" style="width:${Math.min(100,pct)}%;background:${color}"></div></div>
+            <div class="bcat-amounts"><span style="color:${c.color}">${sym} ${spent.toLocaleString(currencyInfo(cCode).locale)}</span><span style="color:${c.color}">${sym} ${c.limit.toLocaleString(currencyInfo(cCode).locale)}/${BUDGET_PERIOD_SUFFIX[c.period||'monthly']}</span></div>
           </div>
         </div>
       </div>`;
   }).join('') : `
     <div class="empty" onclick="openAddBudgetModal()" style="cursor:pointer">
-      <div class="empty-icon">${ICON.wallet||ICON.settings||''}</div>
+      <div class="empty-icon">${ICON.piggyBank}</div>
       <h3>Belum ada kategori anggaran</h3>
-      <p>Ketuk ＋ di atas untuk membuat kategori anggaranmu sendiri</p>
     </div>`;
   initBcatSwipe();
 }
@@ -2819,7 +2902,7 @@ function renderWallets() {
     if (k.indexOf('wallet_') === 0 && _tickerState[k].interval) clearInterval(_tickerState[k].interval);
   });
   if (!WALLETS.length) {
-    list.innerHTML = `<div class="empty"><div class="empty-icon">${ICON.creditCard}</div><h3>Belum ada akun</h3><p>Tambahkan rekening atau dompetmu</p></div>`;
+    list.innerHTML = `<div class="empty"><div class="empty-icon">${ICON.creditCard}</div><h3>Belum ada akun</h3></div>`;
     return;
   }
   const WALLET_TYPE_LABELS = { bank:'Rekening', ewallet:'E-Wallet', tunai:'Tunai', invest:'Investasi' };
@@ -3057,6 +3140,8 @@ function openAddBudgetModal() {
   document.getElementById('newBudgetCatCurrencyLbl').textContent = currencyLabelText('IDR');
   document.getElementById('budgetCatIcon').value = '';
   document.getElementById('budgetCatIconLbl').textContent = 'Pilih ikon';
+  document.getElementById('budgetCatPeriod').value = 'monthly';
+  document.getElementById('budgetCatPeriodLbl').textContent = 'Bulanan';
   _pendingBudgetCatColor = BUDGET_CAT_COLORS[BUDGET.cats.length % BUDGET_CAT_COLORS.length];
   updateColorTrigger('budget');
   document.getElementById('budgetSettingsModalOverlay').classList.add('open');
@@ -3078,6 +3163,9 @@ function openEditBudgetModal(id) {
   document.getElementById('newBudgetCatCurrencyLbl').textContent = currencyLabelText(cur);
   document.getElementById('budgetCatIcon').value = cat.icon || '';
   document.getElementById('budgetCatIconLbl').innerHTML = cat.icon ? (ICON[cat.icon] || '') : 'Pilih ikon';
+  const per = cat.period || 'monthly';
+  document.getElementById('budgetCatPeriod').value = per;
+  document.getElementById('budgetCatPeriodLbl').textContent = BUDGET_PERIOD_LABELS[per] || 'Bulanan';
   _pendingBudgetCatColor = cat.color;
   updateColorTrigger('budget');
   document.getElementById('budgetSettingsModalOverlay').classList.add('open');
@@ -3093,6 +3181,7 @@ function submitBudgetCatModal() {
   _pendingBudgetCatIcon = icon;
   const limit    = parseInt(document.getElementById('budgetCatLimitInput').value) || 0;
   const currency = document.getElementById('newBudgetCatCurrency').value || 'IDR';
+  const period   = document.getElementById('budgetCatPeriod').value || 'monthly';
 
   const color = _pendingBudgetCatColor || BUDGET_CAT_COLORS[BUDGET.cats.length % BUDGET_CAT_COLORS.length];
 
@@ -3106,6 +3195,7 @@ function submitBudgetCatModal() {
     cat.color    = color;
     cat.limit    = limit;
     cat.currency = currency;
+    cat.period   = period;
     CUSTOM_CAT_ICONS[cat.id] = _pendingBudgetCatIcon;
     // Keep the matching expense category in sync (name/icon/warna shown when logging transactions)
     const expCat = CATS.expense.find(c => c.id === cat.id);
@@ -3128,7 +3218,7 @@ function submitBudgetCatModal() {
     const existingExpCat = CATS.expense.find(c => c.label.trim().toLowerCase() === name.trim().toLowerCase());
     const id = existingExpCat ? existingExpCat.id
       : ('cat_' + name.toLowerCase().replace(/[^a-z0-9]+/g,'_').replace(/^_+|_+$/g,'').slice(0,20) + '_' + Date.now().toString(36));
-    BUDGET.cats.push({ id, label:name, icon:_pendingBudgetCatIcon, color, limit, spent:0, currency, linkedExisting: !!existingExpCat });
+    BUDGET.cats.push({ id, label:name, icon:_pendingBudgetCatIcon, color, limit, spent:0, currency, period, linkedExisting: !!existingExpCat });
     CUSTOM_CAT_ICONS[id] = _pendingBudgetCatIcon;
     if (existingExpCat) {
       // Keep the existing chip's color in sync rather than duplicating it.
@@ -3191,7 +3281,6 @@ function renderKategoriList() {
       <div class="empty" onclick="openAddCategoryModal()" style="cursor:pointer">
         <div class="empty-icon">${ICON.package||''}</div>
         <h3>Belum ada kategori</h3>
-        <p>Ketuk ＋ di atas untuk menambah kategori pertamamu</p>
       </div>`;
     return;
   }
@@ -3564,9 +3653,73 @@ function updateAccountDropdown() {
 function updateTxAmountCurrency() {
   const curEl = document.getElementById('txAmountCur');
   if (!curEl) return;
-  const hid  = document.getElementById('txAccount');
-  const code = hid && hid.value ? walletCurrencyCode(hid.value) : 'IDR';
+  const hid = document.getElementById('txAccount');
+  // Belum ada akun terpilih (atau belum ada akun sama sekali) — belum ada
+  // mata uang yang pasti buat ditampilkan, jadi simbolnya dikosongkan
+  // dulu alih-alih dipaksa nampilin "Rp" seolah-olah sudah IDR.
+  if (!hid || !hid.value) { curEl.textContent = ''; return; }
+  const code = walletCurrencyCode(hid.value);
   curEl.textContent = currencyInfo(code).symbol;
+}
+
+/* ── Pembatas anggaran di form Catat Transaksi ──────────────────────────
+   Kalau kategori transaksi yang dipilih juga terdaftar sebagai kategori
+   anggaran (lihat pencocokan di submitTransaction), nominal di form ini
+   dikasih info tambahan "/ sisa anggaran kategori itu" di sebelah nominal
+   — murni informasi/pengingat, TIDAK memengaruhi transaksi yang disimpan.
+   Kalau anggarannya bermata uang tertentu (mis. Rupiah), akun yang beda
+   mata uang ikut dibatasi supaya nggak bisa dipilih untuk kategori itu. */
+function findLinkedBudgetCat(catId) {
+  if (!catId) return null;
+  // Cocok langsung lewat id (kategori transaksi yang juga dibikin/ditaut
+  // jadi kategori anggaran) — ini pencocokan utama & paling akurat.
+  let bc = BUDGET.cats.find(b => b.id === catId);
+  if (bc) return bc;
+  // Fallback: kategori anggaran lama yang cuma nyambung lewat nama label
+  // (lihat submitTransaction) — dicocokkan di sini tanpa syarat mata uang
+  // akun dulu, karena di titik ini akunnya belum tentu sudah dipilih.
+  const cats = CATS[S.currentType] || [];
+  const cat = cats.find(c => c.id === catId);
+  if (!cat) return null;
+  return BUDGET.cats.find(b => b.label.trim().toLowerCase() === cat.label.trim().toLowerCase()) || null;
+}
+
+function budgetCatSpentSoFar(bc) {
+  const cCode  = bc.currency || 'IDR';
+  const period = bc.period || 'monthly';
+  const range  = periodRangeFor(period, localISODate(new Date()));
+  return S.transactions.filter(t =>
+    t.type === 'expense' && (t.budgetCatId === bc.id || t.catId === bc.id) &&
+    walletCurrencyCode(t.account) === cCode &&
+    t.date >= range.from && t.date <= range.to
+  ).reduce((s,t) => s + t.amount, 0);
+}
+
+function updateBudgetLimiterUI() {
+  const limEl = document.getElementById('txAmountLimiter');
+  if (!limEl) return;
+  const bc = (S.currentType === 'expense') ? findLinkedBudgetCat(S.selectedCat) : null;
+  if (!bc) { limEl.style.display = 'none'; limEl.textContent = ''; return; }
+  const spent  = budgetCatSpentSoFar(bc);
+  const remain = Math.max(0, bc.limit - spent);
+  const cur    = currencyInfo(bc.currency || 'IDR');
+  limEl.textContent = '/ ' + cur.symbol + ' ' + remain.toLocaleString(cur.locale);
+  limEl.style.display = '';
+
+  // Kalau akun yang sudah kepilih sekarang beda mata uang sama anggaran
+  // kategori ini (mis. anggaran Rupiah tapi akun USD kepilih sebelum ganti
+  // kategori), reset dulu biar user pilih ulang akun yang cocok.
+  const accHid = document.getElementById('txAccount');
+  if (accHid && accHid.value) {
+    const accCur = walletCurrencyCode(accHid.value);
+    if (accCur !== (bc.currency || 'IDR')) {
+      accHid.value = '';
+      const lbl = document.getElementById('txAccountLabel');
+      if (lbl) lbl.textContent = 'Pilih akun';
+      updateTxAmountCurrency();
+      showToast(`Kategori ini terhubung anggaran ${cur.symbol} — pilih akun bermata uang sama`, 'info');
+    }
+  }
 }
 
 /* ══════════════════════════════════════════
@@ -3688,7 +3841,7 @@ let _donutType = 'expense';
 // only relevant once the user's wallets actually span more than one
 // currency; each card remembers its own pick independently. null = "belum
 // dipilih manual", pakai primaryCurrencyCode() sebagai default.
-const ANALYTICS_CUR_FILTER = { forecast: null, donut: null, compare: null, trend: null };
+const ANALYTICS_CUR_FILTER = { forecast: null, donut: null, trend: null };
 
 function analyticsCurrencyCodes() {
   const codes = [...new Set(WALLETS.map(w => w.currency || 'IDR'))];
@@ -3730,7 +3883,6 @@ function setAnalyticsCurFilter(key, code) {
   closeDp(document.getElementById('acf' + key + 'Panel'));
   if (key === 'forecast') renderForecast();
   if (key === 'donut')    drawDonut();
-  if (key === 'compare')  { renderCompare(); renderAverages(); }
   if (key === 'trend')    drawTrend();
 }
 // Filter pill only makes sense once there's actually more than one wallet
@@ -3738,7 +3890,7 @@ function setAnalyticsCurFilter(key, code) {
 function updateAnalyticsCurFilterVisibility() {
   const codes = analyticsCurrencyCodes();
   const show = codes.length > 1;
-  ['forecast','donut','compare','trend'].forEach(key => {
+  ['forecast','donut','trend'].forEach(key => {
     const wrap = document.getElementById('acf' + key + 'Wrap');
     if (wrap) wrap.style.display = show ? '' : 'none';
     const lbl = document.getElementById('acf' + key + 'Label');
@@ -3746,13 +3898,73 @@ function updateAnalyticsCurFilterVisibility() {
   });
 }
 
+// Filter "per item" di Analitik (dropdown select, bukan kalender):
+// - katCat    → filter Kategori ke satu kategori spesifik saja. Tombolnya
+//               cuma tampil kalau minimal ada 1 kategori (bukan nunggu data
+//               kalender seperti dulu — lihat drawDonut()).
+// - angBudget → filter card Anggaran ke satu kategori anggaran. Cuma tampil
+//               kalau anggarannya lebih dari 1.
+// - akunAcc   → filter card Per Akun ke satu akun. Cuma tampil kalau
+//               akunnya lebih dari 1.
+const ANALYTICS_SEL_FILTER = { katCat: null, angBudget: null, akunAcc: null };
+
+function analyticsSelOptions(key) {
+  if (key === 'katCat') {
+    const type = _donutType || 'expense';
+    return (CATS[type] || []).map(c => ({ value: c.id, label: c.label }));
+  }
+  if (key === 'angBudget') {
+    return BUDGET.cats.filter(c => c.limit > 0).map(c => ({ value: c.id, label: c.label }));
+  }
+  if (key === 'akunAcc') {
+    return WALLETS.map(w => ({ value: w.id, label: w.name }));
+  }
+  return [];
+}
+
+function toggleAnalyticsSelFilter(key) {
+  const panel = document.getElementById('asel' + key + 'Panel');
+  if (!panel) return;
+  const isOpen = isDpOpen(panel);
+  document.querySelectorAll('.dp-overlay.open').forEach(o => { if (o.id !== 'asel'+key+'Overlay') o.classList.remove('open'); });
+  if (isOpen) { closeDp(panel); return; }
+  renderAnalyticsSelPanel(key);
+  openDp(panel);
+}
+
+function renderAnalyticsSelPanel(key) {
+  const panel = document.getElementById('asel' + key + 'Panel');
+  if (!panel) return;
+  const opts   = analyticsSelOptions(key);
+  const active = ANALYTICS_SEL_FILTER[key];
+  panel.innerHTML = `<div class="currency-opt ${!active?'selected':''}" onclick="setAnalyticsSelFilter('${key}',null)">Semua</div>` +
+    opts.map(o => `<div class="currency-opt ${active===o.value?'selected':''}" onclick="setAnalyticsSelFilter('${key}','${o.value}')">${escapeHtml(o.label)}</div>`).join('');
+}
+
+function setAnalyticsSelFilter(key, value) {
+  ANALYTICS_SEL_FILTER[key] = value || null;
+  const lbl = document.getElementById('asel' + key + 'Label');
+  if (lbl) lbl.textContent = value ? ((analyticsSelOptions(key).find(o => o.value === value) || {}).label || 'Semua') : 'Semua';
+  closeDp(document.getElementById('asel' + key + 'Panel'));
+  if (key === 'katCat')    drawDonut();
+  if (key === 'angBudget') renderBudgetOverlay();
+  if (key === 'akunAcc')   renderAccountBreakdown();
+}
+
+function updateAnalyticsSelFilterVisibility() {
+  const type = _donutType || 'expense';
+  const setVis = (id, show) => { const el = document.getElementById(id); if (el) el.style.display = show ? '' : 'none'; };
+  setVis('aselkatCatWrap',    (CATS[type] || []).length >= 1);
+  setVis('aselangBudgetWrap', BUDGET.cats.filter(c => c.limit > 0).length > 1);
+  setVis('aselakunAccWrap',   WALLETS.length > 1);
+}
+
 function renderAnalytics() {
   updateAnalyticsCurFilterVisibility();
+  updateAnalyticsSelFilterVisibility();
   moveTypeIndicator('donutTabs', 'donutTabIndicator', _donutType === 'income' ? 'donutTabIncome' : 'donutTabExpense', false);
   renderForecast();
   drawDonut();
-  renderCompare();
-  renderAverages();
   renderInsights();
   renderBudgetOverlay();
   renderAccountBreakdown();
@@ -3762,10 +3974,16 @@ function renderAnalytics() {
 // Toggle the donut between expense breakdown and income-source breakdown
 function setDonutType(type, el) {
   _donutType = type;
+  // Kategori pengeluaran & pemasukan beda daftar — filter per-kategori yang
+  // lagi aktif nggak nyambung lagi begitu tipe berubah, jadi direset.
+  ANALYTICS_SEL_FILTER.katCat = null;
+  const selLbl = document.getElementById('aselkatCatLabel');
+  if (selLbl) selLbl.textContent = 'Semua';
   document.querySelectorAll('#donutTabs .river-tab').forEach(t=>t.classList.remove('active'));
   const trigger = el || document.getElementById(type === 'income' ? 'donutTabIncome' : 'donutTabExpense');
   if (trigger) trigger.classList.add('active');
   moveTypeIndicator('donutTabs', 'donutTabIndicator', trigger ? trigger.id : (type === 'income' ? 'donutTabIncome' : 'donutTabExpense'));
+  updateAnalyticsSelFilterVisibility();
   drawDonut();
 }
 
@@ -3777,8 +3995,9 @@ function drawDonut() {
   const ctx=canvas.getContext('2d'); ctx.scale(dpr,dpr);
 
   const type = _donutType || 'expense';
-  const _af = typeof ANALYTICS_FILTER !== 'undefined' ? ANALYTICS_FILTER : {};
+  const _af = typeof KAT_FILTER !== 'undefined' ? KAT_FILTER : {};
   const curCode = analyticsEffectiveCur('donut');
+  const catSel  = ANALYTICS_SEL_FILTER.katCat; // filter per-kategori spesifik (null = semua)
 
   // Build data from real transactions for the selected type (expense or income)
   const catMap = {};
@@ -3787,11 +4006,18 @@ function drawDonut() {
     if (walletCurrencyCode(t.account) !== curCode) return false;
     if (_af.dateFrom && t.date < _af.dateFrom) return false;
     if (_af.dateTo   && t.date > _af.dateTo)   return false;
+    if (catSel && t.catId !== catSel) return false;
     return true;
   }).forEach(t=>{
     if (!catMap[t.catId]) catMap[t.catId] = { label: t.cat, color: t.catColor, total: 0 };
     catMap[t.catId].total += t.amount;
   });
+  // Filter kalender card ini selalu tampil, terlepas dari ada-tidaknya data —
+  // yang butuh syarat data adalah "filter per kategori" (aselkatCat), yang
+  // cuma tampil kalau minimal ada 1 kategori (lihat updateAnalyticsSelFilterVisibility()).
+  const katWrap = document.getElementById('katDtWrap');
+  if (katWrap) katWrap.style.display = '';
+
   const totalSel = Object.values(catMap).reduce((s,c)=>s+c.total,0);
   let data = Object.entries(catMap)
     .sort((a,b)=>b[1].total-a[1].total)
@@ -3800,6 +4026,8 @@ function drawDonut() {
 
   const dcLabel = document.getElementById('donutCenterLabel');
   if (dcLabel) dcLabel.textContent = type === 'expense' ? 'pengeluaran' : 'pemasukan';
+
+  renderKatAvgNote(type, curCode, _af);
 
   // no data = empty state
   if (!data.length) {
@@ -3847,6 +4075,26 @@ function drawDonut() {
     </div>`).join('');
 }
 
+// Info tambahan di pojok bawah card Kategori: rata-rata pengeluaran (atau
+// pemasukan, ikut tab yang aktif) per hari — dihitung dari SEMUA transaksi
+// tipe itu di rentang tanggal filter card ini, TIDAK memandang kategori mana
+// yang paling besar di breakdown atas (beda dari donut/legend yang di-cap
+// top 5 kategori). Kosong kalau belum ada transaksi di rentang itu.
+function renderKatAvgNote(type, curCode, _af) {
+  const el = document.getElementById('katAvgNote');
+  if (!el) return;
+  const total = S.transactions.filter(t =>
+    t.type === type && walletCurrencyCode(t.account) === curCode &&
+    (!_af.dateFrom || t.date >= _af.dateFrom) && (!_af.dateTo || t.date <= _af.dateTo)
+  ).reduce((s,t)=>s+t.amount,0);
+  if (total <= 0) { el.textContent = ''; return; }
+  const days = periodDayCount(_af.dateFrom, _af.dateTo);
+  const avg  = total / days;
+  const info = currencyInfo(curCode);
+  const label = type === 'expense' ? 'Rata-rata pengeluaran' : 'Rata-rata pemasukan';
+  el.textContent = `${label}/hari: ${info.symbol} ${Math.round(avg).toLocaleString(info.locale)}`;
+}
+
 /* ── Period comparison (this period vs the immediately preceding one) ── */
 function getPreviousPeriod(from, to) {
   if (!from || !to) return null;
@@ -3855,7 +4103,7 @@ function getPreviousPeriod(from, to) {
   const days  = Math.round((toD - fromD) / 86400000) + 1;
   const prevTo = new Date(fromD); prevTo.setDate(prevTo.getDate() - 1);
   const prevFrom = new Date(prevTo); prevFrom.setDate(prevFrom.getDate() - (days - 1));
-  return { from: prevFrom.toISOString().split('T')[0], to: prevTo.toISOString().split('T')[0] };
+  return { from: localISODate(prevFrom), to: localISODate(prevTo) };
 }
 
 function periodSum(type, from, to, currencyCode) {
@@ -3868,59 +4116,6 @@ function periodSum(type, from, to, currencyCode) {
   }).reduce((s,t)=>s+t.amount,0);
 }
 
-function renderCompare() {
-  const grid = document.getElementById('compareGrid');
-  if (!grid) return;
-  const _af = typeof ANALYTICS_FILTER !== 'undefined' ? ANALYTICS_FILTER : {};
-  const prev = getPreviousPeriod(_af.dateFrom, _af.dateTo);
-  const curCode = analyticsEffectiveCur('compare');
-  const sym = currencyInfo(curCode).symbol;
-
-  if (!prev) {
-    grid.outerHTML = '<div class="compare-empty cc-tile" id="compareGrid">Pilih periode tertentu (mis. bulan ini / 7 hari) untuk melihat perbandingan dengan periode sebelumnya.</div>';
-    return;
-  }
-  // If compareGrid was previously replaced with the empty-state div, restore it as a proper grid
-  if (grid.classList.contains('compare-empty')) {
-    const fresh = document.createElement('div');
-    fresh.className = 'compare-grid';
-    fresh.id = 'compareGrid';
-    grid.replaceWith(fresh);
-  }
-  const el = document.getElementById('compareGrid');
-
-  const curExp  = periodSum('expense', _af.dateFrom, _af.dateTo, curCode);
-  const prevExp = periodSum('expense', prev.from, prev.to, curCode);
-  const curInc  = periodSum('income',  _af.dateFrom, _af.dateTo, curCode);
-  const prevInc = periodSum('income',  prev.from, prev.to, curCode);
-
-  function deltaInfo(cur, prev, badWhenUp) {
-    let pct, dir;
-    if (prev > 0) { pct = Math.round(((cur - prev) / prev) * 100); }
-    else { pct = cur > 0 ? 100 : 0; }
-    if (pct > 0) dir = 'up'; else if (pct < 0) dir = 'down'; else dir = 'flat';
-    const cls = dir === 'flat' ? 'flat' : ((dir === 'up') === badWhenUp ? 'bad' : 'good');
-    const icon = dir === 'down' ? ICON.trendDown : ICON.trendUp;
-    const sign = pct > 0 ? '+' : '';
-    return { cls, icon: dir === 'flat' ? '' : icon, text: dir === 'flat' ? 'Sama dengan periode lalu' : `${sign}${pct}% dari periode lalu` };
-  }
-
-  const expD = deltaInfo(curExp, prevExp, true);   // expense going up = bad
-  const incD = deltaInfo(curInc, prevInc, false);  // income going up = good
-
-  el.innerHTML = `
-    <div class="compare-card cc-tile">
-      <div class="cc-label">Pengeluaran</div>
-      <div class="cc-val">${sym} ${curExp.toLocaleString(currencyInfo(curCode).locale)}</div>
-      <div class="cc-delta ${expD.cls}">${expD.icon}<span>${expD.text}</span></div>
-    </div>
-    <div class="compare-card cc-tile">
-      <div class="cc-label">Pemasukan</div>
-      <div class="cc-val">${sym} ${curInc.toLocaleString(currencyInfo(curCode).locale)}</div>
-      <div class="cc-delta ${incD.cls}">${incD.icon}<span>${incD.text}</span></div>
-    </div>`;
-}
-
 /* ── Automatic insights: biggest category, biggest transaction, biggest spike ── */
 function renderInsights() {
   const list = document.getElementById('insightList');
@@ -3930,7 +4125,7 @@ function renderInsights() {
   const expenses = S.transactions.filter(t => t.type === 'expense' && inRange(t));
 
   if (!expenses.length) {
-    list.innerHTML = '<div class="insight-card cc-tile"><div class="insight-icon" style="background:rgba(255,255,255,0.08);color:var(--txt3)">'+ICON.sparkles+'</div><div class="insight-body"><div class="insight-title">Belum ada insight</div><div class="insight-desc">Catat beberapa transaksi pengeluaran dulu supaya kami bisa kasih insight otomatis di sini.</div></div></div>';
+    list.innerHTML = '<div class="insight-card cc-tile"><div class="insight-icon" style="background:rgba(255,255,255,0.08);color:var(--txt3)">'+ICON.sparkles+'</div><div class="insight-body"><div class="insight-title">Belum ada insight</div></div></div>';
     return;
   }
 
@@ -4010,29 +4205,6 @@ function periodDayCount(from, to) {
   const endDate = to ? new Date(to + 'T00:00:00') : new Date();
   const days = Math.round((endDate - new Date(earliestDate + 'T00:00:00')) / 86400000) + 1;
   return Math.max(1, days);
-}
-
-function renderAverages() {
-  const grid = document.getElementById('avgGrid');
-  if (!grid) return;
-  const _af = typeof ANALYTICS_FILTER !== 'undefined' ? ANALYTICS_FILTER : {};
-  const curCode = analyticsEffectiveCur('compare');
-  const info = currencyInfo(curCode);
-  const inRange = t => (!_af.dateFrom || t.date >= _af.dateFrom) && (!_af.dateTo || t.date <= _af.dateTo);
-  const totalExp = S.transactions.filter(t => t.type === 'expense' && walletCurrencyCode(t.account) === curCode && inRange(t)).reduce((s,t)=>s+t.amount,0);
-  const days = periodDayCount(_af.dateFrom, _af.dateTo);
-  const dailyAvg = totalExp / days;
-  const weeklyAvg = dailyAvg * 7;
-
-  grid.innerHTML = `
-    <div class="compare-card cc-tile">
-      <div class="cc-label">Rata-rata Harian</div>
-      <div class="cc-val">${info.symbol} ${Math.round(dailyAvg).toLocaleString(info.locale)}</div>
-    </div>
-    <div class="compare-card cc-tile">
-      <div class="cc-label">Rata-rata Mingguan</div>
-      <div class="cc-val">${info.symbol} ${Math.round(weeklyAvg).toLocaleString(info.locale)}</div>
-    </div>`;
 }
 
 /* ══════════════════════════════════════════
@@ -4182,20 +4354,29 @@ function renderForecast() {
 /* ── Budget overlay: actual spend vs budget limit per category ── */
 function renderBudgetOverlay() {
   const wrap = document.getElementById('budgetOverlayList');
+  const noteEl = document.getElementById('angPeriodNote');
   if (!wrap) return;
-  const catsWithLimit = BUDGET.cats.filter(c => c.limit > 0);
+  let catsWithLimit = BUDGET.cats.filter(c => c.limit > 0);
   if (!catsWithLimit.length) {
     wrap.innerHTML = `<div style="color:var(--txt3);font-size:12px;text-align:center;padding:8px 0">Belum ada limit anggaran. Atur limit per kategori di halaman <b style="color:var(--txt2)">Anggaran</b> dulu supaya bisa dibandingkan di sini.</div>`;
+    if (noteEl) noteEl.style.display = 'none';
     return;
   }
-  const _af = typeof ANALYTICS_FILTER !== 'undefined' ? ANALYTICS_FILTER : {};
-  const inRange = t => (!_af.dateFrom || t.date >= _af.dateFrom) && (!_af.dateTo || t.date <= _af.dateTo);
-  const expTx = S.transactions.filter(t => t.type === 'expense' && inRange(t));
+  if (ANALYTICS_SEL_FILTER.angBudget) catsWithLimit = catsWithLimit.filter(c => c.id === ANALYTICS_SEL_FILTER.angBudget);
+  const refDate = ANG_FILTER.refDate;
 
   wrap.innerHTML = catsWithLimit.map(c => {
-    const cCode = c.currency || 'IDR';
-    const sym   = currencyInfo(cCode).symbol;
-    const spent = expTx.filter(t => t.catId === c.id && walletCurrencyCode(t.account) === cCode).reduce((s,t) => s+t.amount, 0);
+    const cCode  = c.currency || 'IDR';
+    const sym    = currencyInfo(cCode).symbol;
+    const period = c.period || 'monthly';
+    // Rentang DIHITUNG PER KATEGORI sesuai periodenya masing-masing (bukan
+    // satu rentang seragam) — kategori tahunan nggak ikut ke-reset cuma
+    // karena kategori lain periodenya mingguan, dst.
+    const range  = angRangeFor(period, refDate);
+    const spent  = S.transactions.filter(t =>
+      t.type === 'expense' && t.catId === c.id && walletCurrencyCode(t.account) === cCode &&
+      t.date >= range.from && t.date <= range.to
+    ).reduce((s,t) => s+t.amount, 0);
     const pct = Math.round((spent / c.limit) * 100);
     const over = spent > c.limit;
     const barColor = over ? 'var(--red)' : c.color;
@@ -4209,6 +4390,21 @@ function renderBudgetOverlay() {
         <div class="dl-pct" style="color:${over?'var(--red)':'var(--txt2)'}">${pct}%</div>
       </div>`;
   }).join('');
+
+  // Keterangan rentang tanggal — cuma muncul kalau lagi nge-filter ke SATU
+  // kategori spesifik (bukan "Semua"), karena tiap kategori bisa punya
+  // periode & rentang beda-beda. Nggak ditampilkan buat periode harian
+  // (rentangnya cuma 1 hari, udah kebaca dari label tanggal di atas).
+  if (noteEl) {
+    const selCat = ANALYTICS_SEL_FILTER.angBudget ? catsWithLimit.find(c => c.id === ANALYTICS_SEL_FILTER.angBudget) : null;
+    if (selCat && (selCat.period || 'monthly') !== 'daily') {
+      const range = angRangeFor(selCat.period || 'monthly', refDate);
+      noteEl.textContent = fmtDateShort(range.from) + ' – ' + fmtDateShort(range.to);
+      noteEl.style.display = '';
+    } else {
+      noteEl.style.display = 'none';
+    }
+  }
 }
 
 /* ── Per-account/wallet breakdown ── */
@@ -4219,11 +4415,12 @@ function renderAccountBreakdown() {
     wrap.innerHTML = `<div style="color:var(--txt3);font-size:12px;text-align:center;padding:8px 0">Belum ada akun/dompet ditambahkan.</div>`;
     return;
   }
-  const _af = typeof ANALYTICS_FILTER !== 'undefined' ? ANALYTICS_FILTER : {};
+  const _af = CARD_DATE_FILTERS.akun.filter;
+  const accSel = ANALYTICS_SEL_FILTER.akunAcc;
   const inRange = t => (!_af.dateFrom || t.date >= _af.dateFrom) && (!_af.dateTo || t.date <= _af.dateTo);
   const palette = ['#2AE8C4','#5EB3FF','#C4A8FF','#FF8C00','#FF6B84','#FFD166','#7CE38B','#FF9EC4'];
   const map = {};
-  S.transactions.filter(t => t.type !== 'transfer' && inRange(t)).forEach(t => {
+  S.transactions.filter(t => t.type !== 'transfer' && inRange(t) && (!accSel || t.account === accSel)).forEach(t => {
     if (!t.account) return;
     if (!map[t.account]) map[t.account] = { count: 0, total: 0 };
     map[t.account].count += 1;
@@ -4275,7 +4472,7 @@ function drawTrend() {
   const cur = new Date(trendFrom.getFullYear(), trendFrom.getMonth(), 1);
   const endMonth = new Date(trendTo.getFullYear(), trendTo.getMonth(), 1);
   while (cur <= endMonth) {
-    const key   = cur.toISOString().slice(0,7);
+    const key   = localISODate(cur).slice(0,7);
     const label = cur.toLocaleDateString('id-ID', { month: 'short' });
     monthLabels.push(label.charAt(0).toUpperCase() + label.slice(1, 3));
     monthData[key] = { income: 0, expense: 0 };
@@ -4363,7 +4560,7 @@ function exportCSV() {
   const rows=S.transactions.map(t=>`${t.date},${t.type},${t.amount},${csvEsc(t.note)},${csvEsc(t.cat)},${csvEsc(walletName(t.account))}`);
   const blob=new Blob(['Tanggal,Tipe,Nominal,Keterangan,Kategori,Akun\n'+rows.join('\n')],{type:'text/csv'});
   const a=document.createElement('a'); a.href=URL.createObjectURL(blob);
-  a.download=`OFM_Transaksi_${new Date().toISOString().split('T')[0]}.csv`; a.click();
+  a.download=`OFM_Transaksi_${localISODate(new Date())}.csv`; a.click();
   showToast('Transaksi berhasil diekspor ke CSV', 'success');
 }
 // Alias kept for any call sites still using the old name.
@@ -4387,7 +4584,7 @@ function exportJSON() {
   };
   const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });
   const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
-  a.download = `OFM_Backup_${new Date().toISOString().split('T')[0]}.json`; a.click();
+  a.download = `OFM_Backup_${localISODate(new Date())}.json`; a.click();
   showToast('Backup lengkap berhasil diekspor ke JSON', 'success');
 }
 
@@ -4519,13 +4716,13 @@ function daysUntil(d) {
 }
 
 function processRecurringDue() {
-  const today = new Date().toISOString().split('T')[0];
+  const today = localISODate(new Date());
   let processed = 0;
   let skippedNoWallet = false;
   RECURRINGS.forEach(r => {
     if (!r.active) return;
     const next = nextOccurrence(r.start, r.freq);
-    const nextStr = next.toISOString().split('T')[0];
+    const nextStr = localISODate(next);
     if (nextStr === today && r.lastProcessed !== today) {
       // Pakai akun yang dipilih user pas bikin tagihan rutin ini. Fallback ke
       // wallet pertama cuma buat data lama (dibuat sebelum field ini ada) atau
@@ -4559,7 +4756,7 @@ function renderRecurList() {
   const el = document.getElementById('recurList');
   if (!el) return;
   if (!RECURRINGS.length) {
-    el.innerHTML = `<div class="empty"><div class="empty-icon">${ICON.refresh}</div><h3>Belum ada transaksi rutin</h3><p>Tambahkan tagihan atau pemasukan rutin</p></div>`;
+    el.innerHTML = `<div class="empty"><div class="empty-icon">${ICON.refresh}</div><h3>Belum ada transaksi rutin</h3></div>`;
     return;
   }
   el.innerHTML = RECURRINGS.map(r => {
@@ -4743,7 +4940,7 @@ function setRecurType(t) {
 
 function openRecurModal() {
   document.getElementById('recurModalOverlay').classList.add('open');
-  document.getElementById('recurStart').value = new Date().toISOString().split('T')[0];
+  document.getElementById('recurStart').value = localISODate(new Date());
   document.getElementById('recurStartLabel').textContent = 'Hari ini';
   document.getElementById('recurName').value   = '';
   document.getElementById('recurAmount').value = '';
@@ -5565,9 +5762,6 @@ function renderLockModal() {
   if (!body) return;
   if (!lockEnabled()) {
     body.innerHTML = `
-      <p style="font-size:12.5px;color:var(--txt3);line-height:1.6;margin-bottom:18px">
-        Kunci aplikasi pakai PIN 6 digit sebelum siapa pun bisa lihat data keuanganmu. PIN disimpan cuma di perangkat ini (terenkripsi/hash), tidak dikirim ke server mana pun.
-      </p>
       <button class="auth-btn-primary" onclick="lockStartSetup()">Aktifkan Kunci PIN</button>
     `;
     return;
@@ -5578,13 +5772,13 @@ function renderLockModal() {
     <div class="s-items flat" style="margin-bottom:18px">
       <div class="settings-item" style="cursor:default">
         <div class="si-icon">${ICON.lock}</div>
-        <div class="si-text"><div class="si-name">PIN Aktif</div><div class="si-desc">Diminta tiap kali buka aplikasi</div></div>
+        <div class="si-text"><div class="si-name">PIN Aktif</div></div>
         <div class="si-badge">Aktif</div>
       </div>
       ${bioSupported ? `
       <div class="settings-item" onclick="${bioOn ? 'disableBiometric()' : 'enrollBiometric()'}">
         <div class="si-icon">${ICON.fingerprint}</div>
-        <div class="si-text"><div class="si-name">Buka dengan Biometrik</div><div class="si-desc">Face ID / sidik jari, PIN tetap jadi cadangan</div></div>
+        <div class="si-text"><div class="si-name">Buka dengan Biometrik</div></div>
         <div class="si-badge" style="${bioOn ? '' : 'opacity:0.6'}">${bioOn ? 'Aktif' : 'Nonaktif'}</div>
       </div>` : ''}
     </div>
@@ -5713,7 +5907,7 @@ function renderGoals() {
   const list = document.getElementById('goalsList');
   if (!list) return;
   if (!GOALS.length) {
-    list.innerHTML = `<div class="empty"><div class="empty-icon">${ICON.target}</div><h3>Belum ada goal</h3><p>Mulai tetapkan target tabunganmu</p></div>`;
+    list.innerHTML = `<div class="empty"><div class="empty-icon">${ICON.target}</div><h3>Belum ada goal</h3></div>`;
     return;
   }
   list.innerHTML = GOALS.map(g => {
@@ -5877,8 +6071,8 @@ function deleteGoal(id) {
 function openGoalModal() {
   document.getElementById('goalModalOverlay').classList.add('open');
   const next3mo = new Date(); next3mo.setMonth(next3mo.getMonth() + 3);
-  document.getElementById('goalDeadline').value = next3mo.toISOString().split('T')[0];
-  document.getElementById('goalDeadlineLabel').textContent = fmtDateShort(next3mo.toISOString().split('T')[0]);
+  document.getElementById('goalDeadline').value = localISODate(next3mo);
+  document.getElementById('goalDeadlineLabel').textContent = fmtDateShort(localISODate(next3mo));
   document.getElementById('goalName').value   = '';
   document.getElementById('goalTarget').value = '';
   document.getElementById('goalSaved').value  = '0';
@@ -5974,7 +6168,7 @@ function recordGoalTransferTx(g, acc, amount, direction) {
     fromCurrency: accCur, toCurrency: accCur, rate: 1,
     account: direction === 'add' ? (acc ? acc.id : goalVId) : goalVId,
     note: (direction === 'add' ? 'Tambah dana goal' : 'Ambil dana goal'),
-    date: new Date().toISOString().split('T')[0],
+    date: localISODate(new Date()),
     cat: g.name, catId: 'goal', catColor: goalColor(g),
   };
   S.transactions.unshift(tx);
@@ -6245,7 +6439,7 @@ function openDebtBreakdown(id, mode) {
           <div class="dbf-row-idx">#${r.index}</div>
           <div class="dbf-row-body">
             <div class="dbf-row-date-wrap">
-              <div class="dbf-row-date${r.isManual ? ' dbf-row-date-manual' : ''}">${fmtDateShort(r.due.toISOString().split('T')[0])}</div>
+              <div class="dbf-row-date${r.isManual ? ' dbf-row-date-manual' : ''}">${fmtDateShort(localISODate(r.due))}</div>
               <div class="dbf-row-edit" onclick="event.stopPropagation();openDbfDueEdit(${d.id}, ${i})" title="Ubah jatuh tempo cicilan ini">
                 <svg class="ic" viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
               </div>
@@ -6351,10 +6545,10 @@ function renderDbfDueEditDp() {
   const d = DEBTS.find(x => x.id === _dbfDueEditDebtId);
   const rows   = d ? computeDebtInstallments(d) : [];
   const curRow = rows[_dbfDueEditIndex];
-  const curVal = curRow ? curRow.due.toISOString().split('T')[0] : '';
+  const curVal = curRow ? localISODate(curRow.due) : '';
   const firstDay    = new Date(DBF_DUE_EDIT_DP.year, DBF_DUE_EDIT_DP.month, 1).getDay();
   const daysInMonth = new Date(DBF_DUE_EDIT_DP.year, DBF_DUE_EDIT_DP.month + 1, 0).getDate();
-  const todayStr    = new Date().toISOString().split('T')[0];
+  const todayStr    = localISODate(new Date());
   let html = '';
   for (let i = 0; i < firstDay; i++) html += '<div class="dp-day dp-blank"></div>';
   for (let dnum = 1; dnum <= daysInMonth; dnum++) {
@@ -6448,7 +6642,7 @@ function submitDebtBreakdownPay(id) {
   S.transactions.unshift({
     id: Date.now(), type: isPiutang ? 'income' : 'expense', amount,
     note: (isPiutang ? 'Terima piutang — ' : 'Bayar utang — ') + d.person,
-    date: new Date().toISOString().split('T')[0],
+    date: localISODate(new Date()),
     account: accountId, cat: d.person, catId: 'debt', catColor: debtTxColor(d.kind),
   });
 
@@ -6490,7 +6684,7 @@ function renderDebts() {
   const list = document.getElementById('debtList');
   if (!list) return;
   if (!DEBTS.length) {
-    list.innerHTML = `<div class="empty"><div class="empty-icon">${ICON.swap}</div><h3>Belum ada catatan</h3><p>Catat utang atau piutangmu di sini</p></div>`;
+    list.innerHTML = `<div class="empty"><div class="empty-icon">${ICON.swap}</div><h3>Belum ada catatan</h3></div>`;
     return;
   }
   const sorted = [...DEBTS].sort((a,b) => {
@@ -6762,7 +6956,7 @@ function submitDebtPay() {
   S.transactions.unshift({
     id: Date.now(), type: isPiutang ? 'income' : 'expense', amount,
     note: (isPiutang ? 'Terima piutang — ' : 'Bayar utang — ') + d.person,
-    date: new Date().toISOString().split('T')[0],
+    date: localISODate(new Date()),
     account: accountId, cat: d.person, catId: 'debt', catColor: debtTxColor(d.kind),
   });
 
@@ -6832,7 +7026,7 @@ function renderDebtDueDpFull() {
   document.getElementById('debtDueDpLabel').textContent = months[DEBT_DUE_DP.month] + ' ' + DEBT_DUE_DP.year;
   const firstDay    = new Date(DEBT_DUE_DP.year, DEBT_DUE_DP.month, 1).getDay();
   const daysInMonth = new Date(DEBT_DUE_DP.year, DEBT_DUE_DP.month + 1, 0).getDate();
-  const todayStr    = new Date().toISOString().split('T')[0];
+  const todayStr    = localISODate(new Date());
   let html = '';
   for (let i = 0; i < firstDay; i++) html += '<div class="dp-day dp-blank"></div>';
   for (let d = 1; d <= daysInMonth; d++) {
@@ -6852,7 +7046,7 @@ function pickDebtDueDate(ds) {
 }
 function debtDueDpPreset(days) {
   const d = new Date(); d.setDate(d.getDate() + days);
-  pickDebtDueDate(d.toISOString().split('T')[0]);
+  pickDebtDueDate(localISODate(d));
 }
 
 function clearDebtDueDate() {
@@ -6917,7 +7111,7 @@ function buildRiverData() {
   const labels = [], income = [], expense = [];
   for (let i = days - 1; i >= 0; i--) {
     const d = new Date(); d.setDate(d.getDate() - i); d.setHours(0,0,0,0);
-    const dateStr = d.toISOString().split('T')[0];
+    const dateStr = localISODate(d);
     const dayName = d.toLocaleDateString('id-ID', { weekday: 'short' });
     labels.push(dayName.charAt(0).toUpperCase() + dayName.slice(1, 3));
     const dayTxs = S.transactions.filter(t => t.date === dateStr);
@@ -7080,116 +7274,286 @@ function init() {
 
 
 /* ══════════════════════════════════════════
-   ANALYTICS DATE PICKER
+   ANALYTICS_FILTER — dulu diatur lewat filter kalender di topbar halaman
+   Analitik (sudah dihapus, lihat KAT_FILTER di bawah). Card Proyeksi Saldo/
+   Insight/Anggaran overlay/Per Akun/Tren masih baca default tetapnya
+   (bulan berjalan) di bawah ini; belum ada UI buat ubah rentangnya masing-
+   masing — konsepnya menyusul.
 ══════════════════════════════════════════ */
-const ANALYTICS_DP = {
-  year: new Date().getFullYear(),
-  month: new Date().getMonth(),
-  rangeStart: null,
-  rangeEnd: null,
-};
-
 const ANALYTICS_FILTER = (function() {
   const now   = new Date();
-  const from  = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0];
-  const to    = now.toISOString().split('T')[0];
+  const from  = localISODate(new Date(now.getFullYear(), now.getMonth(), 1));
+  const to    = localISODate(now);
   return { dateFrom: from, dateTo: to };
 })();
 
-function toggleAnalyticsDatePicker() {
-  const panel   = document.getElementById('analyticsDatePicker');
-  const isOpen  = isDpOpen(panel);
-  if (isOpen) { closeDp(panel); return; }
-  ANALYTICS_DP.year  = new Date().getFullYear();
-  ANALYTICS_DP.month = new Date().getMonth();
-  renderAnalyticsDp();
+/* ══════════════════════════════════════════
+   ANALYTICS CARD DATE PICKERS (Kategori / Anggaran / Per Akun)
+   Tiga card ini (donut+legend Kategori, overlay Anggaran, breakdown Per
+   Akun) masing-masing punya filter kalender SENDIRI-SENDIRI — sengaja
+   dipisah dari ANALYTICS_FILTER supaya rentang tanggalnya nggak ikut
+   menggeser card Proyeksi/Insight/Tren dsb yang lain. Dibikin generic
+   (satu factory dipakai 3x lewat CARD_DATE_FILTERS) daripada nge-copas
+   fungsi yang sama tiga kali.
+   Klik satu tanggal SELALU melebar dari awal bulan tanggal itu sampai
+   tanggal yang diklik (misal klik 15 Sept → 1–15 Sept; klik 3 Okt →
+   1–3 Okt — kepisah per bulan, jadi klik "hari ini" di tgl 1 bakal
+   nunjukin data cuma 1 hari itu). Filter kalender ini TIDAK nunggu ada
+   data buat muncul — selalu tampil terlepas dari ada-tidaknya transaksi.
+══════════════════════════════════════════ */
+function _cardMonthStart(ds) {
+  const d = new Date(ds + 'T00:00:00');
+  return localISODate(new Date(d.getFullYear(), d.getMonth(), 1));
+}
+
+function createCardDateFilter(onChange) {
+  const now = new Date();
+  return {
+    dp: { year: now.getFullYear(), month: now.getMonth(), rangeStart: null, rangeEnd: null },
+    filter: { dateFrom: localISODate(new Date(now.getFullYear(), now.getMonth(), 1)), dateTo: localISODate(now) },
+    onChange,
+  };
+}
+
+const CARD_DATE_FILTERS = {
+  kat:  createCardDateFilter(() => drawDonut()),
+  akun: createCardDateFilter(() => renderAccountBreakdown()),
+};
+// NB: card 'ang' (Anggaran) SENGAJA nggak ikut CARD_DATE_FILTERS — beda dari
+// Kategori/Per Akun yang cuma butuh SATU rentang tanggal rata (flat), card
+// Anggaran perlu tanggal ACUAN per kategori sesuai periodenya masing-masing
+// (harian/mingguan/bulanan/tahunan), sama seperti halaman Anggaran utama.
+// Lihat ANG_FILTER & ANG_DP di bawah.
+// Alias lama — banyak kode lain (drawDonut, renderKatAvgNote) masih baca
+// KAT_FILTER langsung; ini reference objek yang SAMA persis, bukan salinan.
+const KAT_FILTER = CARD_DATE_FILTERS.kat.filter;
+
+function toggleCardDatePicker(key) {
+  const c = CARD_DATE_FILTERS[key]; if (!c) return;
+  const panel = document.getElementById(key + 'DatePicker');
+  if (isDpOpen(panel)) { closeDp(panel); return; }
+  const now = new Date();
+  c.dp.year = now.getFullYear(); c.dp.month = now.getMonth();
+  renderCardDp(key);
   openDp(panel);
 }
 
-function analyticsDpNav(dir) {
-  ANALYTICS_DP.month += dir;
-  if (ANALYTICS_DP.month > 11) { ANALYTICS_DP.month = 0; ANALYTICS_DP.year++; }
-  if (ANALYTICS_DP.month < 0)  { ANALYTICS_DP.month = 11; ANALYTICS_DP.year--; }
-  renderAnalyticsDp();
+function cardDpNav(key, dir) {
+  const c = CARD_DATE_FILTERS[key]; if (!c) return;
+  c.dp.month += dir;
+  if (c.dp.month > 11) { c.dp.month = 0; c.dp.year++; }
+  if (c.dp.month < 0)  { c.dp.month = 11; c.dp.year--; }
+  renderCardDp(key);
 }
 
-function renderAnalyticsDp() {
+function renderCardDp(key) {
+  const c = CARD_DATE_FILTERS[key]; if (!c) return;
   const months = ['Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember'];
-  document.getElementById('analyticsDpLabel').textContent = months[ANALYTICS_DP.month] + ' ' + ANALYTICS_DP.year;
+  document.getElementById(key + 'DpLabel').textContent = months[c.dp.month] + ' ' + c.dp.year;
 
-  const firstDay    = new Date(ANALYTICS_DP.year, ANALYTICS_DP.month, 1).getDay();
-  const daysInMonth = new Date(ANALYTICS_DP.year, ANALYTICS_DP.month + 1, 0).getDate();
-  const todayStr    = new Date().toISOString().split('T')[0];
+  const firstDay    = new Date(c.dp.year, c.dp.month, 1).getDay();
+  const daysInMonth = new Date(c.dp.year, c.dp.month + 1, 0).getDate();
+  const todayStr    = localISODate(new Date());
 
   let html = '';
   for (let i = 0; i < firstDay; i++) html += '<div class="dp-day dp-blank"></div>';
   for (let d = 1; d <= daysInMonth; d++) {
-    const ds = ANALYTICS_DP.year + '-' + String(ANALYTICS_DP.month+1).padStart(2,'0') + '-' + String(d).padStart(2,'0');
+    const ds = c.dp.year + '-' + String(c.dp.month+1).padStart(2,'0') + '-' + String(d).padStart(2,'0');
     let cls = 'dp-day';
     if (ds === todayStr) cls += ' today';
-    if (ds === ANALYTICS_DP.rangeStart) cls += ' selected';
-    html += '<div class="' + cls + '" onclick="analyticsDpClick(\'' + ds + '\')">' + d + '</div>';
+    if (ds === c.dp.rangeEnd) cls += ' selected';
+    html += '<div class="' + cls + '" onclick="cardDpClick(\'' + key + '\',\'' + ds + '\')">' + d + '</div>';
   }
-  document.getElementById('analyticsDpDays').innerHTML = html;
+  document.getElementById(key + 'DpDays').innerHTML = html;
 
-  const info = document.getElementById('analyticsDpRangeInfo');
-  if (info) info.textContent = ANALYTICS_DP.rangeStart ? fmtDateShort(ANALYTICS_DP.rangeStart) : 'Pilih tanggal';
+  const info = document.getElementById(key + 'DpRangeInfo');
+  if (info) info.textContent = c.dp.rangeEnd ? fmtDateShort(c.dp.rangeEnd) : 'Pilih tanggal';
 }
 
-function analyticsDpClick(ds) {
-  // Single click = filter that specific day
-  ANALYTICS_DP.rangeStart   = ds;
-  ANALYTICS_DP.rangeEnd     = ds;
-  ANALYTICS_FILTER.dateFrom = ds;
-  ANALYTICS_FILTER.dateTo   = ds;
-  updateAnalyticsDtLabel();
-  closeDp(document.getElementById('analyticsDatePicker'));
-  renderAnalytics();
+function cardDpClick(key, ds) {
+  const c = CARD_DATE_FILTERS[key]; if (!c) return;
+  // Klik satu tanggal = tampilkan dari awal BULAN tanggal itu sampai tanggal
+  // yang diklik (terpisah per bulan — lihat komentar di atas).
+  c.filter.dateFrom = _cardMonthStart(ds);
+  c.filter.dateTo   = ds;
+  c.dp.rangeStart    = c.filter.dateFrom;
+  c.dp.rangeEnd      = ds;
+  updateCardDtLabel(key);
+  document.querySelectorAll('#' + key + 'DatePicker .dp-preset').forEach(el => el.classList.remove('active'));
+  closeDp(document.getElementById(key + 'DatePicker'));
+  c.onChange();
 }
 
-function analyticsDpPreset(preset) {
+function cardDpPreset(key, preset) {
+  const c = CARD_DATE_FILTERS[key]; if (!c) return;
   const today   = new Date(); today.setHours(0,0,0,0);
-  const todayStr = today.toISOString().split('T')[0];
+  const todayStr = localISODate(today);
   let from, to, label;
 
   if (preset === 'week') {
     const d = new Date(today); d.setDate(d.getDate() - 6);
-    from = d.toISOString().split('T')[0]; to = todayStr; label = '7 Hari';
+    from = localISODate(d); to = todayStr; label = '7 Hari';
   } else if (preset === 'month') {
-    from = new Date(today.getFullYear(), today.getMonth(), 1).toISOString().split('T')[0];
+    from = localISODate(new Date(today.getFullYear(), today.getMonth(), 1));
     to = todayStr; label = 'Bulan Ini';
   } else if (preset === 'last3') {
     const d = new Date(today); d.setMonth(d.getMonth() - 3);
-    from = d.toISOString().split('T')[0]; to = todayStr; label = '3 Bulan';
+    from = localISODate(d); to = todayStr; label = '3 Bulan';
   } else if (preset === 'year') {
     from = today.getFullYear() + '-01-01'; to = todayStr; label = 'Tahun Ini';
   } else {
     from = null; to = null; label = 'Semua';
   }
 
-  ANALYTICS_FILTER.dateFrom   = from;
-  ANALYTICS_FILTER.dateTo     = to;
-  ANALYTICS_DP.rangeStart     = from;
-  ANALYTICS_DP.rangeEnd       = to;
-  document.getElementById('analyticsDtLabel').textContent = label;
-  // Update active preset style
-  document.querySelectorAll('#analyticsDatePicker .dp-preset').forEach(el => {
-    el.classList.toggle('active', el.textContent.trim() === label || el.getAttribute('onclick') === "analyticsDpPreset('" + preset + "')");
+  c.filter.dateFrom = from;
+  c.filter.dateTo   = to;
+  c.dp.rangeStart   = from;
+  c.dp.rangeEnd     = to;
+  const lbl = document.getElementById(key + 'DtLabel');
+  if (lbl) lbl.textContent = label;
+  document.querySelectorAll('#' + key + 'DatePicker .dp-preset').forEach(el => {
+    el.classList.toggle('active', el.textContent.trim() === label || el.getAttribute('onclick') === "cardDpPreset('" + key + "','" + preset + "')");
   });
-  closeDp(document.getElementById('analyticsDatePicker'));
-  renderAnalytics();
+  closeDp(document.getElementById(key + 'DatePicker'));
+  c.onChange();
 }
 
-function updateAnalyticsDtLabel() {
-  const lbl = document.getElementById('analyticsDtLabel');
-  if (!ANALYTICS_FILTER.dateFrom) {
-    if (lbl) lbl.textContent = 'Semua';
-  } else if (ANALYTICS_FILTER.dateFrom === ANALYTICS_FILTER.dateTo) {
-    if (lbl) lbl.textContent = fmtDateShort(ANALYTICS_FILTER.dateFrom);
-  } else {
-    if (lbl) lbl.textContent = fmtDateShort(ANALYTICS_FILTER.dateFrom) + ' – ' + fmtDateShort(ANALYTICS_FILTER.dateTo);
+function updateCardDtLabel(key) {
+  const c = CARD_DATE_FILTERS[key]; if (!c) return;
+  const lbl = document.getElementById(key + 'DtLabel');
+  if (!lbl) return;
+  if (!c.filter.dateFrom) lbl.textContent = 'Semua';
+  else if (c.filter.dateFrom === c.filter.dateTo) lbl.textContent = fmtDateShort(c.filter.dateFrom);
+  else lbl.textContent = fmtDateShort(c.filter.dateFrom) + ' – ' + fmtDateShort(c.filter.dateTo);
+}
+// Alias lama dipakai kalau ada referensi tersisa ke nama lama.
+function toggleKatDatePicker() { toggleCardDatePicker('kat'); }
+function katDpNav(dir) { cardDpNav('kat', dir); }
+function katDpClick(ds) { cardDpClick('kat', ds); }
+function katDpPreset(preset) { cardDpPreset('kat', preset); }
+
+
+/* ══════════════════════════════════════════
+   ANGGARAN CARD (Analitik) — filter kalender KONTEKSTUAL per periode
+   Beda dari Kategori/Per Akun (satu rentang tanggal rata buat semua),
+   card Anggaran ini bandingkan tiap kategori anggaran ke LIMIT-nya
+   masing-masing, dan tiap kategori bisa punya periode reset yang beda
+   (harian/mingguan/bulanan/tahunan — lihat BUDGET_PERIOD_LABELS). Jadi
+   filternya cuma nyimpen SATU tanggal acuan (ANG_FILTER.refDate), lalu
+   rentang aktualnya dihitung ULANG per kategori lewat periodRangeFor()/
+   periodFullRangeFor() sesuai periodenya masing-masing — sama persis
+   konsepnya kayak BUDGET_FILTER di halaman Anggaran utama.
+     - refDate === null  → mode OTOMATIS: tiap kategori nunjukin periode
+       BERJALAN penuh (mis. tahunan → 1 Jan–31 Des tahun ini, mingguan →
+       Senin–Minggu minggu ini), ngikutin tanggal device & reset sendiri
+       begitu lewat batas periodenya (nggak perlu buka-tutup halaman).
+     - refDate === 'YYYY-MM-DD' (klik tanggal manual di kalender) → mode
+       KUMULATIF per tanggal itu: dari awal periode sampai tanggal yang
+       diklik (mis. klik Kamis di minggu berjalan → Senin s/d Kamis itu).
+   Keterangan rentang (mis. "2 Agu – 5 Agu") cuma ditampilkan di bawah
+   list kalau filter kategori spesifik (ANALYTICS_SEL_FILTER.angBudget)
+   lagi aktif — karena kalau "Semua" ditampilkan, tiap kategori bisa
+   punya rentang beda-beda sesuai periodenya sendiri, jadi nggak ada satu
+   keterangan yang mewakili semuanya sekaligus.
+══════════════════════════════════════════ */
+// Rentang periode BERJALAN PENUH suatu kategori (bukan cuma sampai refDate,
+// tapi dari awal sampai AKHIR periode itu) — dipakai waktu refDate null
+// alias mode "Otomatis". `today` di sini cuma dipakai buat nentuin periode
+// yang mana yang lagi berjalan (mis. minggu/bulan/tahun keberapa).
+function periodFullRangeFor(period, today) {
+  const d = new Date(today + 'T00:00:00');
+  if (period === 'daily') {
+    return { from: today, to: today };
+  } else if (period === 'weekly') {
+    const day = d.getDay(); // 0=Min..6=Sab
+    const diffToMonday = day === 0 ? 6 : day - 1;
+    const monday = new Date(d); monday.setDate(d.getDate() - diffToMonday);
+    const sunday = new Date(monday); sunday.setDate(monday.getDate() + 6);
+    return { from: localISODate(monday), to: localISODate(sunday) };
+  } else if (period === 'yearly') {
+    return { from: d.getFullYear() + '-01-01', to: d.getFullYear() + '-12-31' };
+  } else { // 'monthly' (default)
+    const first = new Date(d.getFullYear(), d.getMonth(), 1);
+    const last  = new Date(d.getFullYear(), d.getMonth() + 1, 0);
+    return { from: localISODate(first), to: localISODate(last) };
   }
 }
+
+// Rentang efektif satu kategori anggaran buat card Anggaran — otomatis pilih
+// antara mode penuh (refDate null) atau kumulatif-sampai-refDate (dipilih
+// manual), sesuai periode kategorinya.
+function angRangeFor(period, refDate) {
+  return refDate ? periodRangeFor(period, refDate) : periodFullRangeFor(period, localISODate(new Date()));
+}
+
+const ANG_DP = { year: new Date().getFullYear(), month: new Date().getMonth() };
+const ANG_FILTER = { refDate: null }; // null = mode Otomatis (periode berjalan penuh)
+
+function toggleAngDatePicker() {
+  const panel = document.getElementById('angDatePicker');
+  if (isDpOpen(panel)) { closeDp(panel); return; }
+  const now = new Date();
+  ANG_DP.year = now.getFullYear(); ANG_DP.month = now.getMonth();
+  renderAngDp();
+  openDp(panel);
+}
+
+function angDpNav(dir) {
+  ANG_DP.month += dir;
+  if (ANG_DP.month > 11) { ANG_DP.month = 0; ANG_DP.year++; }
+  if (ANG_DP.month < 0)  { ANG_DP.month = 11; ANG_DP.year--; }
+  renderAngDp();
+}
+
+function renderAngDp() {
+  const months = ['Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember'];
+  document.getElementById('angDpLabel').textContent = months[ANG_DP.month] + ' ' + ANG_DP.year;
+  const firstDay    = new Date(ANG_DP.year, ANG_DP.month, 1).getDay();
+  const daysInMonth = new Date(ANG_DP.year, ANG_DP.month + 1, 0).getDate();
+  const todayStr    = localISODate(new Date());
+  let html = '';
+  for (let i = 0; i < firstDay; i++) html += '<div class="dp-day dp-blank"></div>';
+  for (let d = 1; d <= daysInMonth; d++) {
+    const ds = ANG_DP.year + '-' + String(ANG_DP.month+1).padStart(2,'0') + '-' + String(d).padStart(2,'0');
+    let cls = 'dp-day';
+    if (ds === todayStr) cls += ' today';
+    if (ds === ANG_FILTER.refDate) cls += ' selected';
+    html += '<div class="' + cls + '" onclick="angDpClick(\'' + ds + '\')">' + d + '</div>';
+  }
+  document.getElementById('angDpDays').innerHTML = html;
+  const info = document.getElementById('angDpRangeInfo');
+  if (info) info.textContent = ANG_FILTER.refDate ? fmtDateShort(ANG_FILTER.refDate) : 'Otomatis (periode berjalan)';
+}
+
+function angDpClick(ds) {
+  // Tanggal manual = tanggal acuan buat mode kumulatif (lihat angRangeFor).
+  ANG_FILTER.refDate = ds;
+  document.getElementById('angDtLabel').textContent = fmtDateShort(ds);
+  document.querySelectorAll('#angDatePicker .dp-preset').forEach(el => el.classList.remove('active'));
+  closeDp(document.getElementById('angDatePicker'));
+  renderBudgetOverlay();
+}
+
+function angDpPreset(preset) {
+  // Satu-satunya preset: balik ke mode Otomatis (periode berjalan penuh,
+  // ngikutin tanggal device & reset sendiri).
+  ANG_FILTER.refDate = null;
+  document.getElementById('angDtLabel').textContent = 'Otomatis';
+  document.querySelectorAll('#angDatePicker .dp-preset').forEach(el => el.classList.add('active'));
+  closeDp(document.getElementById('angDatePicker'));
+  renderBudgetOverlay();
+}
+
+// Cek pergantian tanggal di perangkat waktu app masih terbuka — kalau mode
+// masih Otomatis, render ulang card supaya kategori yang masuk periode baru
+// (harian/mingguan/bulanan/tahunan) langsung ke-reset tanpa perlu buka-tutup
+// halaman. Nggak perlu geser refDate (memang selalu null di mode ini).
+function angCheckDayRollover() {
+  if (ANG_FILTER.refDate !== null) return;
+  if (S.currentPage === 'analytics') renderBudgetOverlay();
+}
+setInterval(angCheckDayRollover, 60000);
+document.addEventListener('visibilitychange', () => { if (!document.hidden) angCheckDayRollover(); });
 
 
 /* ══════════════════════════════════════════
@@ -7218,7 +7582,7 @@ function renderTxDp() {
   document.getElementById('txDpLabel').textContent = months[TX_DP.month] + ' ' + TX_DP.year;
   const firstDay    = new Date(TX_DP.year, TX_DP.month, 1).getDay();
   const daysInMonth = new Date(TX_DP.year, TX_DP.month + 1, 0).getDate();
-  const todayStr    = new Date().toISOString().split('T')[0];
+  const todayStr    = localISODate(new Date());
   const curVal      = document.getElementById('txDate').value || todayStr;
   let html = '';
   for (let i = 0; i < firstDay; i++) html += '<div class="dp-day dp-blank"></div>';
@@ -7234,8 +7598,8 @@ function renderTxDp() {
 
 function pickTxDate(ds) {
   document.getElementById('txDate').value = ds;
-  const today     = new Date().toISOString().split('T')[0];
-  const yesterday = new Date(Date.now()-86400000).toISOString().split('T')[0];
+  const today     = localISODate(new Date());
+  const yesterday = localISODate(new Date(Date.now()-86400000));
   const lbl = document.getElementById('txDateLabel');
   if (ds === today)     lbl.textContent = 'Hari ini';
   else if (ds === yesterday) lbl.textContent = 'Kemarin';
@@ -7247,8 +7611,8 @@ function pickTxDate(ds) {
 }
 
 function txDpPreset(p) {
-  const today     = new Date().toISOString().split('T')[0];
-  const yesterday = new Date(Date.now()-86400000).toISOString().split('T')[0];
+  const today     = localISODate(new Date());
+  const yesterday = localISODate(new Date(Date.now()-86400000));
   pickTxDate(p === 'today' ? today : yesterday);
 }
 
@@ -7282,7 +7646,7 @@ function renderRecurStartDp() {
   document.getElementById('recurStartDpLabel').textContent = months[RECUR_START_DP.month] + ' ' + RECUR_START_DP.year;
   const firstDay    = new Date(RECUR_START_DP.year, RECUR_START_DP.month, 1).getDay();
   const daysInMonth = new Date(RECUR_START_DP.year, RECUR_START_DP.month + 1, 0).getDate();
-  const todayStr    = new Date().toISOString().split('T')[0];
+  const todayStr    = localISODate(new Date());
   const curVal      = document.getElementById('recurStart').value || todayStr;
   let html = '';
   for (let i = 0; i < firstDay; i++) html += '<div class="dp-day dp-blank"></div>';
@@ -7298,13 +7662,13 @@ function renderRecurStartDp() {
 
 function pickRecurStartDate(ds) {
   document.getElementById('recurStart').value = ds;
-  const today = new Date().toISOString().split('T')[0];
+  const today = localISODate(new Date());
   document.getElementById('recurStartLabel').textContent = (ds === today) ? 'Hari ini' : fmtDateShort(ds);
   closeDp(document.getElementById('recurStartPicker'));
 }
 
 function recurStartDpPreset(p) {
-  const today = new Date().toISOString().split('T')[0];
+  const today = localISODate(new Date());
   pickRecurStartDate(p === 'today' ? today : today);
 }
 
@@ -7338,7 +7702,7 @@ function renderGoalDeadlineDp() {
   document.getElementById('goalDeadlineDpLabel').textContent = months[GOAL_DEADLINE_DP.month] + ' ' + GOAL_DEADLINE_DP.year;
   const firstDay    = new Date(GOAL_DEADLINE_DP.year, GOAL_DEADLINE_DP.month, 1).getDay();
   const daysInMonth = new Date(GOAL_DEADLINE_DP.year, GOAL_DEADLINE_DP.month + 1, 0).getDate();
-  const todayStr    = new Date().toISOString().split('T')[0];
+  const todayStr    = localISODate(new Date());
   const curVal      = document.getElementById('goalDeadline').value;
   let html = '';
   for (let i = 0; i < firstDay; i++) html += '<div class="dp-day dp-blank"></div>';
@@ -7360,7 +7724,7 @@ function pickGoalDeadlineDate(ds) {
 
 function goalDeadlineDpPreset(months) {
   const d = new Date(); d.setMonth(d.getMonth() + months);
-  pickGoalDeadlineDate(d.toISOString().split('T')[0]);
+  pickGoalDeadlineDate(localISODate(d));
 }
 
 
@@ -7368,12 +7732,15 @@ function goalDeadlineDpPreset(months) {
    BUDGET DATE PICKER
 ══════════════════════════════════════════ */
 const BUDGET_DP = { year: new Date().getFullYear(), month: new Date().getMonth() };
-const BUDGET_FILTER = (function() {
-  const now  = new Date();
-  const from = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0];
-  const to   = now.toISOString().split('T')[0];
-  return { dateFrom: from, dateTo: to };
-})();
+// BUDGET_FILTER cuma nyimpen SATU tanggal acuan (refDate) — bukan rentang.
+// Rentang aktualnya dihitung ULANG per kategori di renderBudget() lewat
+// periodRangeFor(), sesuai periode masing-masing kategori (harian/mingguan/
+// bulanan/tahunan). refDate null = "Semua Waktu" (periode diabaikan).
+const BUDGET_FILTER = { refDate: localISODate(new Date()) };
+// true selama user belum manual milih tanggal lampau — dipakai buat auto-
+// geser refDate begitu tanggal di perangkat berganti (lewat jam 12 malam),
+// jadi anggaran ke-reset otomatis tanpa perlu buka-tutup halaman.
+let _budgetFilterFollowsToday = true;
 
 function toggleBudgetDatePicker() {
   const panel   = document.getElementById('budgetDatePicker');
@@ -7396,8 +7763,8 @@ function renderBudgetDp() {
   document.getElementById('budgetDpLabel').textContent = months[BUDGET_DP.month] + ' ' + BUDGET_DP.year;
   const firstDay    = new Date(BUDGET_DP.year, BUDGET_DP.month, 1).getDay();
   const daysInMonth = new Date(BUDGET_DP.year, BUDGET_DP.month + 1, 0).getDate();
-  const todayStr    = new Date().toISOString().split('T')[0];
-  const selDate     = BUDGET_FILTER.dateFrom === BUDGET_FILTER.dateTo ? BUDGET_FILTER.dateFrom : null;
+  const todayStr    = localISODate(new Date());
+  const selDate     = BUDGET_FILTER.refDate;
   let html = '';
   for (let i = 0; i < firstDay; i++) html += '<div class="dp-day dp-blank"></div>';
   for (let d = 1; d <= daysInMonth; d++) {
@@ -7409,39 +7776,34 @@ function renderBudgetDp() {
   }
   document.getElementById('budgetDpDays').innerHTML = html;
   const info = document.getElementById('budgetDpRangeInfo');
-  if (info) info.textContent = BUDGET_FILTER.dateFrom && BUDGET_FILTER.dateTo && BUDGET_FILTER.dateFrom !== BUDGET_FILTER.dateTo
-    ? fmtDateShort(BUDGET_FILTER.dateFrom) + ' – ' + fmtDateShort(BUDGET_FILTER.dateTo)
-    : BUDGET_FILTER.dateFrom ? fmtDateShort(BUDGET_FILTER.dateFrom) : '';
+  if (info) info.textContent = BUDGET_FILTER.refDate ? fmtDateShort(BUDGET_FILTER.refDate) : 'Semua waktu';
 }
 
 function budgetDpPickDay(ds) {
-  // Single click = set both from and to to that day
-  BUDGET_FILTER.dateFrom = ds;
-  BUDGET_FILTER.dateTo   = ds;
+  // Pilih tanggal acuan spesifik — rentang tiap kategori dihitung dari sini
+  // sesuai periodenya masing-masing (lihat periodRangeFor()). Karena ini
+  // pilihan manual, filter berhenti ngikutin "hari ini" otomatis.
+  BUDGET_FILTER.refDate     = ds;
+  _budgetFilterFollowsToday = false;
   document.getElementById('budgetDtLabel').textContent = fmtDateShort(ds);
+  document.querySelectorAll('#budgetDatePicker .dp-preset').forEach(el => el.classList.remove('active'));
   closeDp(document.getElementById('budgetDatePicker'));
   renderBudget();
 }
 
 function budgetDpPreset(preset) {
   const today = new Date(); today.setHours(0,0,0,0);
-  const ts    = today.toISOString().split('T')[0];
-  let from, to, label;
-  if (preset === 'today') {
-    from = to = ts; label = 'Hari Ini';
-  } else if (preset === 'month') {
-    from = new Date(today.getFullYear(), today.getMonth(), 1).toISOString().split('T')[0];
-    to = ts; label = 'Bulan Ini';
-  } else if (preset === 'last3') {
-    const d = new Date(today); d.setMonth(d.getMonth()-3);
-    from = d.toISOString().split('T')[0]; to = ts; label = '3 Bulan';
-  } else if (preset === 'year') {
-    from = today.getFullYear() + '-01-01'; to = ts; label = 'Tahun Ini';
+  const ts    = localISODate(today);
+  let refDate, label;
+  if (preset === 'all') {
+    refDate = null; label = 'Semua';
+    _budgetFilterFollowsToday = false;
   } else {
-    from = null; to = null; label = 'Semua';
+    // 'today' — dan default balik ngikutin tanggal perangkat lagi.
+    refDate = ts; label = 'Hari Ini';
+    _budgetFilterFollowsToday = true;
   }
-  BUDGET_FILTER.dateFrom = from;
-  BUDGET_FILTER.dateTo   = to;
+  BUDGET_FILTER.refDate = refDate;
   document.getElementById('budgetDtLabel').textContent = label;
   document.querySelectorAll('#budgetDatePicker .dp-preset').forEach(el => {
     el.classList.toggle('active', el.getAttribute('onclick') === "budgetDpPreset('" + preset + "')");
@@ -7449,6 +7811,24 @@ function budgetDpPreset(preset) {
   closeDp(document.getElementById('budgetDatePicker'));
   renderBudget();
 }
+
+// Cek pergantian tanggal di perangkat (misalnya lewat jam 12 malam saat app
+// masih terbuka) — kalau filter lagi ngikutin "hari ini", geser refDate ke
+// tanggal baru supaya anggaran periode harian/mingguan/bulanan/tahunan yang
+// masuk periode baru langsung ke-reset (spent dihitung ulang dari transaksi
+// di rentang barunya, bukan dari counter tersimpan, jadi otomatis nol lagi).
+function budgetCheckDayRollover() {
+  if (!_budgetFilterFollowsToday) return;
+  const ts = localISODate(new Date());
+  if (BUDGET_FILTER.refDate !== ts) {
+    BUDGET_FILTER.refDate = ts;
+    const lbl = document.getElementById('budgetDtLabel');
+    if (lbl) lbl.textContent = 'Hari Ini';
+    if (S.currentPage === 'budget') renderBudget();
+  }
+}
+setInterval(budgetCheckDayRollover, 60000);
+document.addEventListener('visibilitychange', () => { if (!document.hidden) budgetCheckDayRollover(); });
 
 
 /* ══════════════════════════════════════════
@@ -8069,16 +8449,24 @@ window.addEventListener('resize',()=>{ if(S.currentPage==='dashboard')drawRiver(
 // nggak bisa milih akun yang bakal jadi minus). requiredAmount null/0
 // berarti nggak ada pembatasan (semua akun bisa dipilih, cuma saldonya
 // tetap ditampilkan buat referensi).
-function walletOptsWithBalance(wallets, requiredAmount) {
+function walletOptsWithBalance(wallets, requiredAmount, restrictCurrency) {
   return wallets.map(w => {
     const bal = getWalletBalance(w.id);
     const cur = currencyInfo(w.currency || 'IDR');
-    const disabled = !!(requiredAmount && requiredAmount > 0 && bal < requiredAmount);
+    // Kalau kategori transaksi lagi kepilih terhubung ke anggaran bermata
+    // uang tertentu (mis. Rupiah), akun mata uang lain nggak bisa dipilih
+    // buat transaksi kategori itu — cuma pembatasan pilihan, bukan validasi
+    // transaksi (nominal & saldo tetap dicek terpisah di bawah).
+    const wrongCurrency  = !!(restrictCurrency && (w.currency || 'IDR') !== restrictCurrency);
+    const insufficientBal = !!(requiredAmount && requiredAmount > 0 && bal < requiredAmount);
     return {
       value: w.id,
       text: w.name,
-      sub: cur.symbol + ' ' + bal.toLocaleString(cur.locale),
-      disabled,
+      sub: cur.symbol + ' ' + bal.toLocaleString(cur.locale) + (wrongCurrency ? ' · beda mata uang' : ''),
+      disabled: wrongCurrency || insufficientBal,
+      disabledReason: wrongCurrency
+        ? `Akun ${cur.symbol} nggak bisa dipakai — kategori ini terhubung anggaran mata uang lain`
+        : (insufficientBal ? 'Saldo akun ini tidak cukup' : undefined),
     };
   });
 }
@@ -8088,7 +8476,9 @@ const PICKER_REGISTRY = {
     title: 'Pilih Akun',
     getOpts: () => {
       const required = (S.currentType === 'expense' && S.amountRaw > 0) ? S.amountRaw : null;
-      return walletOptsWithBalance(WALLETS, required);
+      const bc = (S.currentType === 'expense') ? findLinkedBudgetCat(S.selectedCat) : null;
+      const restrictCurrency = bc ? (bc.currency || 'IDR') : null;
+      return walletOptsWithBalance(WALLETS, required, restrictCurrency);
     },
     labelId: 'txAccountLabel',
   },
@@ -8163,6 +8553,16 @@ const PICKER_REGISTRY = {
       { value: 'yearly',  text: 'Pertahun' },
     ],
     labelId: 'debtPeriodLbl',
+  },
+  budgetCatPeriod: {
+    title: 'Periode',
+    getOpts: () => [
+      { value: 'daily',   text: 'Harian' },
+      { value: 'weekly',  text: 'Mingguan' },
+      { value: 'monthly', text: 'Bulanan' },
+      { value: 'yearly',  text: 'Tahunan' },
+    ],
+    labelId: 'budgetCatPeriodLbl',
   },
   recurFreq: {
     title: 'Frekuensi',
@@ -8275,6 +8675,44 @@ function selectPickerIcon(key) {
    enough room — instead of the old behaviour of popping up centered on
    screen like a full modal.
 ══════════════════════════════════════════ */
+/* ══════════════════════════════════════════
+   INFO TIP — tombol "i" kecil pengganti paragraf penjelasan
+   Dulu beberapa modal (Tambah Anggaran, Kurs Mata Uang, Kelola Perangkat,
+   Kelola Autentikasi, dst) punya teks instruksi yang nempel permanen di
+   bawah judul/field-nya. Sekarang teks itu disembunyikan ke dalam bubble
+   yang cuma muncul waktu tombol "i" di pojok judul modal diketuk — biar
+   modalnya nggak penuh teks penjelasan yang bikin sesak, tapi infonya
+   tetap ada buat yang butuh.
+══════════════════════════════════════════ */
+function toggleInfoTip(btn) {
+  const bubble = document.getElementById('infoTipBubble');
+  if (!bubble || !btn) return;
+  // Ketuk tombol yang lagi kebuka bubble-nya → tutup (toggle).
+  if (bubble.classList.contains('open') && bubble._forBtn === btn) {
+    closeInfoTip();
+    return;
+  }
+  bubble.textContent = btn.getAttribute('data-tip') || '';
+  bubble.classList.add('open');
+  bubble._forBtn = btn;
+  document.querySelectorAll('.info-tip-btn.active').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  anchorDropdown(bubble, btn);
+}
+function closeInfoTip() {
+  const bubble = document.getElementById('infoTipBubble');
+  if (!bubble) return;
+  bubble.classList.remove('open');
+  bubble._forBtn = null;
+  document.querySelectorAll('.info-tip-btn.active').forEach(b => b.classList.remove('active'));
+}
+// Ketuk di luar tombol info/bubble-nya → tutup, sama seperti dropdown lain.
+document.addEventListener('click', e => {
+  if (e.target.closest('.info-tip-btn') || e.target.closest('#infoTipBubble')) return;
+  closeInfoTip();
+});
+document.addEventListener('scroll', closeInfoTip, true);
+
 function anchorDropdown(panel, trigger) {
   if (!panel || !trigger) return;
   const gap = 8, margin = 12;
@@ -8336,7 +8774,7 @@ function openPicker(trigger, fieldId, title) {
   document.querySelectorAll('#pickerOpts .picker-opt').forEach(el => {
     el.addEventListener('click', () => {
       const o = _pickerActiveOpts[+el.dataset.idx];
-      if (o.disabled) { showToast('Saldo akun ini tidak cukup', 'warning'); return; }
+      if (o.disabled) { showToast(o.disabledReason || 'Saldo akun ini tidak cukup', 'warning'); return; }
       pickOpt(fieldId, o);
     });
   });
@@ -8353,7 +8791,7 @@ function pickOpt(fieldId, o) {
   if (lbl)    lbl.innerHTML = (o.icon ? ICON[o.icon]||'' : '') + ' ' + escapeHtml(o.text);
   if (fieldId === 'txAccount' && typeof updateTxAmountCurrency === 'function') updateTxAmountCurrency();
   if ((fieldId === 'txAccount' || fieldId === 'txToAccount') && typeof updateTransferConvertPreview === 'function') updateTransferConvertPreview();
-  if (fieldId === 'txCategory') S.selectedCat = o.value;
+  if (fieldId === 'txCategory') { S.selectedCat = o.value; updateBudgetLimiterUI(); }
   if (fieldId === 'debtPeriod') onDebtPeriodChange(o.value);
   if (fieldId === 'walletTypeInput')     syncWalletAccountNumberField('wallet', o.value);
   if (fieldId === 'editWalletTypeInput') syncWalletAccountNumberField('editWallet', o.value);
@@ -8545,7 +8983,15 @@ function openDp(panel) {
   // instead of reaching them. Scrolling the trigger toward the center of its
   // scrollable container first (the modal-sheet) gives the panel room to open
   // below it instead, so it never has to overlap sibling controls.
-  if (trigger && trigger.scrollIntoView) trigger.scrollIntoView({ block: 'center', behavior: 'auto' });
+  // Cuma lakuin ini kalau trigger-nya emang ada di dalam modal (.modal-sheet /
+  // .goal-modal-sheet) — itu skenario yang beneran butuh ruang tambahan.
+  // Trigger yang nangkring di topbar halaman (Anggaran/Analitik/Riwayat) BUKAN
+  // di dalam modal, jadi jangan discroll: dulu ini ikut jalan buat trigger
+  // topbar juga, dan karena elemennya sticky di atas, scrollIntoView cuma
+  // bikin halaman keukeuh digeser ke atas tiap kali dipencet (harus dipencet
+  // berkali-kali sampai scroll-nya nyampe paling atas baru overlay-nya nongol).
+  const inModal = trigger && trigger.closest('.modal-sheet');
+  if (inModal && trigger.scrollIntoView) trigger.scrollIntoView({ block: 'center', behavior: 'auto' });
   overlay.style.display = 'none';
   void overlay.offsetHeight; // discard any stale compositing layer
   overlay.style.display = '';
@@ -8587,7 +9033,7 @@ function renderRiwayatDp() {
   const firstDay = new Date(RIWAYAT_DP.year, RIWAYAT_DP.month, 1).getDay();
   const daysInMonth = new Date(RIWAYAT_DP.year, RIWAYAT_DP.month + 1, 0).getDate();
   const today = new Date(); today.setHours(0,0,0,0);
-  const todayStr = today.toISOString().split('T')[0];
+  const todayStr = localISODate(today);
 
   let html = '';
   for (let i = 0; i < firstDay; i++) html += '<div class="dp-day dp-blank"></div>';
@@ -8627,20 +9073,20 @@ function riwayatDpClick(dateStr) {
 
 function riwayatDpPreset(preset) {
   const today = new Date(); today.setHours(0,0,0,0);
-  const todayStr = today.toISOString().split('T')[0];
+  const todayStr = localISODate(today);
   let from = null, to = null, label = 'Semua';
 
   if (preset === 'today') {
     from = to = todayStr; label = 'Hari Ini';
   } else if (preset === 'week') {
     const d = new Date(today); d.setDate(d.getDate() - 6);
-    from = d.toISOString().split('T')[0]; to = todayStr; label = '7 Hari';
+    from = localISODate(d); to = todayStr; label = '7 Hari';
   } else if (preset === 'month') {
     const d = new Date(today.getFullYear(), today.getMonth(), 1);
-    from = d.toISOString().split('T')[0]; to = todayStr; label = 'Bulan Ini';
+    from = localISODate(d); to = todayStr; label = 'Bulan Ini';
   } else if (preset === 'last3') {
     const d = new Date(today); d.setMonth(d.getMonth() - 3);
-    from = d.toISOString().split('T')[0]; to = todayStr; label = '3 Bulan';
+    from = localISODate(d); to = todayStr; label = '3 Bulan';
   } else {
     from = null; to = null; label = 'Semua';
   }
