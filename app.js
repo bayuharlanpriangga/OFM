@@ -661,7 +661,11 @@ function _toggleDeviceMenu(id, btnEl) {
   const menu = document.createElement('div');
   menu.className = 'device-menu-popover';
   menu.id = 'deviceMenuPopover';
-  menu.innerHTML = `<div class="device-menu-item danger" onclick="event.stopPropagation();deleteDevice('${id}')">${ICON.trash||''} Hapus Perangkat</div>`;
+  menu.innerHTML = `<div class="device-menu-item danger">${ICON.trash||''} Hapus Perangkat</div>`;
+  menu.firstElementChild.addEventListener('click', (e) => {
+    e.stopPropagation();
+    deleteDevice(id);
+  });
   btnEl.style.position = 'relative';
   btnEl.appendChild(menu);
   // Jangan maksa bukanya ke bawah kalau ruang di bawah trigger nggak cukup
